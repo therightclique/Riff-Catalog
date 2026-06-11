@@ -1174,6 +1174,14 @@ function TabCard({ title, subtitle, tab, difficulty }) {
   );
 }
 
+// Scale groups available per mode
+const LICK_GROUPS = ['Minor Pentatonic', 'Major Pentatonic', 'Blues', 'Natural Minor', 'Major'];
+const DS_GROUPS   = ['Minor Pentatonic', 'Major Pentatonic', 'Blues', 'Natural Minor', 'Major'];
+
+// Which scale groups make sense for major vs minor keys
+const MAJOR_KEY_GROUPS = ['Major Pentatonic', 'Major', 'Blues'];
+const MINOR_KEY_GROUPS = ['Minor Pentatonic', 'Natural Minor', 'Blues'];
+
 export default function Practice() {
   const [mode, setMode] = useState('licks');
   const [selectedKey, setSelectedKey] = useState('');
@@ -1183,12 +1191,43 @@ export default function Practice() {
   const [showAll, setShowAll] = useState(false);
 
   const root = selectedKey ? selectedKey.split(' ').slice(0,-1).join(' ') : null;
+  const keyMode = selectedKey ? selectedKey.split(' ').slice(-1)[0] : null; // 'Major' or 'Minor'
+
+  // When key is selected, limit available scale groups to musically appropriate ones
+  const availableGroups = !selectedKey
+    ? (mode === 'licks' ? LICK_GROUPS : DS_GROUPS)
+    : keyMode === 'Major' ? MAJOR_KEY_GROUPS : MINOR_KEY_GROUPS;
+
+  // Auto-correct selectedGroup if it's not in the available list
+  const effectiveGroup = availableGroups.includes(selectedGroup) ? selectedGroup : availableGroups[0];
+
+  const handleKeyChange = (key) => {
+    setSelectedKey(key);
+    setCurrent(null);
+    setShowAll(false);
+    // If current group isn't valid for new key, reset to first valid one
+    if (key) {
+      const km = key.split(' ').slice(-1)[0];
+      const validGroups = km === 'Major' ? MAJOR_KEY_GROUPS : MINOR_KEY_GROUPS;
+      if (!validGroups.includes(selectedGroup)) {
+        setSelectedGroup(validGroups[0]);
+      }
+    }
+  };
+
+  const handleModeChange = (newMode) => {
+    setMode(newMode);
+    setCurrent(null);
+    setShowAll(false);
+    setSelectedKey('');
+    setSelectedGroup('Minor Pentatonic');
+  };
 
   const getItems = () => {
     if (mode === 'licks')
-      return (LICK_DATA[selectedGroup] || []).filter(l => !selectedDifficulty || l.difficulty === selectedDifficulty);
+      return (LICK_DATA[effectiveGroup] || []).filter(l => !selectedDifficulty || l.difficulty === selectedDifficulty);
     if (mode === 'doublestops')
-      return (DS_DATA[selectedGroup] || []).filter(l => !selectedDifficulty || l.difficulty === selectedDifficulty);
+      return (DS_DATA[effectiveGroup] || []).filter(l => !selectedDifficulty || l.difficulty === selectedDifficulty);
     if (mode === 'chords')
       return selectedKey ? (CHORD_DATA[selectedKey] || []) : Object.values(CHORD_DATA).flat();
     return [];
@@ -1198,11 +1237,11 @@ export default function Practice() {
 
   const renderItem = (item, idx) => {
     if (mode === 'licks') {
-      const notes = root ? transposeLick(item.notes, selectedGroup, root) : item.notes;
+      const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
       return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderSingleNote(notes)} difficulty={item.difficulty} />;
     }
     if (mode === 'doublestops') {
-      const pairs = root ? transposeDS(item.pairs, selectedGroup, root) : item.pairs;
+      const pairs = root ? transposeDS(item.pairs, effectiveGroup, root) : item.pairs;
       return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderDoubleStop(pairs)} difficulty={item.difficulty} />;
     }
     if (mode === 'chords') {
@@ -1221,48 +1260,58 @@ export default function Practice() {
     setShowAll(false);
   };
 
-  const modeLabel = mode==='licks'?'Single-note licks':mode==='doublestops'?'Double stop riffs':'Chord riffs';
+  const labelStyle = {fontSize:'11px',fontWeight:'600',color:'#888',textTransform:'uppercase',marginBottom:'4px',display:'block'};
+  const selectStyle = {padding:'8px 12px',fontSize:'14px',borderRadius:'8px',border:'1px solid #ccc',backgroundColor:'white',color:'#222',width:'100%'};
 
   return (
     <div style={{marginTop:'20px'}}>
-      <h2 style={{textAlign:'center',marginBottom:'6px'}}>Practice</h2>
-      <p style={{textAlign:'center',color:'#888',fontSize:'13px',marginBottom:'20px'}}>{modeLabel}</p>
+      <h2 style={{textAlign:'center',marginBottom:'20px'}}>Practice</h2>
 
-      <div style={{display:'flex',flexWrap:'wrap',gap:'10px',justifyContent:'center',marginBottom:'16px'}}>
-        <select value={mode} onChange={e=>{setMode(e.target.value);setCurrent(null);setShowAll(false);setSelectedKey('');}}
-          style={{padding:'8px 12px',fontSize:'14px',borderRadius:'8px',border:'2px solid #1a73e8',backgroundColor:'white',color:'#1a73e8',fontWeight:'600'}}>
-          <option value="licks">Single-note Licks</option>
-          <option value="doublestops">Double Stops</option>
-          <option value="chords">Chord Riffs</option>
-        </select>
+      <div style={{display:'flex',flexWrap:'wrap',gap:'16px',justifyContent:'center',marginBottom:'20px'}}>
 
-        <select value={selectedKey} onChange={e=>setSelectedKey(e.target.value)}
-          style={{padding:'8px 12px',fontSize:'14px',borderRadius:'8px',border:'1px solid #ccc',backgroundColor:'white',color:'#222'}}>
-          <option value="">{mode==='chords'?'— All keys —':'— Key (optional) —'}</option>
-          {mode==='chords'
-            ? ALL_KEYS.map(k=><option key={k} value={k}>{k}</option>)
-            : <>
-                <optgroup label="Major Keys">{ALL_KEYS.filter(k=>k.includes('Major')).map(k=><option key={k} value={k}>{k}</option>)}</optgroup>
-                <optgroup label="Minor Keys">{ALL_KEYS.filter(k=>k.includes('Minor')).map(k=><option key={k} value={k}>{k}</option>)}</optgroup>
-              </>
-          }
-        </select>
-
-        {mode!=='chords' && (
-          <select value={selectedGroup} onChange={e=>{setSelectedGroup(e.target.value);setCurrent(null);setShowAll(false);}}
-            style={{padding:'8px 12px',fontSize:'14px',borderRadius:'8px',border:'1px solid #ccc',backgroundColor:'white',color:'#222'}}>
-            {Object.keys(mode==='licks'?LICK_DATA:DS_DATA).map(g=><option key={g} value={g}>{g}</option>)}
+        <div style={{minWidth:'160px'}}>
+          <label style={labelStyle}>Type</label>
+          <select value={mode} onChange={e=>handleModeChange(e.target.value)}
+            style={{...selectStyle,border:'2px solid #1a73e8',color:'#1a73e8',fontWeight:'600'}}>
+            <option value="licks">Single-note Licks</option>
+            <option value="doublestops">Double Stops</option>
+            <option value="chords">Chord Riffs</option>
           </select>
+        </div>
+
+        <div style={{minWidth:'160px'}}>
+          <label style={labelStyle}>Key</label>
+          <select value={selectedKey} onChange={e=>handleKeyChange(e.target.value)} style={selectStyle}>
+            <option value="">{mode==='chords'?'All keys':'Any key'}</option>
+            {mode==='chords'
+              ? ALL_KEYS.map(k=><option key={k} value={k}>{k}</option>)
+              : <>
+                  <optgroup label="Major Keys">{ALL_KEYS.filter(k=>k.includes('Major')).map(k=><option key={k} value={k}>{k}</option>)}</optgroup>
+                  <optgroup label="Minor Keys">{ALL_KEYS.filter(k=>k.includes('Minor')).map(k=><option key={k} value={k}>{k}</option>)}</optgroup>
+                </>
+            }
+          </select>
+        </div>
+
+        {mode !== 'chords' && (
+          <div style={{minWidth:'160px'}}>
+            <label style={labelStyle}>Scale</label>
+            <select value={effectiveGroup} onChange={e=>{setSelectedGroup(e.target.value);setCurrent(null);setShowAll(false);}} style={selectStyle}>
+              {availableGroups.map(g=><option key={g} value={g}>{g}</option>)}
+            </select>
+          </div>
         )}
 
-        {mode!=='chords' && (
-          <select value={selectedDifficulty} onChange={e=>setSelectedDifficulty(e.target.value)}
-            style={{padding:'8px 12px',fontSize:'14px',borderRadius:'8px',border:'1px solid #ccc',backgroundColor:'white',color:'#222'}}>
-            <option value="">Any difficulty</option>
-            <option value="Beginner">Beginner</option>
-            <option value="Intermediate">Intermediate</option>
-            <option value="Advanced">Advanced</option>
-          </select>
+        {mode !== 'chords' && (
+          <div style={{minWidth:'140px'}}>
+            <label style={labelStyle}>Difficulty</label>
+            <select value={selectedDifficulty} onChange={e=>setSelectedDifficulty(e.target.value)} style={selectStyle}>
+              <option value="">Any</option>
+              <option value="Beginner">Beginner</option>
+              <option value="Intermediate">Intermediate</option>
+              <option value="Advanced">Advanced</option>
+            </select>
+          </div>
         )}
       </div>
 
