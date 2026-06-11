@@ -6,6 +6,7 @@ import Library from './components/Library';
 import { analyzeAudio } from './components/AudioAnalyzer';
 import KeyFinder from './components/KeyFinder';
 import Practice from './components/Practice';
+import Changelog from './components/Changelog';
 
 const CLIENT_ID = '495492558072-8ohvj2v3npv2coeq1alndbh0g0lk95s2.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -226,6 +227,7 @@ function App() {
             <button style={tabStyle(view === 'library')} onClick={() => setView('library')}>Library</button>
             <button style={tabStyle(view === 'keyfinder')} onClick={() => setView('keyfinder')}>Key Finder</button>
             <button style={tabStyle(view === 'practice')} onClick={() => setView('practice')}>Practice</button>
+            <button style={tabStyle(view === 'changelog')} onClick={() => setView('changelog')}>Changelog</button>
           </div>
 
           {view === 'record' && (
@@ -346,6 +348,7 @@ function App() {
           {view === 'library' && <Library accessToken={accessToken} initialKeyFilter={keyFinderFilter} onFilterConsumed={() => setKeyFinderFilter(null)} />}
           {view === 'keyfinder' && <KeyFinder onFilterByKey={handleFilterByKey} />}
           {view === 'practice' && <Practice />}
+          {view === 'changelog' && <Changelog />}
         </div>
       )}
     </div>
