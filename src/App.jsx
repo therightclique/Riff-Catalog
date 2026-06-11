@@ -238,6 +238,9 @@ function App() {
                       ✅ Saved: <strong>{lastUpload.name}</strong>
                     </p>
                   )}
+                  <p style={{ marginTop: '24px', fontSize: '13px', color: '#888', textAlign: 'center', maxWidth: '400px' }}>
+                    🗂 Your recordings are saved to your Google Drive in a folder called <strong>RiffCatalog</strong>. Only you can access them — this app cannot see anything else in your Drive.
+                  </p>
                 </>
               ) : (
                 <div style={{ marginTop: '20px', width: '100%' }}>

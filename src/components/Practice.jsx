@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { FretboardDiagram } from './FretboardDiagram';
 
 const ALL_KEYS = [
   'A Major','A# Major','B Major','C Major','C# Major','D Major',
@@ -1326,8 +1327,18 @@ export default function Practice() {
         </button>
       </div>
 
-      {current && !showAll && renderItem(current, 0)}
-      {showAll && <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>{items.map((item,i)=>renderItem(item,i))}</div>}
+      {current && !showAll && (
+        <>
+          {renderItem(current, 0)}
+          {selectedKey && <FretboardDiagram selectedKey={selectedKey} />}
+        </>
+      )}
+      {showAll && (
+        <>
+          <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>{items.map((item,i)=>renderItem(item,i))}</div>
+          {selectedKey && <FretboardDiagram selectedKey={selectedKey} />}
+        </>
+      )}
       {items.length===0 && <p style={{textAlign:'center',color:'#888'}}>No items found for this selection.</p>}
     </div>
   );
