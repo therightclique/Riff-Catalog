@@ -189,29 +189,29 @@ function KeyFinder({ onFilterByKey }) {
         <>
           {/* Scale degree cards — no chord diagrams here */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '8px', width: '100%', maxWidth: '500px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', width: '100%' }}>
               {scaleNotes.map(({ degree, quality, note }) => {
                 const chordLabel = quality === 'M' ? note : quality === 'dim' ? `${note}°` : `${note}m`;
                 return (
                   <div key={degree} style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center',
-                    padding: '12px 4px', borderRadius: '8px',
+                    padding: '10px 2px', borderRadius: '8px',
                     backgroundColor: quality === 'M' ? '#e8f5e2' : quality === 'dim' ? '#fde8e8' : '#e8eeff',
                     border: `1px solid ${quality === 'M' ? '#b5d9a5' : quality === 'dim' ? '#f0b8b8' : '#b5c8f0'}`,
                   }}>
                     <span style={{
-                      fontSize: '16px', fontWeight: '700',
+                      fontSize: '14px', fontWeight: '700',
                       color: quality === 'M' ? '#2a6b17' : quality === 'dim' ? '#8b1a1a' : '#1a3d8b',
                     }}>
-                      {degree}<span style={{ fontSize: '11px', fontWeight: '400' }}>{quality}</span>
+                      {degree}<span style={{ fontSize: '10px', fontWeight: '400' }}>{quality}</span>
                     </span>
-                    <span style={{ fontSize: '14px', fontWeight: '600', marginTop: '6px', color: '#333' }}>{note}</span>
+                    <span style={{ fontSize: '12px', fontWeight: '600', marginTop: '5px', color: '#333' }}>{note}</span>
                     {onFilterByKey && (
                       <button
                         onClick={() => onFilterByKey(`${note} ${quality === 'M' ? 'Major' : quality === 'dim' ? 'Major' : 'Minor'}`)}
                         title={`Find clips in ${chordLabel}`}
                         style={{
-                          marginTop: '6px', padding: '2px 8px', fontSize: '10px', cursor: 'pointer',
+                          marginTop: '5px', padding: '2px 6px', fontSize: '9px', cursor: 'pointer',
                           border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white', color: '#555',
                         }}
                       >
