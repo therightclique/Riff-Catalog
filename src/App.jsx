@@ -189,11 +189,12 @@ function App() {
   };
 
   const tabStyle = (active) => ({
-    padding: '8px 20px', cursor: 'pointer', border: 'none',
+    padding: '8px 12px', cursor: 'pointer', border: 'none',
     borderBottom: active ? '2px solid #1a73e8' : '2px solid transparent',
-    backgroundColor: 'transparent', fontSize: '16px',
+    backgroundColor: 'transparent', fontSize: '14px',
     fontWeight: active ? '600' : '400',
     color: active ? '#1a73e8' : '#555',
+    whiteSpace: 'nowrap',
   });
 
   const candidateBtnStyle = (isSelected, isFirst) => ({
@@ -205,7 +206,7 @@ function App() {
   });
 
   return (
-    <div style={{ padding: '40px 20px', fontFamily: 'sans-serif', maxWidth: '600px', margin: '0 auto' }}>
+    <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       <h1 style={{ textAlign: 'center' }}>🎸 Riff Catalog</h1>
       {!user ? (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '40px' }}>
@@ -222,12 +223,11 @@ function App() {
             <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '14px' }}>Sign out</button>
           </p>
 
-          <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', display: 'flex', justifyContent: 'center' }}>
+          <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button style={tabStyle(view === 'record')} onClick={() => setView('record')}>Record</button>
             <button style={tabStyle(view === 'library')} onClick={() => setView('library')}>Library</button>
             <button style={tabStyle(view === 'keyfinder')} onClick={() => setView('keyfinder')}>Key Finder</button>
             <button style={tabStyle(view === 'practice')} onClick={() => setView('practice')}>Practice</button>
-            <button style={tabStyle(view === 'changelog')} onClick={() => setView('changelog')}>Changelog</button>
           </div>
 
           {view === 'record' && (
@@ -242,6 +242,11 @@ function App() {
                   )}
                   <p style={{ marginTop: '24px', fontSize: '13px', color: '#888', textAlign: 'center', maxWidth: '400px' }}>
                     🗂 Your recordings are saved to your Google Drive in a folder called <strong>RiffCatalog</strong>. Only you can access them — this app cannot see anything else in your Drive.
+                  </p>
+                  <p style={{ marginTop: '12px', fontSize: '13px', textAlign: 'center' }}>
+                    <button onClick={() => setView('changelog')} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
+                      View changelog
+                    </button>
                   </p>
                 </>
               ) : (
