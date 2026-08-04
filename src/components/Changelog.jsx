@@ -24,6 +24,13 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Library performance',
+        items: [
+          'Fixed library load time growing slower as more recordings were added — metadata was being looked up with one Drive search request per clip; now fetched in a single batched request and matched locally',
+          'Fixed a silent cap that limited the library to the first 100 recordings — clip loading now pages through the full library',
+        ],
+      },
+      {
         title: 'Versioning',
         items: [
           'Added version number and last-updated date display on the main page',

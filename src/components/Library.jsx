@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchClips, getAudioUrl } from './DriveLibrary';
-import { loadMetadata, saveMetadata } from './MetadataService';
+import { loadMetadata, loadAllMetadata, saveMetadata } from './MetadataService';
 import MetadataEditor from './MetadataEditor';
 import { analyzeAudio } from './AudioAnalyzer';
 import FilterBar from './FilterBar';
@@ -173,13 +173,8 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
     try {
       const results = await fetchClips(accessToken);
       setClips(results);
-      const metaEntries = await Promise.all(
-        results.map(async clip => {
-          const meta = await loadMetadata(accessToken, clip.id, clip.name);
-          return [clip.id, meta];
-        })
-      );
-      setMetadataMap(Object.fromEntries(metaEntries));
+      const metadataMap = await loadAllMetadata(accessToken, results);
+      setMetadataMap(metadataMap);
     } catch (err) {
       console.error('Failed to load clips:', err);
     }
