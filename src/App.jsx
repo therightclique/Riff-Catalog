@@ -6,7 +6,7 @@ import Library from './components/Library';
 import { analyzeAudio } from './components/AudioAnalyzer';
 import KeyFinder from './components/KeyFinder';
 import Practice from './components/Practice';
-import Changelog from './components/Changelog';
+import Changelog, { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog';
 
 const CLIENT_ID = '495492558072-8ohvj2v3npv2coeq1alndbh0g0lk95s2.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -247,6 +247,9 @@ function App() {
                     <button onClick={() => setView('changelog')} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
                       View changelog
                     </button>
+                  </p>
+                  <p style={{ marginTop: '4px', fontSize: '11px', color: '#666', textAlign: 'center' }}>
+                    Version {CURRENT_VERSION} · Updated {LAST_UPDATED}
                   </p>
                 </>
               ) : (
