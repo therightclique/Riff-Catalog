@@ -120,7 +120,7 @@ function ensureRelativeKeyPresent(candidates) {
 export async function analyzeAudio(blob) {
   try {
     const arrayBuffer = await blob.arrayBuffer();
-    const audioContext = new AudioContext({ sampleRate: 44100 });
+    const audioContext = new AudioContext();
     const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
     const sampleRate = audioBuffer.sampleRate;
     const channelData = audioBuffer.getChannelData(0);
@@ -162,6 +162,7 @@ export async function analyzeAudio(blob) {
     };
   } catch (err) {
     console.error('Audio analysis failed:', err);
+    alert('Key/BPM analysis failed: ' + (err?.message || 'unknown error') + '\n\nCheck the browser console for details.');
     return null;
   }
 }
