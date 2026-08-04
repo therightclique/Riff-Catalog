@@ -1,6 +1,41 @@
+import { useState } from 'react';
+
 const CHANGELOG = [
   {
-    date: 'June 11, 2025',
+    date: '2026-08-04',
+    displayDate: 'August 4, 2026',
+    version: '1.4',
+    entries: [
+      {
+        title: 'Audio quality fix',
+        items: [
+          'Disabled browser echo cancellation, noise suppression, and auto-gain control on recording — these voice-call features were causing popping and cracking artifacts on sustained guitar tones',
+          'Fixed key/BPM detection silently failing on iOS due to a forced sample rate on the audio analysis context',
+          'Analysis errors now show a visible message instead of failing silently',
+        ],
+      },
+      {
+        title: 'Mobile layout fixes',
+        items: [
+          'Added proper viewport meta tag so the app renders at actual device width on iOS instead of desktop-scaled-down',
+          'Fixed horizontal overflow across the app',
+          'Moved Changelog out of the tab bar into a link below the Google Drive note, freeing up space on small screens',
+          'Fixed Key Finder scale degree cards so all 7 fit on one row on mobile',
+        ],
+      },
+      {
+        title: 'Versioning',
+        items: [
+          'Added version number and last-updated date display on the main page',
+          'Changelog entries older than 60 days now move to a collapsible archive section',
+        ],
+      },
+    ],
+  },
+  {
+    date: '2026-06-11',
+    displayDate: 'June 11, 2026',
+    version: '1.2',
     entries: [
       {
         title: 'Practice Tab — complete rebuild',
@@ -39,7 +74,9 @@ const CHANGELOG = [
     ],
   },
   {
-    date: 'June 10, 2025',
+    date: '2026-06-10',
+    displayDate: 'June 10, 2026',
+    version: '1.1',
     entries: [
       {
         title: 'Project setup',
@@ -120,7 +157,70 @@ const CHANGELOG = [
   },
 ];
 
+export const CURRENT_VERSION = CHANGELOG[0].version;
+export const LAST_UPDATED = CHANGELOG[0].displayDate;
+
+function daysSince(dateStr) {
+  const then = new Date(dateStr);
+  const now = new Date();
+  return Math.floor((now - then) / (1000 * 60 * 60 * 24));
+}
+
+function ChangelogDay({ day }) {
+  return (
+    <div style={{ marginBottom: '40px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px' }}>
+        <div style={{
+          backgroundColor: '#1a73e8', color: 'white', borderRadius: '8px',
+          padding: '4px 14px', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap',
+        }}>
+          {day.displayDate}
+        </div>
+        <div style={{
+          fontSize: '12px', color: '#666', fontWeight: '600',
+        }}>
+          v{day.version}
+        </div>
+        <div style={{ flex: 1, height: '1px', backgroundColor: '#2a2a2a' }} />
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        {day.entries.map((entry) => (
+          <div key={entry.title} style={{
+            border: '1px solid #2a2a2a', borderRadius: '10px', overflow: 'hidden',
+          }}>
+            <div style={{
+              padding: '10px 16px', backgroundColor: '#1e1e1e',
+              fontSize: '14px', fontWeight: '600', color: '#ddd',
+              borderBottom: '1px solid #2a2a2a',
+            }}>
+              {entry.title}
+            </div>
+            <ul style={{ margin: 0, padding: '12px 16px 12px 32px', listStyleType: 'disc' }}>
+              {entry.items.map((item, i) => (
+                <li key={i} style={{
+                  fontSize: '13px', color: '#aaa', lineHeight: '1.7', marginBottom: '2px',
+                }}>
+                  {item}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Changelog() {
+  const [showArchive, setShowArchive] = useState(false);
+
+  // Most recent entry always stays visible regardless of age.
+  // Everything else visible if updated within the last 60 days; older goes to archive.
+  const [mostRecent, ...rest] = CHANGELOG;
+  const recentEntries = rest.filter(day => daysSince(day.date) <= 60);
+  const archivedEntries = rest.filter(day => daysSince(day.date) > 60);
+
   return (
     <div style={{ marginTop: '20px', maxWidth: '700px', margin: '20px auto', padding: '0 16px' }}>
       <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>Changelog</h2>
@@ -128,46 +228,31 @@ export default function Changelog() {
         A running log of everything added and changed in Riff Catalog.
       </p>
 
-      {CHANGELOG.map((day) => (
-        <div key={day.date} style={{ marginBottom: '40px' }}>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '20px',
-          }}>
-            <div style={{
-              backgroundColor: '#1a73e8', color: 'white', borderRadius: '8px',
-              padding: '4px 14px', fontSize: '13px', fontWeight: '600', whiteSpace: 'nowrap',
-            }}>
-              {day.date}
-            </div>
-            <div style={{ flex: 1, height: '1px', backgroundColor: '#2a2a2a' }} />
-          </div>
+      <ChangelogDay day={mostRecent} />
+      {recentEntries.map((day) => <ChangelogDay key={day.date} day={day} />)}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {day.entries.map((entry) => (
-              <div key={entry.title} style={{
-                border: '1px solid #2a2a2a', borderRadius: '10px', overflow: 'hidden',
-              }}>
-                <div style={{
-                  padding: '10px 16px', backgroundColor: '#1e1e1e',
-                  fontSize: '14px', fontWeight: '600', color: '#ddd',
-                  borderBottom: '1px solid #2a2a2a',
-                }}>
-                  {entry.title}
-                </div>
-                <ul style={{ margin: 0, padding: '12px 16px 12px 32px', listStyleType: 'disc' }}>
-                  {entry.items.map((item, i) => (
-                    <li key={i} style={{
-                      fontSize: '13px', color: '#aaa', lineHeight: '1.7', marginBottom: '2px',
-                    }}>
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
-          </div>
+      {archivedEntries.length > 0 && (
+        <div style={{ marginTop: '20px' }}>
+          <button
+            onClick={() => setShowArchive(v => !v)}
+            style={{
+              width: '100%', padding: '10px 16px', backgroundColor: '#1e1e1e',
+              border: '1px solid #2a2a2a', borderRadius: '8px', color: '#aaa',
+              fontSize: '13px', cursor: 'pointer', display: 'flex',
+              justifyContent: 'space-between', alignItems: 'center',
+            }}
+          >
+            <span>Archive ({archivedEntries.length} older update{archivedEntries.length !== 1 ? 's' : ''})</span>
+            <span>{showArchive ? '▲' : '▼'}</span>
+          </button>
+          {showArchive && (
+            <div style={{ marginTop: '20px' }}>
+              {archivedEntries.map((day) => <ChangelogDay key={day.date} day={day} />)}
+            </div>
+          )}
         </div>
-      ))}
+      )}
     </div>
   );
 }
+
