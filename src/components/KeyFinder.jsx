@@ -170,6 +170,12 @@ function KeyFinder({ onFilterByKey }) {
   // Reverse key lookup
   const [pickedNotes, setPickedNotes] = useState([]);
   const [lookupResults, setLookupResults] = useState(null);
+  const [lookupExpanded, setLookupExpanded] = useState(true);
+
+  const handleKeyDropdownChange = (key) => {
+    setSelectedKey(key);
+    if (key) setLookupExpanded(false);
+  };
 
   const toggleNote = (note) => {
     setLookupResults(null);
@@ -211,7 +217,7 @@ function KeyFinder({ onFilterByKey }) {
       <h2 style={{ marginBottom: '16px', textAlign: 'center' }}>Key Finder</h2>
 
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
-        <select value={selectedKey} onChange={e => setSelectedKey(e.target.value)}
+        <select value={selectedKey} onChange={e => handleKeyDropdownChange(e.target.value)}
           style={{ padding: '10px 14px', fontSize: '16px', borderRadius: '8px',
             border: '1px solid #ccc', backgroundColor: 'white', color: '#222', width: '100%', maxWidth: '300px' }}>
           <option value="">— Select a key —</option>
@@ -229,10 +235,21 @@ function KeyFinder({ onFilterByKey }) {
         border: '1px solid #ddd', borderRadius: '10px', padding: '16px',
         marginBottom: '28px', backgroundColor: '#fafafa',
       }}>
-        <h3 style={{ fontSize: '15px', textAlign: 'center', marginBottom: '4px' }}>Reverse Key Lookup</h3>
-        <p style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '14px' }}>
-          Tap the notes you have. We'll find keys that contain them.
-        </p>
+        <button onClick={() => setLookupExpanded(v => !v)}
+          style={{
+            width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center',
+            gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+            marginBottom: lookupExpanded ? '4px' : '0',
+          }}>
+          <h3 style={{ fontSize: '15px', margin: 0 }}>Reverse Key Lookup</h3>
+          <span style={{ fontSize: '12px', color: '#888' }}>{lookupExpanded ? '▲' : '▼'}</span>
+        </button>
+
+        {lookupExpanded && (
+          <>
+            <p style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '14px' }}>
+              Tap the notes you have. We'll find keys that contain them.
+            </p>
 
         <div style={{
           display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px',
@@ -290,7 +307,7 @@ function KeyFinder({ onFilterByKey }) {
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {lookupResults.map(({ key, matchCount, exact }) => (
-                    <button key={key} onClick={() => setSelectedKey(key)}
+                    <button key={key} onClick={() => { setSelectedKey(key); setLookupExpanded(false); }}
                       style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         padding: '10px 14px', borderRadius: '8px', cursor: 'pointer',
@@ -308,6 +325,8 @@ function KeyFinder({ onFilterByKey }) {
               </>
             )}
           </div>
+        )}
+          </>
         )}
       </div>
 
