@@ -167,6 +167,45 @@ function KeyFinder({ onFilterByKey }) {
   const [selectedKey, setSelectedKey] = useState('');
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
 
+  // Reverse key lookup
+  const [pickedNotes, setPickedNotes] = useState([]);
+  const [lookupResults, setLookupResults] = useState(null);
+
+  const toggleNote = (note) => {
+    setLookupResults(null);
+    setPickedNotes(prev =>
+      prev.includes(note) ? prev.filter(n => n !== note) : [...prev, note]
+    );
+  };
+
+  const runLookup = () => {
+    if (pickedNotes.length === 0) { setLookupResults([]); return; }
+    const pickedSet = new Set(pickedNotes);
+
+    const scored = ALL_KEYS.map(key => {
+      const notes = getScaleNotes(key).map(n => n.note);
+      const noteSet = new Set(notes);
+      const matchCount = pickedNotes.filter(n => noteSet.has(n)).length;
+      return { key, notes, matchCount, exact: matchCount === pickedNotes.length };
+    });
+
+    const exactMatches = scored.filter(s => s.exact);
+    if (exactMatches.length > 0) {
+      setLookupResults(exactMatches.sort((a, b) => a.key.localeCompare(b.key)));
+    } else {
+      const ranked = scored
+        .filter(s => s.matchCount > 0)
+        .sort((a, b) => b.matchCount - a.matchCount || a.key.localeCompare(b.key))
+        .slice(0, 8);
+      setLookupResults(ranked);
+    }
+  };
+
+  const clearLookup = () => {
+    setPickedNotes([]);
+    setLookupResults(null);
+  };
+
   return (
     <div style={{ marginTop: '20px' }}>
       <h2 style={{ marginBottom: '16px', textAlign: 'center' }}>Key Finder</h2>
@@ -183,6 +222,93 @@ function KeyFinder({ onFilterByKey }) {
             {ALL_KEYS.filter(k => k.includes('Minor')).map(k => <option key={k} value={k}>{k}</option>)}
           </optgroup>
         </select>
+      </div>
+
+      {/* Reverse Key Lookup */}
+      <div style={{
+        border: '1px solid #ddd', borderRadius: '10px', padding: '16px',
+        marginBottom: '28px', backgroundColor: '#fafafa',
+      }}>
+        <h3 style={{ fontSize: '15px', textAlign: 'center', marginBottom: '4px' }}>Reverse Key Lookup</h3>
+        <p style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '14px' }}>
+          Tap the notes you have. We'll find keys that contain them.
+        </p>
+
+        <div style={{
+          display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '6px',
+          maxWidth: '380px', margin: '0 auto 14px',
+        }}>
+          {CHROMATIC.map(note => {
+            const active = pickedNotes.includes(note);
+            return (
+              <button key={note} onClick={() => toggleNote(note)}
+                style={{
+                  padding: '10px 0', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
+                  cursor: 'pointer', border: active ? '2px solid #1a73e8' : '1px solid #ccc',
+                  backgroundColor: active ? '#1a73e8' : 'white',
+                  color: active ? 'white' : '#333',
+                }}>
+                {note}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '10px' }}>
+          <button onClick={runLookup} disabled={pickedNotes.length === 0}
+            style={{
+              padding: '9px 22px', borderRadius: '8px', border: 'none', fontSize: '14px',
+              fontWeight: '600', cursor: pickedNotes.length ? 'pointer' : 'default',
+              backgroundColor: pickedNotes.length ? '#cc0000' : '#e5e5e5',
+              color: pickedNotes.length ? 'white' : '#999',
+            }}>
+            Find Keys
+          </button>
+          {(pickedNotes.length > 0 || lookupResults) && (
+            <button onClick={clearLookup}
+              style={{
+                padding: '9px 18px', borderRadius: '8px', fontSize: '14px',
+                border: '1px solid #ccc', backgroundColor: 'white', color: '#555', cursor: 'pointer',
+              }}>
+              Clear
+            </button>
+          )}
+        </div>
+
+        {lookupResults && (
+          <div style={{ marginTop: '18px' }}>
+            {lookupResults.length === 0 ? (
+              <p style={{ textAlign: 'center', fontSize: '13px', color: '#888' }}>
+                No keys contain any of the selected notes.
+              </p>
+            ) : (
+              <>
+                <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '10px' }}>
+                  {lookupResults[0].exact
+                    ? `${lookupResults.length} key${lookupResults.length > 1 ? 's' : ''} contain${lookupResults.length > 1 ? '' : 's'} all selected notes:`
+                    : `No exact match — closest keys by shared notes:`}
+                </p>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                  {lookupResults.map(({ key, matchCount, exact }) => (
+                    <button key={key} onClick={() => setSelectedKey(key)}
+                      style={{
+                        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                        padding: '10px 14px', borderRadius: '8px', cursor: 'pointer',
+                        border: `1px solid ${exact ? '#b5d9a5' : '#ddd'}`,
+                        backgroundColor: exact ? '#e8f5e2' : 'white',
+                        fontSize: '14px', textAlign: 'left',
+                      }}>
+                      <span style={{ fontWeight: '600', color: '#222' }}>{key}</span>
+                      <span style={{ fontSize: '12px', color: '#888' }}>
+                        {matchCount}/{pickedNotes.length} notes match
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       {scaleNotes.length > 0 && (
