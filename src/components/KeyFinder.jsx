@@ -241,7 +241,7 @@ function KeyFinder({ onFilterByKey }) {
             gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
             marginBottom: lookupExpanded ? '4px' : '0',
           }}>
-          <h3 style={{ fontSize: '15px', margin: 0 }}>Reverse Key Lookup</h3>
+          <h3 style={{ fontSize: '15px', margin: 0, color: '#222' }}>Reverse Key Lookup</h3>
           <span style={{ fontSize: '12px', color: '#888' }}>{lookupExpanded ? '▲' : '▼'}</span>
         </button>
 
