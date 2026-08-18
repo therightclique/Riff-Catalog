@@ -608,7 +608,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
           marginBottom: '8px', border: '1px solid #ddd', borderRadius: '8px',
           backgroundColor: playingId === clip.id ? '#f0f7ff' : '#fafafa', overflow: 'hidden',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px' }}>
             <input type="checkbox"
               checked={selectedIds.has(clip.id)}
               onChange={() => toggleSelect(clip.id)}
@@ -652,10 +652,10 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                 />
               ) : (
                 <div style={{ cursor: 'pointer' }} onClick={() => handleExpand(clip)}>
-                  <div style={{ fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontWeight: '500', wordBreak: 'break-word', lineHeight: '1.3' }}>
                     {baseName(clip.name)}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#888' }}>
+                  <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
                     {formatDate(clip.createdTime)}
                     {durationMap[clip.id] ? ` · ${formatDuration(durationMap[clip.id])}` : clip.size ? ` · ${formatSize(clip.size)}` : ''}
                     {metadataMap[clip.id]?.key ? ` · ${metadataMap[clip.id].key}` : ''}
@@ -666,12 +666,19 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
               )}
             </div>
             <button onClick={(e) => { e.stopPropagation(); startRename(clip); }} style={iconBtnStyle} title="Rename">✎</button>
-            <button onClick={() => handleDownload(clip)} style={iconBtnStyle} title="Download">⬇</button>
-            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(clip.id); }}
-              style={{ ...iconBtnStyle, color: '#c00' }} title="Delete">🗑</button>
             <button onClick={() => handleExpand(clip)} style={iconBtnStyle}>
               {expandedId === clip.id ? '▲' : '▼'}
             </button>
+          </div>
+
+          {/* Secondary actions on their own line so the clip name gets full width */}
+          <div style={{
+            display: 'flex', justifyContent: 'flex-end', gap: '8px',
+            padding: '0 12px 10px', marginTop: '-4px',
+          }}>
+            <button onClick={() => handleDownload(clip)} style={iconBtnStyle} title="Download">⬇</button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(clip.id); }}
+              style={{ ...iconBtnStyle, color: '#c00' }} title="Delete">🗑</button>
           </div>
 
           {confirmDeleteId === clip.id && (
