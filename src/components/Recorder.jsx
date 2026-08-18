@@ -69,6 +69,7 @@ function Recorder({ onRecordingComplete }) {
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
+          channelCount: 1,
         }
       });
 

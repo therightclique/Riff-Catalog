@@ -130,10 +130,14 @@ function ensureRelativeKeyPresent(candidates) {
 // playback, no audio output, purely binary parsing.
 function decodeFragmentedMp4(blob) {
   return new Promise((resolve, reject) => {
+    const steps = [];
+    const fail = (msg) => reject(new Error(msg + ' | steps: ' + steps.join(' > ')));
+
     if (typeof AudioDecoder === 'undefined') {
-      reject(new Error('WebCodecs AudioDecoder is not available on this browser'));
+      fail('WebCodecs AudioDecoder is not available on this browser');
       return;
     }
+    steps.push('AudioDecoder available');
 
     const mp4boxFile = MP4Box.createFile();
     const pcmChunks = [];
@@ -142,13 +146,15 @@ function decodeFragmentedMp4(blob) {
     let decoder = null;
     let samplesReceived = 0;
     let samplesExpected = 0;
+    let decodeErrors = 0;
     let finalized = false;
 
     const finalize = () => {
       if (finalized) return;
       finalized = true;
+      steps.push(`finalize (received ${samplesReceived}/${samplesExpected}, decodeErrors ${decodeErrors})`);
       if (!pcmChunks.length) {
-        reject(new Error('No audio samples were decoded from the recording'));
+        fail('No audio samples were decoded from the recording');
         return;
       }
       const totalLength = pcmChunks.reduce((sum, c) => sum + c.length, 0);
@@ -164,61 +170,84 @@ function decodeFragmentedMp4(blob) {
       });
     };
 
-    mp4boxFile.onError = (err) => reject(new Error('mp4box demux error: ' + err));
+    mp4boxFile.onError = (err) => fail('mp4box demux error: ' + err);
 
     mp4boxFile.onReady = (info) => {
+      steps.push('mp4box onReady');
       const audioTrack = info.tracks.find(t => t.type === 'audio' || t.audio);
       if (!audioTrack) {
-        reject(new Error('No audio track found in recording'));
+        fail('No audio track found in recording (tracks: ' + info.tracks.map(t => t.type).join(',') + ')');
         return;
       }
       sampleRate = audioTrack.audio?.sample_rate || audioTrack.timescale;
       numberOfChannels = audioTrack.audio?.channel_count || 1;
       samplesExpected = audioTrack.nb_samples;
+      steps.push(`track found (codec=${audioTrack.codec}, sr=${sampleRate}, ch=${numberOfChannels}, samples=${samplesExpected})`);
 
-      decoder = new AudioDecoder({
-        output: (audioData) => {
-          const numFrames = audioData.numberOfFrames;
-          const channelData = new Float32Array(numFrames);
-          audioData.copyTo(channelData, { planeIndex: 0 });
-          pcmChunks.push(channelData);
-          audioData.close();
-          samplesReceived++;
-          if (samplesReceived >= samplesExpected) finalize();
-        },
-        error: (err) => reject(new Error('AudioDecoder error: ' + err.message)),
-      });
+      let decoderConfigured = false;
+      try {
+        decoder = new AudioDecoder({
+          output: (audioData) => {
+            try {
+              const numFrames = audioData.numberOfFrames;
+              const channelData = new Float32Array(numFrames);
+              audioData.copyTo(channelData, { planeIndex: 0 });
+              pcmChunks.push(channelData);
+            } finally {
+              audioData.close();
+            }
+            samplesReceived++;
+            if (samplesReceived >= samplesExpected) finalize();
+          },
+          error: (err) => fail('AudioDecoder error: ' + err.message),
+        });
 
-      const trackConfig = mp4boxFile.getTrackById(audioTrack.id);
-      decoder.configure({
-        codec: audioTrack.codec,
-        sampleRate,
-        numberOfChannels,
-      });
+        decoder.configure({
+          codec: audioTrack.codec,
+          sampleRate,
+          numberOfChannels,
+        });
+        decoderConfigured = true;
+        steps.push('decoder configured');
+      } catch (configErr) {
+        fail('AudioDecoder configure failed: ' + configErr.message);
+        return;
+      }
+
+      if (!decoderConfigured) return;
 
       mp4boxFile.setExtractionOptions(audioTrack.id, null, { nbSamples: 100 });
       mp4boxFile.start();
+      steps.push('extraction started');
     };
 
     mp4boxFile.onSamples = (trackId, ref, samples) => {
+      steps.push(`onSamples (${samples.length} samples)`);
       for (const sample of samples) {
-        const chunk = new EncodedAudioChunk({
-          type: sample.is_sync ? 'key' : 'delta',
-          timestamp: (sample.cts / sample.timescale) * 1_000_000,
-          duration: (sample.duration / sample.timescale) * 1_000_000,
-          data: sample.data,
-        });
-        decoder.decode(chunk);
+        try {
+          const chunk = new EncodedAudioChunk({
+            type: sample.is_sync ? 'key' : 'delta',
+            timestamp: (sample.cts / sample.timescale) * 1_000_000,
+            duration: (sample.duration / sample.timescale) * 1_000_000,
+            data: sample.data,
+          });
+          decoder.decode(chunk);
+        } catch (decodeErr) {
+          decodeErrors++;
+          console.warn('Sample decode failed:', decodeErr);
+        }
       }
     };
 
     blob.arrayBuffer().then((arrayBuffer) => {
       arrayBuffer.fileStart = 0;
+      steps.push(`blob read (${arrayBuffer.byteLength} bytes)`);
       mp4boxFile.appendBuffer(arrayBuffer);
       mp4boxFile.flush();
+      steps.push('buffer appended + flushed');
       // Safety timeout in case sample counts never line up
       setTimeout(() => finalize(), 8000);
-    }).catch(reject);
+    }).catch((err) => fail('blob read failed: ' + err.message));
   });
 }
 
