@@ -220,6 +220,29 @@ function App() {
     fontWeight: isSelected || isFirst ? '600' : '400',
   });
 
+  const handleRefreshApp = async () => {
+    // In standalone (home-screen) mode there's no address bar or browser
+    // reload button, so this is the only escape hatch when the app
+    // misbehaves. Clear caches first so a stale bundle can't survive it.
+    try {
+      if (window.caches?.keys) {
+        const keys = await window.caches.keys();
+        await Promise.all(keys.map(k => window.caches.delete(k)));
+      }
+    } catch (err) {
+      console.warn('Cache clear failed:', err);
+    }
+    window.location.replace(window.location.pathname + '?r=' + Date.now());
+  };
+
+  const RefreshLink = () => (
+    <button
+      onClick={handleRefreshApp}
+      style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
+      🔄 Refresh app
+    </button>
+  );
+
   return (
     <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       <h1 style={{ textAlign: 'center' }}>🎸 Riff Catalog</h1>
@@ -260,6 +283,9 @@ function App() {
                     🗂 Your recordings are saved to your Google Drive in a folder called <strong>RiffCatalog</strong>. Only you can access them — this app cannot see anything else in your Drive.
                   </p>
                   <p style={{ marginTop: '12px', fontSize: '13px', textAlign: 'center' }}>
+                    <RefreshLink />
+                  </p>
+                  <p style={{ marginTop: '6px', fontSize: '13px', textAlign: 'center' }}>
                     <button onClick={() => setView('changelog')} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
                       View changelog
                     </button>
@@ -364,6 +390,12 @@ function App() {
                       Discard
                     </button>
                   </div>
+                  <p style={{ marginTop: '16px', fontSize: '13px', textAlign: 'center' }}>
+                    <RefreshLink />
+                  </p>
+                  <p style={{ marginTop: '4px', fontSize: '11px', color: '#999', textAlign: 'center' }}>
+                    Refreshing discards this unsaved recording.
+                  </p>
                 </div>
               )}
             </div>
