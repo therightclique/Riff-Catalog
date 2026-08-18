@@ -162,7 +162,13 @@ export async function analyzeAudio(blob) {
     };
   } catch (err) {
     console.error('Audio analysis failed:', err);
-    alert('Key/BPM analysis failed: ' + (err?.message || 'unknown error') + '\n\nCheck the browser console for details.');
+    alert(
+      'Key/BPM analysis failed.\n\n' +
+      'Blob type: ' + blob.type + '\n' +
+      'Blob size: ' + blob.size + ' bytes\n' +
+      'Error name: ' + (err?.name || 'unknown') + '\n' +
+      'Error message: ' + (err?.message || 'unknown error')
+    );
     return null;
   }
 }
