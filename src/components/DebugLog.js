@@ -30,10 +30,18 @@ function serialize(arg) {
   }
 }
 
+function localTimestamp() {
+  const d = new Date();
+  const pad = (n, w = 2) => String(n).padStart(w, '0');
+  // Render in the browser's local timezone rather than UTC.
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
+         `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}.${pad(d.getMilliseconds(), 3)}`;
+}
+
 export function addEntry(level, args) {
   entries.push({
     level,
-    time: new Date().toISOString(),
+    time: localTimestamp(),
     text: args.map(serialize).join(' '),
   });
   if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
@@ -56,9 +64,11 @@ export function getEntries() {
 }
 
 export function formatAsText() {
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'local';
   const header = [
     `Riff Catalog debug log`,
     `Generated: ${new Date().toString()}`,
+    `Timestamps shown in: ${tz}`,
     `User agent: ${navigator.userAgent}`,
     `Entries: ${entries.length}`,
     '',

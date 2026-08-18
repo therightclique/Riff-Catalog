@@ -1,4 +1,92 @@
 import Meyda from 'meyda';
+import * as MP4Box from 'mp4box';
+
+// iOS Safari's MediaRecorder writes fragmented MP4. Neither
+// AudioContext.decodeAudioData nor the WASM AAC decoder can read that
+// container directly. mp4box can, so we demux the raw AAC frames out of
+// it and re-wrap each one in a 7-byte ADTS header, producing a plain AAC
+// stream the WASM decoder handles. No playback, no platform decoder.
+
+function parseAudioSpecificConfig(asc) {
+  const b0 = asc[0], b1 = asc[1];
+  return {
+    objectType: (b0 >> 3) & 0x1F,
+    freqIndex: ((b0 & 0x07) << 1) | ((b1 >> 7) & 0x01),
+    channelConfig: (b1 >> 3) & 0x0F,
+  };
+}
+
+function adtsHeader(payloadLength, { objectType, freqIndex, channelConfig }) {
+  const frameLength = payloadLength + 7;
+  const h = new Uint8Array(7);
+  h[0] = 0xFF;
+  h[1] = 0xF1; // MPEG-4, layer 0, no CRC
+  h[2] = ((objectType - 1) << 6) | (freqIndex << 2) | ((channelConfig >> 2) & 0x01);
+  h[3] = ((channelConfig & 0x03) << 6) | ((frameLength >> 11) & 0x03);
+  h[4] = (frameLength >> 3) & 0xFF;
+  h[5] = ((frameLength & 0x07) << 5) | 0x1F;
+  h[6] = 0xFC;
+  return h;
+}
+
+function demuxMp4ToAdts(arrayBuffer) {
+  const file = MP4Box.createFile();
+  const parts = [];
+  let cfg = null;
+  let trackId = null;
+  let demuxError = null;
+
+  file.onError = (e) => { demuxError = new Error('mp4box: ' + e); };
+
+  file.onReady = (info) => {
+    const track = info.tracks.find(t => t.type === 'audio' || t.audio);
+    if (!track) { demuxError = new Error('No audio track in file'); return; }
+    trackId = track.id;
+    const trak = file.getTrackById(track.id);
+    const entry = trak?.mdia?.minf?.stbl?.stsd?.entries?.[0];
+    const dsi = entry?.esds?.esd?.descs
+      ?.find(d => d.tag === 0x04)?.descs
+      ?.find(d => d.tag === 0x05);
+    if (!dsi?.data || dsi.data.length < 2) {
+      demuxError = new Error('No AudioSpecificConfig found in file');
+      return;
+    }
+    cfg = parseAudioSpecificConfig(dsi.data);
+    file.setExtractionOptions(track.id, null, { nbSamples: 1000 });
+    file.start();
+  };
+
+  file.onSamples = (id, ref, samples) => {
+    if (!cfg) return;
+    for (const s of samples) {
+      const d = s.data instanceof Uint8Array ? s.data : new Uint8Array(s.data);
+      parts.push(adtsHeader(d.length, cfg), d);
+    }
+  };
+
+  const ab = arrayBuffer.slice(0);
+  ab.fileStart = 0;
+  file.appendBuffer(ab);
+  file.flush();
+
+  // If extraction was armed inside onReady after the buffer had already
+  // been parsed, feed it once more so onSamples runs over the data.
+  if (parts.length === 0 && cfg && trackId !== null && !demuxError) {
+    const ab2 = arrayBuffer.slice(0);
+    ab2.fileStart = 0;
+    file.appendBuffer(ab2);
+    file.flush();
+  }
+
+  if (demuxError) throw demuxError;
+  if (parts.length === 0) throw new Error('mp4box extracted no audio frames');
+
+  const total = parts.reduce((sum, p) => sum + p.length, 0);
+  const adts = new Uint8Array(total);
+  let offset = 0;
+  for (const p of parts) { adts.set(p, offset); offset += p.length; }
+  return adts;
+}
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -142,12 +230,29 @@ export async function analyzeAudio(blob, capturedPcm = null) {
       } catch (directErr) {
         console.warn('Native decode failed, using WASM AAC decoder:', directErr);
         const { default: decodeAAC } = await import('@audio/decode-aac');
-        const decoded = await decodeAAC(new Uint8Array(arrayBuffer));
-        sampleRate = decoded.sampleRate;
-        channelData = decoded.channelData[0];
-        if (!channelData?.length) {
-          throw new Error('WASM AAC decoder returned no samples');
+
+        // Try the file as-is first (works for plain, non-fragmented AAC),
+        // then fall back to demuxing the MP4 container into an ADTS stream.
+        let decoded = null;
+        try {
+          decoded = await decodeAAC(new Uint8Array(arrayBuffer.slice(0)));
+        } catch (rawErr) {
+          console.warn('Direct AAC decode threw, will demux:', rawErr);
         }
+
+        if (!decoded?.channelData?.[0]?.length) {
+          console.warn('Direct AAC decode produced no samples, demuxing MP4 to ADTS');
+          const adts = demuxMp4ToAdts(arrayBuffer);
+          console.log(`Demuxed ${adts.length} bytes of ADTS from container`);
+          decoded = await decodeAAC(adts);
+        }
+
+        sampleRate = decoded.sampleRate;
+        channelData = decoded.channelData?.[0];
+        if (!channelData?.length) {
+          throw new Error('AAC decoder returned no samples after demuxing');
+        }
+        console.log(`Decoded ${channelData.length} samples at ${sampleRate}Hz`);
       }
     }
 

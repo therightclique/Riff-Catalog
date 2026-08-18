@@ -110,7 +110,7 @@ export default function Debug({ accessToken }) {
               borderBottom: '1px solid #1e1e1e', whiteSpace: 'pre-wrap',
               wordBreak: 'break-word', color: LEVEL_COLORS[e.level] || '#d0d0d0',
             }}>
-              <span style={{ color: '#666' }}>{e.time.slice(11, 23)} </span>
+              <span style={{ color: '#666' }}>{e.time.slice(11)} </span>
               <strong>{e.level.toUpperCase()}</strong>{' '}
               {e.text}
             </div>
