@@ -1,5 +1,4 @@
 import Meyda from 'meyda';
-import * as MP4Box from 'mp4box';
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -118,248 +117,13 @@ function ensureRelativeKeyPresent(candidates) {
   return [candidates[0], relativeEntry, ...candidates.slice(1)];
 }
 
-// iOS Safari's MediaRecorder writes fragmented MP4 (multiple internal
-// moov/moof/mdat sections). AudioContext.decodeAudioData() is a strict
-// whole-file decoder and commonly rejects that structure with a generic
-// "EncodingError: Decoding failed", even though the file is perfectly
-// valid — it's why Library playback (which uses a plain <audio> element
-// and the OS's native, more tolerant media pipeline) works fine while
-// analysis fails. This fallback properly demuxes the fragmented MP4 with
-// mp4box.js into raw AAC chunks, then decodes them with the WebCodecs
-// AudioDecoder, which is built to handle streaming/fragmented input. No
-// playback, no audio output, purely binary parsing.
-function decodeFragmentedMp4(blob) {
-  return Promise.race([
-    decodeFragmentedMp4Inner(blob),
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Decode timed out after 15s')), 15000)
-    ),
-  ]);
-}
-
-function decodeFragmentedMp4Inner(blob) {
-  return new Promise((resolve, reject) => {
-    const steps = [];
-    const fail = (msg) => reject(new Error(msg + ' | steps: ' + steps.join(' > ')));
-
-    if (typeof AudioDecoder === 'undefined') {
-      fail('WebCodecs AudioDecoder is not available on this browser');
-      return;
-    }
-    steps.push('AudioDecoder available');
-
-    const mp4boxFile = MP4Box.createFile();
-    const pcmChunks = [];
-    let sampleRate = null;
-    let numberOfChannels = null;
-    let decoder = null;
-    let samplesReceived = 0;
-    let samplesExpected = 0;
-    let decodeErrors = 0;
-    let finalized = false;
-
-    const finalize = () => {
-      if (finalized) return;
-      finalized = true;
-      steps.push(`finalize (received ${samplesReceived}/${samplesExpected}, decodeErrors ${decodeErrors})`);
-      if (!pcmChunks.length) {
-        fail('No audio samples were decoded from the recording');
-        return;
-      }
-      const totalLength = pcmChunks.reduce((sum, c) => sum + c.length, 0);
-      const merged = new Float32Array(totalLength);
-      let offset = 0;
-      for (const chunk of pcmChunks) {
-        merged.set(chunk, offset);
-        offset += chunk.length;
-      }
-      resolve({
-        sampleRate,
-        getChannelData: () => merged,
-      });
-    };
-
-    mp4boxFile.onError = (err) => fail('mp4box demux error: ' + err);
-
-    let onReadyComplete = null;
-    const onReadyPromise = new Promise((res) => { onReadyComplete = res; });
-
-    mp4boxFile.onReady = async (info) => {
-      steps.push('mp4box onReady');
-      const audioTrack = info.tracks.find(t => t.type === 'audio' || t.audio);
-      if (!audioTrack) {
-        fail('No audio track found in recording (tracks: ' + info.tracks.map(t => t.type).join(',') + ')');
-        onReadyComplete();
-        return;
-      }
-      sampleRate = audioTrack.audio?.sample_rate || audioTrack.timescale;
-      numberOfChannels = audioTrack.audio?.channel_count || 1;
-      samplesExpected = audioTrack.nb_samples;
-      steps.push(`track found (codec=${audioTrack.codec}, sr=${sampleRate}, ch=${numberOfChannels}, samples=${samplesExpected})`);
-
-      const decoderConfig = {
-        codec: audioTrack.codec,
-        sampleRate,
-        numberOfChannels,
-      };
-
-      // WebCodecs AAC handling: if `description` is omitted, the decoder
-      // assumes the bitstream is raw ADTS (with sync headers per frame).
-      // MP4-contained AAC samples are NOT ADTS-framed — they're raw AAC
-      // access units meant to pair with the AudioSpecificConfig stored in
-      // the esds box. Without supplying that as `description`, Safari's
-      // decoder can silently accept every chunk and never produce output,
-      // which matches exactly what we're seeing (0 errors, 0 output).
-      try {
-        const trak = mp4boxFile.getTrackById(audioTrack.id);
-        const stsdEntry = trak?.mdia?.minf?.stbl?.stsd?.entries?.[0];
-        const esds = stsdEntry?.esds;
-        if (esds?.esd?.descs) {
-          // Find the DecoderSpecificInfo (tag 0x05) inside the ES descriptor
-          const decoderConfigDescr = esds.esd.descs
-            .find(d => d.tag === 0x04)?.descs
-            ?.find(d => d.tag === 0x05);
-          if (decoderConfigDescr?.data) {
-            decoderConfig.description = decoderConfigDescr.data;
-            const hex = Array.from(decoderConfigDescr.data).map(b => b.toString(16).padStart(2, '0')).join(' ');
-            steps.push(`extracted AudioSpecificConfig (${decoderConfigDescr.data.length} bytes: ${hex})`);
-          } else {
-            steps.push('esds found but no DecoderSpecificInfo (tag 0x05) located');
-          }
-        } else {
-          steps.push('no esds/AudioSpecificConfig found on track');
-        }
-      } catch (descErr) {
-        steps.push('description extraction failed: ' + descErr.message);
-      }
-
-      try {
-        const support = await AudioDecoder.isConfigSupported(decoderConfig);
-        steps.push(`isConfigSupported: ${support.supported}`);
-        if (!support.supported) {
-          fail(`This browser reports it does NOT support decoding codec "${audioTrack.codec}" at ${sampleRate}Hz/${numberOfChannels}ch via WebCodecs, even though the AudioDecoder class exists`);
-          onReadyComplete();
-          return;
-        }
-      } catch (supportErr) {
-        steps.push('isConfigSupported check threw: ' + supportErr.message);
-      }
-
-      let decoderConfigured = false;
-      try {
-        decoder = new AudioDecoder({
-          output: (audioData) => {
-            try {
-              const numFrames = audioData.numberOfFrames;
-              const channelData = new Float32Array(numFrames);
-              audioData.copyTo(channelData, { planeIndex: 0 });
-              pcmChunks.push(channelData);
-            } finally {
-              audioData.close();
-            }
-            samplesReceived++;
-            if (samplesReceived >= samplesExpected) finalize();
-          },
-          error: (err) => fail('AudioDecoder error: ' + err.message),
-        });
-
-        decoder.configure(decoderConfig);
-        decoderConfigured = true;
-        steps.push('decoder configured');
-      } catch (configErr) {
-        fail('AudioDecoder configure failed: ' + configErr.message);
-        onReadyComplete();
-        return;
-      }
-
-      if (!decoderConfigured) { onReadyComplete(); return; }
-
-      mp4boxFile.setExtractionOptions(audioTrack.id, null, { nbSamples: 100 });
-      mp4boxFile.start();
-      steps.push('extraction started (start() called)');
-
-      // mp4box only emits onSamples for data processed AFTER start() is
-      // called with extraction options armed. The initial appendBuffer
-      // (done purely to trigger onReady/parse the header) happened before
-      // extraction was armed, so re-feed the same bytes now so mp4box
-      // actually runs sample extraction over them.
-      try {
-        mp4boxFile.appendBuffer(fullArrayBuffer);
-        mp4boxFile.flush();
-        steps.push('buffer re-appended post-start for extraction');
-      } catch (reAppendErr) {
-        steps.push('re-append failed: ' + reAppendErr.message);
-      }
-
-      onReadyComplete();
-    };
-
-    let loggedFirstSample = false;
-    mp4boxFile.onSamples = (trackId, ref, samples) => {
-      steps.push(`onSamples (${samples.length} samples)`);
-      for (const sample of samples) {
-        if (!loggedFirstSample) {
-          loggedFirstSample = true;
-          const dataArr = sample.data instanceof Uint8Array ? sample.data : new Uint8Array(sample.data);
-          const hex = Array.from(dataArr.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
-          steps.push(`first sample: ${dataArr.length} bytes, is_sync=${sample.is_sync}, cts=${sample.cts}, timescale=${sample.timescale}, first8=${hex}`);
-        }
-        try {
-          const chunk = new EncodedAudioChunk({
-            type: sample.is_sync ? 'key' : 'delta',
-            timestamp: (sample.cts / sample.timescale) * 1_000_000,
-            duration: (sample.duration / sample.timescale) * 1_000_000,
-            data: sample.data,
-          });
-          decoder.decode(chunk);
-        } catch (decodeErr) {
-          decodeErrors++;
-          console.warn('Sample decode failed:', decodeErr);
-        }
-      }
-    };
-
-    let fullArrayBuffer = null;
-
-    blob.arrayBuffer().then(async (arrayBuffer) => {
-      arrayBuffer.fileStart = 0;
-      fullArrayBuffer = arrayBuffer;
-      steps.push(`blob read (${arrayBuffer.byteLength} bytes)`);
-      mp4boxFile.appendBuffer(arrayBuffer);
-      mp4boxFile.flush();
-      steps.push('buffer appended + flushed (sync mp4box work done)');
-
-      // mp4box.js calls onReady synchronously during appendBuffer/flush,
-      // but does NOT await it. Since onReady does async work (checking
-      // isConfigSupported, configuring the decoder, then re-appending for
-      // extraction), we must wait for it to actually finish before
-      // touching the decoder here.
-      steps.push('waiting for onReady to finish its async setup');
-      await onReadyPromise;
-      steps.push('onReady setup complete');
-
-      if (finalized) return; // onReady already failed/finalized
-
-      // mp4box's flush() only forces IT to emit samples via onSamples;
-      // it does not touch the AudioDecoder. WebCodecs decoders are allowed
-      // to buffer decoded output internally and are only REQUIRED to emit
-      // everything once AudioDecoder.flush() is called.
-      try {
-        if (decoder && decoder.state === 'configured') {
-          steps.push('calling decoder.flush()');
-          await decoder.flush();
-          steps.push('decoder.flush() resolved');
-        } else {
-          steps.push(`decoder not ready for flush (decoder=${!!decoder}, state=${decoder?.state})`);
-        }
-      } catch (flushErr) {
-        steps.push('decoder.flush() threw: ' + flushErr.message);
-      }
-      finalize();
-    }).catch((err) => fail('blob read failed: ' + err.message));
-  });
-}
-
+// iOS Safari cannot decode its own MediaRecorder output (fragmented MP4)
+// via AudioContext.decodeAudioData or the WebCodecs AudioDecoder — both
+// silently fail on files that are perfectly valid and play back fine.
+// The fallback below uses a self-contained WASM AAC decoder, which parses
+// and decodes the file entirely in JavaScript/WASM with no dependency on
+// the platform's media stack. Loaded lazily so it only downloads when a
+// clip actually needs decoding.
 export async function analyzeAudio(blob, capturedPcm = null) {
   try {
     let sampleRate, channelData;
@@ -368,18 +132,22 @@ export async function analyzeAudio(blob, capturedPcm = null) {
       sampleRate = capturedPcm.sampleRate;
       channelData = capturedPcm.pcm;
     } else {
+      const arrayBuffer = await blob.arrayBuffer();
       try {
-        const arrayBuffer = await blob.arrayBuffer();
         const audioContext = new AudioContext();
-        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer.slice(0));
         sampleRate = audioBuffer.sampleRate;
         channelData = audioBuffer.getChannelData(0);
         await audioContext.close();
       } catch (directErr) {
-        console.warn('Direct decode failed, demuxing fragmented MP4 instead:', directErr);
-        const decoded = await decodeFragmentedMp4(blob);
+        console.warn('Native decode failed, using WASM AAC decoder:', directErr);
+        const { default: decodeAAC } = await import('@audio/decode-aac');
+        const decoded = await decodeAAC(new Uint8Array(arrayBuffer));
         sampleRate = decoded.sampleRate;
-        channelData = decoded.getChannelData();
+        channelData = decoded.channelData[0];
+        if (!channelData?.length) {
+          throw new Error('WASM AAC decoder returned no samples');
+        }
       }
     }
 
@@ -419,12 +187,6 @@ export async function analyzeAudio(blob, capturedPcm = null) {
     };
   } catch (err) {
     console.error('Audio analysis failed:', err);
-    alert(
-      "Key/BPM analysis isn't available for this clip on this device.\n\n" +
-      "iPhones currently can't re-analyze previously saved recordings due to an Apple browser limitation. " +
-      "New recordings are analyzed automatically when you record them. " +
-      "To analyze this older clip, open Riff Catalog on a computer."
-    );
     return null;
   }
 }
