@@ -221,9 +221,39 @@ function App() {
   });
 
   const handleRefreshApp = async () => {
+    // If Drive isn't connected, the silent (prompt: '') token request made
+    // on load has likely failed — this is common in standalone/home-screen
+    // mode, where the browser can restrict the storage access that silent
+    // OAuth relies on. A plain page reload just repeats the same silent
+    // request and fails the same way. Instead, use this click (a real user
+    // gesture) to force an interactive consent prompt, which works even
+    // when the silent path can't.
+    if (!accessToken && window.google?.accounts?.oauth2) {
+      try {
+        await new Promise((resolve) => {
+          const tokenClient = window.google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            prompt: 'consent',
+            callback: (tokenResponse) => {
+              if (tokenResponse.access_token) setAccessToken(tokenResponse.access_token);
+              resolve();
+            },
+          });
+          tokenClient.requestAccessToken();
+        });
+        // If that worked, we're reconnected without needing a disruptive
+        // full reload — don't proceed to the cache-clear/reload below.
+        return;
+      } catch (err) {
+        console.warn('Drive reconnect attempt failed:', err);
+        // fall through to the full refresh below
+      }
+    }
+
     // In standalone (home-screen) mode there's no address bar or browser
-    // reload button, so this is the only escape hatch when the app
-    // misbehaves. Clear caches first so a stale bundle can't survive it.
+    // reload button, so this is the escape hatch when the app misbehaves
+    // in other ways. Clear caches first so a stale bundle can't survive it.
     try {
       if (window.caches?.keys) {
         const keys = await window.caches.keys();
@@ -239,7 +269,7 @@ function App() {
     <button
       onClick={handleRefreshApp}
       style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
-      🔄 Refresh app
+      {accessToken ? '🔄 Refresh app' : '🔄 Reconnect Drive & refresh'}
     </button>
   );
 
