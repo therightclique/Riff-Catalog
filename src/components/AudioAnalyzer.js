@@ -187,6 +187,6 @@ export async function analyzeAudio(blob, capturedPcm = null) {
     };
   } catch (err) {
     console.error('Audio analysis failed:', err);
-    return null;
+    throw err;
   }
 }

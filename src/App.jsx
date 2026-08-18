@@ -7,6 +7,10 @@ import { analyzeAudio } from './components/AudioAnalyzer';
 import KeyFinder from './components/KeyFinder';
 import Practice from './components/Practice';
 import Changelog, { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog';
+import Debug from './components/Debug';
+import { initDebugLog } from './components/DebugLog';
+
+initDebugLog();
 
 const CLIENT_ID = '495492558072-8ohvj2v3npv2coeq1alndbh0g0lk95s2.apps.googleusercontent.com';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
@@ -127,7 +131,12 @@ function App() {
     setShowOtherKey(false);
     setDuplicateWarning(null);
     setAnalyzing(true);
-    const result = await analyzeAudio(blob, capturedPcm);
+    let result = null;
+    try {
+      result = await analyzeAudio(blob, capturedPcm);
+    } catch (err) {
+      console.error('Record-time analysis failed:', err);
+    }
     console.log('Analysis result:', result);
     setAnalysis(result);
     if (result?.candidates?.length > 0) setSelectedKey(result.candidates[0].key);
@@ -139,8 +148,10 @@ function App() {
     setUploading(true);
     setDuplicateWarning(null);
 
+    const t0 = performance.now();
     try {
       const isDupe = await checkDuplicate(accessToken, clipName.trim());
+      console.log(`[timing] duplicate check: ${Math.round(performance.now() - t0)}ms`);
       if (isDupe) {
         const suggested = await findAvailableName(accessToken, clipName.trim());
         setDuplicateWarning({ original: clipName.trim(), suggested });
@@ -157,6 +168,7 @@ function App() {
   const doUpload = async (name) => {
     setUploading(true);
     setDuplicateWarning(null);
+    const t0 = performance.now();
     try {
       const initialMetadata = {
         dateRecorded: new Date().toISOString(),
@@ -168,6 +180,7 @@ function App() {
         accessToken, pendingRecording.blob, name,
         pendingRecording.mimeType, initialMetadata
       );
+      console.log(`[timing] uploadToDrive total: ${Math.round(performance.now() - t0)}ms`);
       setLastUpload(result);
       setPendingRecording(null);
       setClipName('');
@@ -230,6 +243,7 @@ function App() {
             <button style={tabStyle(view === 'library')} onClick={() => setView('library')}>Library</button>
             <button style={tabStyle(view === 'keyfinder')} onClick={() => setView('keyfinder')}>Key Finder</button>
             <button style={tabStyle(view === 'practice')} onClick={() => setView('practice')}>Practice</button>
+            <button style={tabStyle(view === 'debug')} onClick={() => setView('debug')}>Debug</button>
           </div>
 
           {view === 'record' && (
@@ -359,6 +373,7 @@ function App() {
           {view === 'keyfinder' && <KeyFinder onFilterByKey={handleFilterByKey} />}
           {view === 'practice' && <Practice />}
           {view === 'changelog' && <Changelog />}
+          {view === 'debug' && <Debug accessToken={accessToken} />}
         </div>
       )}
     </div>

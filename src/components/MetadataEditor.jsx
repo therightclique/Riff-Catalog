@@ -39,7 +39,7 @@ const inputStyle = {
 };
 const selectStyle = { ...inputStyle };
 
-function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidates }) {
+function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidates, analyzeError }) {
   const [tagInput, setTagInput] = useState('');
   const [moodInput, setMoodInput] = useState('');
 
@@ -98,7 +98,17 @@ function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidate
             </button>
           )}
         </div>
+        {analyzeError && (
+          <p style={{
+            fontSize: '12px', color: '#a00', margin: '8px 0 0',
+            lineHeight: '1.4', wordBreak: 'break-word',
+          }}>
+            {analyzeError}
+          </p>
+        )}
       </div>
+
+      <div style={{ height: '12px' }} />
 
       {/* BPM + Time Signature */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>

@@ -528,12 +528,8 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                 onAnalyze={() => handleAnalyze(clip)}
                 analyzing={analyzingId === clip.id}
                 keyCandidates={analysisCandidates[clip.id] || metadataMap[clip.id]?.candidates || null}
+                analyzeError={analyzeFailed[clip.id] ? `Analysis failed — ${analyzeFailed[clip.id]}` : null}
               />
-              {analyzeFailed[clip.id] && (
-                <p style={{ fontSize: '12px', color: '#a00', margin: '8px 0 0' }}>
-                  Analysis failed — {analyzeFailed[clip.id]}
-                </p>
-              )}
               <button onClick={() => handleSaveMetadata(clip)} disabled={savingId === clip.id}
                 style={{ marginTop: '10px', padding: '8px 20px', backgroundColor: '#1a73e8', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }}>

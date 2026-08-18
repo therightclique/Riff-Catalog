@@ -40,6 +40,29 @@ async function getOrCreateFolder(accessToken, folderName, parentId = null) {
   return createData.id;
 }
 
+export async function uploadTextFile(accessToken, fileName, text) {
+  const rootFolderId = await getOrCreateFolder(accessToken, FOLDER_NAME);
+  const debugFolderId = await getOrCreateFolder(accessToken, 'Debug', rootFolderId);
+
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify({
+    name: fileName,
+    parents: [debugFolderId],
+  })], { type: 'application/json' }));
+  form.append('file', new Blob([text], { type: 'text/plain' }));
+
+  const res = await fetch(
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name',
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+      body: form,
+    }
+  );
+  if (!res.ok) throw new Error(`Drive upload failed (${res.status})`);
+  return res.json();
+}
+
 export async function uploadToDrive(accessToken, blob, fileName, mimeType, initialMetadata = {}) {
   const now = new Date();
   const year = now.getFullYear().toString();
