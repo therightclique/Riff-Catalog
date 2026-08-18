@@ -275,7 +275,21 @@ function decodeFragmentedMp4Inner(blob) {
 
       mp4boxFile.setExtractionOptions(audioTrack.id, null, { nbSamples: 100 });
       mp4boxFile.start();
-      steps.push('extraction started');
+      steps.push('extraction started (start() called)');
+
+      // mp4box only emits onSamples for data processed AFTER start() is
+      // called with extraction options armed. The initial appendBuffer
+      // (done purely to trigger onReady/parse the header) happened before
+      // extraction was armed, so re-feed the same bytes now so mp4box
+      // actually runs sample extraction over them.
+      try {
+        mp4boxFile.appendBuffer(fullArrayBuffer);
+        mp4boxFile.flush();
+        steps.push('buffer re-appended post-start for extraction');
+      } catch (reAppendErr) {
+        steps.push('re-append failed: ' + reAppendErr.message);
+      }
+
       onReadyComplete();
     };
 
@@ -297,8 +311,11 @@ function decodeFragmentedMp4Inner(blob) {
       }
     };
 
+    let fullArrayBuffer = null;
+
     blob.arrayBuffer().then(async (arrayBuffer) => {
       arrayBuffer.fileStart = 0;
+      fullArrayBuffer = arrayBuffer;
       steps.push(`blob read (${arrayBuffer.byteLength} bytes)`);
       mp4boxFile.appendBuffer(arrayBuffer);
       mp4boxFile.flush();
@@ -306,9 +323,9 @@ function decodeFragmentedMp4Inner(blob) {
 
       // mp4box.js calls onReady synchronously during appendBuffer/flush,
       // but does NOT await it. Since onReady does async work (checking
-      // isConfigSupported, configuring the decoder), we must wait for it
-      // to actually finish before touching the decoder here, or we race
-      // ahead with decoder still null / unconfigured.
+      // isConfigSupported, configuring the decoder, then re-appending for
+      // extraction), we must wait for it to actually finish before
+      // touching the decoder here.
       steps.push('waiting for onReady to finish its async setup');
       await onReadyPromise;
       steps.push('onReady setup complete');
@@ -318,10 +335,7 @@ function decodeFragmentedMp4Inner(blob) {
       // mp4box's flush() only forces IT to emit samples via onSamples;
       // it does not touch the AudioDecoder. WebCodecs decoders are allowed
       // to buffer decoded output internally and are only REQUIRED to emit
-      // everything once AudioDecoder.flush() is called. Without this,
-      // decode() can accept every chunk with zero errors while output
-      // never fires — exactly the "received 0/N, decodeErrors 0" failure
-      // seen on iOS Safari.
+      // everything once AudioDecoder.flush() is called.
       try {
         if (decoder && decoder.state === 'configured') {
           steps.push('calling decoder.flush()');
