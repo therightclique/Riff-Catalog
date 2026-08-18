@@ -118,6 +118,7 @@ function App() {
   };
 
   const handleRecordingComplete = async (blob, mimeType) => {
+    console.log('Recording complete. Blob type:', blob.type, 'size:', blob.size, 'passed mimeType:', mimeType);
     setPendingRecording({ blob, mimeType });
     setClipName('');
     setLastUpload(null);
@@ -127,6 +128,7 @@ function App() {
     setDuplicateWarning(null);
     setAnalyzing(true);
     const result = await analyzeAudio(blob);
+    console.log('Analysis result:', result);
     setAnalysis(result);
     if (result?.candidates?.length > 0) setSelectedKey(result.candidates[0].key);
     setAnalyzing(false);

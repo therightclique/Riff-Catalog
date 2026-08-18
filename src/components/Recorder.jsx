@@ -80,7 +80,23 @@ function Recorder({ onRecordingComplete }) {
       source.connect(analyser);
       analyserRef.current = analyser;
 
-      const mediaRecorder = new MediaRecorder(stream);
+      // Explicitly pick a MIME type MediaRecorder can produce AND
+      // AudioContext.decodeAudioData can reliably decode. Leaving this
+      // unspecified lets the browser choose its own default, which on
+      // some iOS versions produces a container decodeAudioData can't
+      // read, causing "Decoding failed" after recording.
+      const preferredTypes = [
+        'audio/mp4',
+        'audio/webm;codecs=opus',
+        'audio/webm',
+        'audio/aac',
+        'audio/ogg;codecs=opus',
+      ];
+      const supportedType = preferredTypes.find(t => MediaRecorder.isTypeSupported(t));
+
+      const mediaRecorder = supportedType
+        ? new MediaRecorder(stream, { mimeType: supportedType })
+        : new MediaRecorder(stream);
       mediaRecorderRef.current = mediaRecorder;
       chunksRef.current = [];
 
