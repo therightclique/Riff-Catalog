@@ -52,7 +52,38 @@ function App() {
     const saved = localStorage.getItem('rc_user');
     return saved ? JSON.parse(saved) : null;
   });
-  const [accessToken, setAccessToken] = useState(null);
+
+  // Google's implicit-flow access tokens are short-lived (~1hr) and are
+  // never persisted anywhere by default — every fresh page load starts
+  // with none and has to ask Google for a new one. That request is silent
+  // and relies on Google's own session cookie. In a standalone home-screen
+  // app on iOS, each relaunch gets its OWN isolated storage/cookie jar
+  // completely separate from Safari's, so there's no session for the
+  // silent request to use — it fails every single time you reopen the app,
+  // which is what caused the constant hourglass.
+  //
+  // The fix: store the token itself (with its real expiry) so relaunches
+  // within that ~1hr window reuse it instantly with no network request and
+  // no prompt at all, instead of depending on a cookie that doesn't exist
+  // in this context.
+  const [accessToken, setAccessToken] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('rc_drive_token') || 'null');
+      if (saved?.token && saved?.expiresAt && Date.now() < saved.expiresAt) {
+        return saved.token;
+      }
+    } catch { /* ignore malformed storage */ }
+    return null;
+  });
+
+  const storeToken = (token, expiresInSeconds) => {
+    setAccessToken(token);
+    try {
+      const expiresAt = Date.now() + (Math.max(expiresInSeconds || 3600, 60) - 60) * 1000; // 60s safety margin
+      localStorage.setItem('rc_drive_token', JSON.stringify({ token, expiresAt }));
+    } catch { /* storage full/unavailable — token still works for this session */ }
+  };
+
   const [pendingRecording, setPendingRecording] = useState(null);
   const [clipName, setClipName] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -77,7 +108,7 @@ function App() {
     const tokenClient = window.google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID, scope: SCOPES, prompt: '',
       callback: (tokenResponse) => {
-        if (tokenResponse.access_token) setAccessToken(tokenResponse.access_token);
+        if (tokenResponse.access_token) storeToken(tokenResponse.access_token, tokenResponse.expires_in);
       },
     });
     tokenClient.requestAccessToken({ prompt: '' });
@@ -90,7 +121,9 @@ function App() {
     script.defer = true;
     script.onload = () => {
       if (user) {
-        requestDriveAccess();
+        // A still-valid stored token was already loaded into state above —
+        // only ask Google for a new one if we don't already have one.
+        if (!accessToken) requestDriveAccess();
       } else {
         window.google.accounts.id.initialize({
           client_id: CLIENT_ID,
@@ -116,6 +149,7 @@ function App() {
     window.google.accounts.id.disableAutoSelect();
     if (accessToken) window.google.accounts.oauth2.revoke(accessToken);
     localStorage.removeItem('rc_user');
+    localStorage.removeItem('rc_drive_token');
     setUser(null);
     setAccessToken(null);
     driveRequested.current = false;
@@ -221,29 +255,49 @@ function App() {
   });
 
   const handleRefreshApp = async () => {
-    // If Drive isn't connected, the silent (prompt: '') token request made
-    // on load has likely failed — this is common in standalone/home-screen
-    // mode, where the browser can restrict the storage access that silent
-    // OAuth relies on. A plain page reload just repeats the same silent
-    // request and fails the same way. Instead, use this click (a real user
-    // gesture) to force an interactive consent prompt, which works even
-    // when the silent path can't.
+    // Reconnect Drive if needed. Try silently first — most of the time
+    // (token merely expired, or Google still recognizes the browser) this
+    // succeeds instantly with no UI at all. Only fall back to an
+    // interactive prompt if the silent attempt genuinely fails, and even
+    // then avoid forcing the full permissions screen — the scope was
+    // already granted previously, so a light prompt is usually enough.
     if (!accessToken && window.google?.accounts?.oauth2) {
       try {
-        await new Promise((resolve) => {
+        const gotToken = await new Promise((resolve) => {
           const tokenClient = window.google.accounts.oauth2.initTokenClient({
             client_id: CLIENT_ID,
             scope: SCOPES,
-            prompt: 'consent',
+            prompt: '',
             callback: (tokenResponse) => {
-              if (tokenResponse.access_token) setAccessToken(tokenResponse.access_token);
-              resolve();
+              if (tokenResponse.access_token) {
+                storeToken(tokenResponse.access_token, tokenResponse.expires_in);
+                resolve(true);
+              } else {
+                resolve(false);
+              }
             },
           });
-          tokenClient.requestAccessToken();
+          tokenClient.requestAccessToken({ prompt: '' });
+          setTimeout(() => resolve(false), 3000);
         });
-        // If that worked, we're reconnected without needing a disruptive
-        // full reload — don't proceed to the cache-clear/reload below.
+
+        if (!gotToken) {
+          // Silent path genuinely failed — this is the only case that
+          // needs a visible prompt, and we deliberately omit `prompt` so
+          // Google shows the lightest UI it can (often just an account
+          // tap) rather than the full re-consent screen.
+          await new Promise((resolve) => {
+            const tokenClient = window.google.accounts.oauth2.initTokenClient({
+              client_id: CLIENT_ID,
+              scope: SCOPES,
+              callback: (tokenResponse) => {
+                if (tokenResponse.access_token) storeToken(tokenResponse.access_token, tokenResponse.expires_in);
+                resolve();
+              },
+            });
+            tokenClient.requestAccessToken();
+          });
+        }
         return;
       } catch (err) {
         console.warn('Drive reconnect attempt failed:', err);
