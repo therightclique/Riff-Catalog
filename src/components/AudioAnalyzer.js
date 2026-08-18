@@ -1,4 +1,5 @@
 import Meyda from 'meyda';
+import * as MP4Box from 'mp4box';
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -117,14 +118,126 @@ function ensureRelativeKeyPresent(candidates) {
   return [candidates[0], relativeEntry, ...candidates.slice(1)];
 }
 
+// iOS Safari's MediaRecorder writes fragmented MP4 (multiple internal
+// moov/moof/mdat sections). AudioContext.decodeAudioData() is a strict
+// whole-file decoder and commonly rejects that structure with a generic
+// "EncodingError: Decoding failed", even though the file is perfectly
+// valid — it's why Library playback (which uses a plain <audio> element
+// and the OS's native, more tolerant media pipeline) works fine while
+// analysis fails. This fallback properly demuxes the fragmented MP4 with
+// mp4box.js into raw AAC chunks, then decodes them with the WebCodecs
+// AudioDecoder, which is built to handle streaming/fragmented input. No
+// playback, no audio output, purely binary parsing.
+function decodeFragmentedMp4(blob) {
+  return new Promise((resolve, reject) => {
+    if (typeof AudioDecoder === 'undefined') {
+      reject(new Error('WebCodecs AudioDecoder is not available on this browser'));
+      return;
+    }
+
+    const mp4boxFile = MP4Box.createFile();
+    const pcmChunks = [];
+    let sampleRate = null;
+    let numberOfChannels = null;
+    let decoder = null;
+    let samplesReceived = 0;
+    let samplesExpected = 0;
+    let finalized = false;
+
+    const finalize = () => {
+      if (finalized) return;
+      finalized = true;
+      if (!pcmChunks.length) {
+        reject(new Error('No audio samples were decoded from the recording'));
+        return;
+      }
+      const totalLength = pcmChunks.reduce((sum, c) => sum + c.length, 0);
+      const merged = new Float32Array(totalLength);
+      let offset = 0;
+      for (const chunk of pcmChunks) {
+        merged.set(chunk, offset);
+        offset += chunk.length;
+      }
+      resolve({
+        sampleRate,
+        getChannelData: () => merged,
+      });
+    };
+
+    mp4boxFile.onError = (err) => reject(new Error('mp4box demux error: ' + err));
+
+    mp4boxFile.onReady = (info) => {
+      const audioTrack = info.tracks.find(t => t.type === 'audio' || t.audio);
+      if (!audioTrack) {
+        reject(new Error('No audio track found in recording'));
+        return;
+      }
+      sampleRate = audioTrack.audio?.sample_rate || audioTrack.timescale;
+      numberOfChannels = audioTrack.audio?.channel_count || 1;
+      samplesExpected = audioTrack.nb_samples;
+
+      decoder = new AudioDecoder({
+        output: (audioData) => {
+          const numFrames = audioData.numberOfFrames;
+          const channelData = new Float32Array(numFrames);
+          audioData.copyTo(channelData, { planeIndex: 0 });
+          pcmChunks.push(channelData);
+          audioData.close();
+          samplesReceived++;
+          if (samplesReceived >= samplesExpected) finalize();
+        },
+        error: (err) => reject(new Error('AudioDecoder error: ' + err.message)),
+      });
+
+      const trackConfig = mp4boxFile.getTrackById(audioTrack.id);
+      decoder.configure({
+        codec: audioTrack.codec,
+        sampleRate,
+        numberOfChannels,
+      });
+
+      mp4boxFile.setExtractionOptions(audioTrack.id, null, { nbSamples: 100 });
+      mp4boxFile.start();
+    };
+
+    mp4boxFile.onSamples = (trackId, ref, samples) => {
+      for (const sample of samples) {
+        const chunk = new EncodedAudioChunk({
+          type: sample.is_sync ? 'key' : 'delta',
+          timestamp: (sample.cts / sample.timescale) * 1_000_000,
+          duration: (sample.duration / sample.timescale) * 1_000_000,
+          data: sample.data,
+        });
+        decoder.decode(chunk);
+      }
+    };
+
+    blob.arrayBuffer().then((arrayBuffer) => {
+      arrayBuffer.fileStart = 0;
+      mp4boxFile.appendBuffer(arrayBuffer);
+      mp4boxFile.flush();
+      // Safety timeout in case sample counts never line up
+      setTimeout(() => finalize(), 8000);
+    }).catch(reject);
+  });
+}
+
 export async function analyzeAudio(blob) {
   try {
-    const arrayBuffer = await blob.arrayBuffer();
-    const audioContext = new AudioContext();
-    const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-    const sampleRate = audioBuffer.sampleRate;
-    const channelData = audioBuffer.getChannelData(0);
-    await audioContext.close();
+    let sampleRate, channelData;
+    try {
+      const arrayBuffer = await blob.arrayBuffer();
+      const audioContext = new AudioContext();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+      sampleRate = audioBuffer.sampleRate;
+      channelData = audioBuffer.getChannelData(0);
+      await audioContext.close();
+    } catch (directErr) {
+      console.warn('Direct decode failed, demuxing fragmented MP4 instead:', directErr);
+      const decoded = await decodeFragmentedMp4(blob);
+      sampleRate = decoded.sampleRate;
+      channelData = decoded.getChannelData();
+    }
 
     // Analyze first 2 seconds for opening bias
     const firstTwoSecs = Math.min(sampleRate * 2, channelData.length);
