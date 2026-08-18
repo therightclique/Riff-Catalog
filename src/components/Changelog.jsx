@@ -2,6 +2,68 @@ import { useState } from 'react';
 
 const CHANGELOG = [
   {
+    date: '2026-08-17',
+    displayDate: 'August 17, 2026',
+    version: '1.6',
+    entries: [
+      {
+        title: 'Library management',
+        items: [
+          'Clips can be renamed directly in the library — the metadata sidecar is renamed to match so the two stay paired',
+          'Clips can be deleted, with an inline confirmation. Deleted clips move to the Google Drive trash rather than being destroyed, so they can be recovered for 30 days',
+          'Clips can be starred, with a "Starred only" filter for surfacing favorites quickly',
+          'Export the entire library to a CSV file with every metadata field included',
+        ],
+      },
+      {
+        title: 'Installable app',
+        items: [
+          'Added a web app manifest and app icon, so adding Riff Catalog to your home screen now installs it as a proper standalone app instead of a browser bookmark',
+          'Launches fullscreen without browser chrome, with a dark theme and its own app icon',
+        ],
+      },
+      {
+        title: 'Key detection fixed on iPhone',
+        items: [
+          'New recordings are now analyzed from raw audio captured live while you record, so key and BPM are detected without decoding a file at all',
+          'Existing clips can be analyzed again — the app now demuxes the recording itself and decodes it with a built-in AAC decoder instead of relying on the browser, which could not read its own recordings on iOS',
+          'Root cause: iOS Safari writes fragmented MP4 files that neither its own audio decoder nor the WebCodecs decoder could read, failing silently with no error',
+        ],
+      },
+      {
+        title: 'Recording improvements',
+        items: [
+          'Recording is now explicitly mono, fixing audio that played out of only the left speaker on some devices',
+          'Waveform display is far more sensitive — the signal is amplified and clamped so normal playing and singing are clearly visible instead of a near-flat line',
+          'Waveform line is thicker and smoother',
+        ],
+      },
+      {
+        title: 'Faster saving',
+        items: [
+          'Drive folder locations are cached for the session instead of being looked up on every save',
+          'The audio file and its metadata sidecar now upload at the same time rather than one after the other',
+        ],
+      },
+      {
+        title: 'Reverse Key Lookup',
+        items: [
+          'New section on the Key Finder tab — tap any combination of the 12 notes and find every key containing them',
+          'Falls back to a ranked list of closest matches when no key contains all selected notes',
+          'Collapsible, and collapses automatically when a key is chosen from the dropdown',
+        ],
+      },
+      {
+        title: 'Debug tab',
+        items: [
+          'New Debug tab capturing all console output and errors from the session',
+          'Filter by all / warnings / errors, copy the log, clear it, or save it to RiffCatalog/Debug in your Drive',
+          'Timestamps and log filenames use local time',
+        ],
+      },
+    ],
+  },
+  {
     date: '2026-08-04',
     displayDate: 'August 4, 2026',
     version: '1.4',

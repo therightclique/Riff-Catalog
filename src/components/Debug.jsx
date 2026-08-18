@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { subscribe, clearEntries, formatAsText, addEntry } from './DebugLog';
+import { subscribe, clearEntries, formatAsText, addEntry, localFileStamp } from './DebugLog';
 import { uploadTextFile } from './DriveUploader';
 
 const LEVEL_COLORS = {
@@ -39,8 +39,7 @@ export default function Debug({ accessToken }) {
     setUploading(true);
     setStatus('Uploading…');
     try {
-      const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const result = await uploadTextFile(accessToken, `debug-${stamp}.txt`, formatAsText());
+      const result = await uploadTextFile(accessToken, `debug-${localFileStamp()}.txt`, formatAsText());
       setStatus(`Saved to Drive: RiffCatalog/Debug/${result.name}`);
     } catch (err) {
       setStatus('Upload failed: ' + err.message);

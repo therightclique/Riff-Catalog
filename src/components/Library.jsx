@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { fetchClips, getAudioUrl } from './DriveLibrary';
+import { fetchClips, getAudioUrl, trashFile, renameFile } from './DriveLibrary';
 import { loadMetadata, loadAllMetadata, saveMetadata } from './MetadataService';
 import MetadataEditor from './MetadataEditor';
 import { analyzeAudio } from './AudioAnalyzer';
@@ -147,10 +147,14 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
   const [savingId, setSavingId] = useState(null);
   const [analyzingId, setAnalyzingId] = useState(null);
   const [analyzeFailed, setAnalyzeFailed] = useState({});
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  const [busyId, setBusyId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [analysisCandidates, setAnalysisCandidates] = useState({});
   const [filters, setFilters] = useState({
     key: '', keyMode: 'exact', instrument: '', quality: '',
-    timeSignature: '', tuning: '', genre: '', capo: '', tags: [], moods: [], needsLyrics: false,
+    timeSignature: '', tuning: '', genre: '', capo: '', tags: [], moods: [], needsLyrics: false, favorite: false,
   });
   const [sortBy, setSortBy] = useState('newest');
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -285,6 +289,109 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
     setAnalyzingId(null);
   };
 
+  const baseName = (name) => name.replace(/\.(webm|ogg|m4a|mp4|audio|aac)$/i, '');
+  const extOf = (name) => {
+    const m = name.match(/\.(webm|ogg|m4a|mp4|audio|aac)$/i);
+    return m ? m[0] : '';
+  };
+
+  const startRename = (clip) => {
+    setRenamingId(clip.id);
+    setRenameValue(baseName(clip.name));
+  };
+
+  const commitRename = async (clip) => {
+    const trimmed = renameValue.trim();
+    if (!trimmed || trimmed === baseName(clip.name)) { setRenamingId(null); return; }
+    setBusyId(clip.id);
+    try {
+      const newAudioName = trimmed + extOf(clip.name);
+      await renameFile(accessToken, clip.id, newAudioName);
+      // Keep the metadata sidecar's name in sync so it stays paired
+      const sidecarId = metadataMap[clip.id]?._sidecarId;
+      if (sidecarId) {
+        await renameFile(accessToken, sidecarId, trimmed + '.json');
+      }
+      setClips(prev => prev.map(c => c.id === clip.id ? { ...c, name: newAudioName } : c));
+      setRenamingId(null);
+    } catch (err) {
+      console.error('Rename failed:', err);
+      alert('Rename failed: ' + err.message);
+    }
+    setBusyId(null);
+  };
+
+  const handleDelete = async (clip) => {
+    setBusyId(clip.id);
+    try {
+      await trashFile(accessToken, clip.id);
+      const sidecarId = metadataMap[clip.id]?._sidecarId;
+      if (sidecarId) {
+        await trashFile(accessToken, sidecarId).catch(e => console.warn('Sidecar delete failed:', e));
+      }
+      setClips(prev => prev.filter(c => c.id !== clip.id));
+      setConfirmDeleteId(null);
+      if (expandedId === clip.id) setExpandedId(null);
+    } catch (err) {
+      console.error('Delete failed:', err);
+      alert('Delete failed: ' + err.message);
+    }
+    setBusyId(null);
+  };
+
+  const toggleFavorite = async (clip) => {
+    const current = metadataMap[clip.id] || {};
+    const updated = { ...current, favorite: !current.favorite };
+    setMetadataMap(prev => ({ ...prev, [clip.id]: updated }));
+    try {
+      await saveMetadata(accessToken, clip.id, clip.name, updated);
+    } catch (err) {
+      console.error('Favorite save failed:', err);
+      setMetadataMap(prev => ({ ...prev, [clip.id]: current }));
+    }
+  };
+
+  const handleExport = () => {
+    const rows = clips.map(c => {
+      const m = metadataMap[c.id] || {};
+      return {
+        name: baseName(c.name),
+        dateRecorded: c.createdTime || '',
+        key: m.key || '',
+        bpm: m.bpm || '',
+        timeSignature: m.timeSignature || '',
+        instrument: m.instrument || '',
+        tuning: m.tuning || '',
+        genre: m.genre || '',
+        capo: m.capo || '',
+        quality: m.quality || '',
+        favorite: m.favorite ? 'yes' : '',
+        needsLyrics: m.needsLyrics ? 'yes' : '',
+        moods: (m.moods || []).join('; '),
+        tags: (m.tags || []).join('; '),
+        notes: (m.notes || '').replace(/\r?\n/g, ' '),
+      };
+    });
+
+    const headers = Object.keys(rows[0] || { name: '' });
+    const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
+    const csv = [
+      headers.join(','),
+      ...rows.map(r => headers.map(h => escape(r[h])).join(',')),
+    ].join('\n');
+
+    const stamp = new Date().toISOString().slice(0, 10);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `riff-catalog-${stamp}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
   const toggleSelect = (clipId) => {
     setSelectedIds(prev => {
       const next = new Set(prev);
@@ -347,6 +454,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
       else { if (meta.quality !== filters.quality) return false; }
     }
     if (filters.needsLyrics && !meta.needsLyrics) return false;
+    if (filters.favorite && !meta.favorite) return false;
     if (filters.moods?.length > 0) {
       if (!filters.moods.every(m => (meta.moods || []).includes(m))) return false;
     }
@@ -436,6 +544,18 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
 
       <FilterBar filters={filters} onChange={setFilters} availableTags={availableTags} />
 
+      {clips.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>
+          <button onClick={handleExport}
+            style={{
+              padding: '6px 14px', backgroundColor: 'transparent', color: '#888',
+              border: '1px solid #666', borderRadius: '6px', fontSize: '12px', cursor: 'pointer',
+            }}>
+            ⬇ Export library (CSV)
+          </button>
+        </div>
+      )}
+
       {undoSnapshot && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -502,23 +622,79 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
             }}>
               {playingId === clip.id ? '■' : '▶'}
             </button>
-            <div style={{ flex: 1, minWidth: 0, cursor: 'pointer' }} onClick={() => handleExpand(clip)}>
-              <div style={{ fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {clip.name.replace(/\.(webm|m4a|ogg|audio)$/, '')}
-              </div>
-              <div style={{ fontSize: '12px', color: '#888' }}>
-                {formatDate(clip.createdTime)}
-                {durationMap[clip.id] ? ` · ${formatDuration(durationMap[clip.id])}` : clip.size ? ` · ${formatSize(clip.size)}` : ''}
-                {metadataMap[clip.id]?.key ? ` · ${metadataMap[clip.id].key}` : ''}
-                {metadataMap[clip.id]?.bpm ? ` · ${metadataMap[clip.id].bpm} BPM` : ''}
-                {metadataMap[clip.id]?.needsLyrics ? ' · 📝 needs lyrics' : ''}
-              </div>
+            <button
+              onClick={(e) => { e.stopPropagation(); toggleFavorite(clip); }}
+              title={metadataMap[clip.id]?.favorite ? 'Unstar' : 'Star'}
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0,
+                fontSize: '18px', padding: '0 2px', lineHeight: 1,
+                color: metadataMap[clip.id]?.favorite ? '#f5b301' : '#555',
+              }}>
+              {metadataMap[clip.id]?.favorite ? '★' : '☆'}
+            </button>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {renamingId === clip.id ? (
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={e => setRenameValue(e.target.value)}
+                  onClick={e => e.stopPropagation()}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter') commitRename(clip);
+                    if (e.key === 'Escape') setRenamingId(null);
+                  }}
+                  onBlur={() => commitRename(clip)}
+                  disabled={busyId === clip.id}
+                  style={{
+                    width: '100%', padding: '6px 8px', fontSize: '14px',
+                    borderRadius: '4px', border: '1px solid #1a73e8', boxSizing: 'border-box',
+                  }}
+                />
+              ) : (
+                <div style={{ cursor: 'pointer' }} onClick={() => handleExpand(clip)}>
+                  <div style={{ fontWeight: '500', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {baseName(clip.name)}
+                  </div>
+                  <div style={{ fontSize: '12px', color: '#888' }}>
+                    {formatDate(clip.createdTime)}
+                    {durationMap[clip.id] ? ` · ${formatDuration(durationMap[clip.id])}` : clip.size ? ` · ${formatSize(clip.size)}` : ''}
+                    {metadataMap[clip.id]?.key ? ` · ${metadataMap[clip.id].key}` : ''}
+                    {metadataMap[clip.id]?.bpm ? ` · ${metadataMap[clip.id].bpm} BPM` : ''}
+                    {metadataMap[clip.id]?.needsLyrics ? ' · 📝 needs lyrics' : ''}
+                  </div>
+                </div>
+              )}
             </div>
+            <button onClick={(e) => { e.stopPropagation(); startRename(clip); }} style={iconBtnStyle} title="Rename">✎</button>
             <button onClick={() => handleDownload(clip)} style={iconBtnStyle} title="Download">⬇</button>
+            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(clip.id); }}
+              style={{ ...iconBtnStyle, color: '#c00' }} title="Delete">🗑</button>
             <button onClick={() => handleExpand(clip)} style={iconBtnStyle}>
               {expandedId === clip.id ? '▲' : '▼'}
             </button>
           </div>
+
+          {confirmDeleteId === clip.id && (
+            <div style={{
+              padding: '10px 12px', backgroundColor: '#3a1414',
+              borderTop: '1px solid #5a2020', display: 'flex',
+              alignItems: 'center', gap: '10px', flexWrap: 'wrap',
+            }}>
+              <span style={{ fontSize: '13px', color: '#ffb4b4', flex: 1, minWidth: '160px' }}>
+                Move “{baseName(clip.name)}” to Drive trash?
+              </span>
+              <button onClick={() => handleDelete(clip)} disabled={busyId === clip.id}
+                style={{ padding: '6px 14px', backgroundColor: '#cc0000', color: 'white',
+                  border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                {busyId === clip.id ? 'Deleting…' : 'Delete'}
+              </button>
+              <button onClick={() => setConfirmDeleteId(null)}
+                style={{ padding: '6px 14px', backgroundColor: 'transparent', color: '#ccc',
+                  border: '1px solid #666', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          )}
 
           {expandedId === clip.id && metadataMap[clip.id] && (
             <div style={{ padding: '0 12px 12px' }}>

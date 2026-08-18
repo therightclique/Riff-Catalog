@@ -63,13 +63,14 @@ function FilterBar({ filters, onChange, availableTags }) {
 
   const clearAll = () => onChange({
     key: '', keyMode: 'exact', instrument: '', quality: '',
-    timeSignature: '', tuning: '', genre: '', capo: '', tags: [], moods: [], needsLyrics: false,
+    timeSignature: '', tuning: '', genre: '', capo: '', tags: [], moods: [], needsLyrics: false, favorite: false,
   });
 
   const activeCount = [
     filters.key, filters.instrument, filters.quality,
     filters.timeSignature, filters.tuning, filters.genre, filters.capo,
     filters.needsLyrics ? 'y' : '',
+    filters.favorite ? 'y' : '',
     ...(filters.tags || []),
     ...(filters.moods || []),
   ].filter(Boolean).length;
@@ -170,6 +171,16 @@ function FilterBar({ filters, onChange, availableTags }) {
               style={{ width: '14px', height: '14px', cursor: 'pointer' }} />
             <label htmlFor="filterNeedsLyrics" style={{ fontSize: '13px', color: '#555', cursor: 'pointer' }}>
               Needs lyrics only
+            </label>
+          </div>
+
+          {/* Favorites */}
+          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <input type="checkbox" id="filterFavorite" checked={filters.favorite || false}
+              onChange={e => set('favorite', e.target.checked)}
+              style={{ width: '14px', height: '14px', cursor: 'pointer' }} />
+            <label htmlFor="filterFavorite" style={{ fontSize: '13px', color: '#555', cursor: 'pointer' }}>
+              ★ Starred only
             </label>
           </div>
 
