@@ -181,11 +181,15 @@ function decodeFragmentedMp4Inner(blob) {
 
     mp4boxFile.onError = (err) => fail('mp4box demux error: ' + err);
 
+    let onReadyComplete = null;
+    const onReadyPromise = new Promise((res) => { onReadyComplete = res; });
+
     mp4boxFile.onReady = async (info) => {
       steps.push('mp4box onReady');
       const audioTrack = info.tracks.find(t => t.type === 'audio' || t.audio);
       if (!audioTrack) {
         fail('No audio track found in recording (tracks: ' + info.tracks.map(t => t.type).join(',') + ')');
+        onReadyComplete();
         return;
       }
       sampleRate = audioTrack.audio?.sample_rate || audioTrack.timescale;
@@ -233,6 +237,7 @@ function decodeFragmentedMp4Inner(blob) {
         steps.push(`isConfigSupported: ${support.supported}`);
         if (!support.supported) {
           fail(`This browser reports it does NOT support decoding codec "${audioTrack.codec}" at ${sampleRate}Hz/${numberOfChannels}ch via WebCodecs, even though the AudioDecoder class exists`);
+          onReadyComplete();
           return;
         }
       } catch (supportErr) {
@@ -262,14 +267,16 @@ function decodeFragmentedMp4Inner(blob) {
         steps.push('decoder configured');
       } catch (configErr) {
         fail('AudioDecoder configure failed: ' + configErr.message);
+        onReadyComplete();
         return;
       }
 
-      if (!decoderConfigured) return;
+      if (!decoderConfigured) { onReadyComplete(); return; }
 
       mp4boxFile.setExtractionOptions(audioTrack.id, null, { nbSamples: 100 });
       mp4boxFile.start();
       steps.push('extraction started');
+      onReadyComplete();
     };
 
     mp4boxFile.onSamples = (trackId, ref, samples) => {
@@ -295,7 +302,18 @@ function decodeFragmentedMp4Inner(blob) {
       steps.push(`blob read (${arrayBuffer.byteLength} bytes)`);
       mp4boxFile.appendBuffer(arrayBuffer);
       mp4boxFile.flush();
-      steps.push('buffer appended + flushed');
+      steps.push('buffer appended + flushed (sync mp4box work done)');
+
+      // mp4box.js calls onReady synchronously during appendBuffer/flush,
+      // but does NOT await it. Since onReady does async work (checking
+      // isConfigSupported, configuring the decoder), we must wait for it
+      // to actually finish before touching the decoder here, or we race
+      // ahead with decoder still null / unconfigured.
+      steps.push('waiting for onReady to finish its async setup');
+      await onReadyPromise;
+      steps.push('onReady setup complete');
+
+      if (finalized) return; // onReady already failed/finalized
 
       // mp4box's flush() only forces IT to emit samples via onSamples;
       // it does not touch the AudioDecoder. WebCodecs decoders are allowed
@@ -309,6 +327,8 @@ function decodeFragmentedMp4Inner(blob) {
           steps.push('calling decoder.flush()');
           await decoder.flush();
           steps.push('decoder.flush() resolved');
+        } else {
+          steps.push(`decoder not ready for flush (decoder=${!!decoder}, state=${decoder?.state})`);
         }
       } catch (flushErr) {
         steps.push('decoder.flush() threw: ' + flushErr.message);
