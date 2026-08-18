@@ -4,8 +4,17 @@ const CHANGELOG = [
   {
     date: '2026-08-17',
     displayDate: 'August 17, 2026',
-    version: '1.6',
+    version: '1.7',
     entries: [
+      {
+        title: 'Google Drive connection persists across app launches',
+        items: [
+          'Fixed the standalone home-screen app losing its Google Drive connection every time it was closed and reopened',
+          'Root cause: a standalone home-screen app on iOS gets its own isolated storage, completely separate from Safari — so the silent reconnect that normally works in a browser tab had no session to use and failed every time',
+          'The Drive connection is now remembered across launches, so reopening the app reconnects instantly with no prompt, for as long as the connection stays valid',
+          'The manual reconnect option no longer forces the full permissions screen — it tries quietly first and only asks for input if that genuinely fails',
+        ],
+      },
       {
         title: 'Library management',
         items: [
