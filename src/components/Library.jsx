@@ -146,6 +146,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
   const [durationMap, setDurationMap] = useState({});
   const [savingId, setSavingId] = useState(null);
   const [analyzingId, setAnalyzingId] = useState(null);
+  const [analyzeFailed, setAnalyzeFailed] = useState({});
   const [analysisCandidates, setAnalysisCandidates] = useState({});
   const [filters, setFilters] = useState({
     key: '', keyMode: 'exact', instrument: '', quality: '',
@@ -247,6 +248,18 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
   const handleAnalyze = async (clip) => {
     setAnalyzingId(clip.id);
     setAnalysisCandidates(prev => ({ ...prev, [clip.id]: null }));
+    setAnalyzeFailed(prev => ({ ...prev, [clip.id]: null }));
+
+    // Clips analyzed at record time already have candidates stored in their
+    // sidecar — reuse those instantly instead of re-decoding the file
+    // (which iOS Safari cannot do for its own MediaRecorder output).
+    const storedCandidates = metadataMap[clip.id]?.candidates;
+    if (storedCandidates?.length > 0) {
+      setAnalysisCandidates(prev => ({ ...prev, [clip.id]: storedCandidates }));
+      setAnalyzingId(null);
+      return;
+    }
+
     try {
       let url = audioUrls[clip.id];
       if (!url) {
@@ -262,9 +275,12 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
           ...prev,
           [clip.id]: { ...prev[clip.id], key: result.key, bpm: result.bpm?.toString() || prev[clip.id]?.bpm || '' }
         }));
+      } else {
+        setAnalyzeFailed(prev => ({ ...prev, [clip.id]: 'Decoder returned no result.' }));
       }
     } catch (err) {
       console.error('Analysis failed:', err);
+      setAnalyzeFailed(prev => ({ ...prev, [clip.id]: `${err?.name || 'Error'}: ${err?.message || 'unknown'}` }));
     }
     setAnalyzingId(null);
   };
@@ -513,6 +529,11 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                 analyzing={analyzingId === clip.id}
                 keyCandidates={analysisCandidates[clip.id] || metadataMap[clip.id]?.candidates || null}
               />
+              {analyzeFailed[clip.id] && (
+                <p style={{ fontSize: '12px', color: '#a00', margin: '8px 0 0' }}>
+                  Analysis failed — {analyzeFailed[clip.id]}
+                </p>
+              )}
               <button onClick={() => handleSaveMetadata(clip)} disabled={savingId === clip.id}
                 style={{ marginTop: '10px', padding: '8px 20px', backgroundColor: '#1a73e8', color: 'white',
                   border: 'none', borderRadius: '6px', fontSize: '14px', cursor: 'pointer' }}>

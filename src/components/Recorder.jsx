@@ -48,12 +48,23 @@ function Recorder({ onRecordingComplete }) {
 
       // Waveform
       ctx.strokeStyle = '#cc0000';
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 4;
+      ctx.lineJoin = 'round';
+      ctx.lineCap = 'round';
       ctx.beginPath();
 
+      // getByteTimeDomainData centers silence at 128. Convert to a
+      // -1..1 deviation, amplify it, then clamp so loud peaks stay on
+      // canvas. Without the gain, normal singing/playing barely moves
+      // off the center line.
+      const GAIN = 6;
+      const half = H / 2;
       for (let i = 0; i < bufferLength; i++) {
         const x = (i / bufferLength) * W;
-        const y = (dataArray[i] / 255) * H;
+        const deviation = (dataArray[i] - 128) / 128;
+        let y = half - deviation * GAIN * half;
+        if (y < 2) y = 2;
+        if (y > H - 2) y = H - 2;
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.stroke();
