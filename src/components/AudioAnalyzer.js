@@ -129,6 +129,15 @@ function ensureRelativeKeyPresent(candidates) {
 // AudioDecoder, which is built to handle streaming/fragmented input. No
 // playback, no audio output, purely binary parsing.
 function decodeFragmentedMp4(blob) {
+  return Promise.race([
+    decodeFragmentedMp4Inner(blob),
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Decode timed out after 15s')), 15000)
+    ),
+  ]);
+}
+
+function decodeFragmentedMp4Inner(blob) {
   return new Promise((resolve, reject) => {
     const steps = [];
     const fail = (msg) => reject(new Error(msg + ' | steps: ' + steps.join(' > ')));
@@ -239,14 +248,30 @@ function decodeFragmentedMp4(blob) {
       }
     };
 
-    blob.arrayBuffer().then((arrayBuffer) => {
+    blob.arrayBuffer().then(async (arrayBuffer) => {
       arrayBuffer.fileStart = 0;
       steps.push(`blob read (${arrayBuffer.byteLength} bytes)`);
       mp4boxFile.appendBuffer(arrayBuffer);
       mp4boxFile.flush();
       steps.push('buffer appended + flushed');
-      // Safety timeout in case sample counts never line up
-      setTimeout(() => finalize(), 8000);
+
+      // mp4box's flush() only forces IT to emit samples via onSamples;
+      // it does not touch the AudioDecoder. WebCodecs decoders are allowed
+      // to buffer decoded output internally and are only REQUIRED to emit
+      // everything once AudioDecoder.flush() is called. Without this,
+      // decode() can accept every chunk with zero errors while output
+      // never fires — exactly the "received 0/N, decodeErrors 0" failure
+      // seen on iOS Safari.
+      try {
+        if (decoder && decoder.state === 'configured') {
+          steps.push('calling decoder.flush()');
+          await decoder.flush();
+          steps.push('decoder.flush() resolved');
+        }
+      } catch (flushErr) {
+        steps.push('decoder.flush() threw: ' + flushErr.message);
+      }
+      finalize();
     }).catch((err) => fail('blob read failed: ' + err.message));
   });
 }
