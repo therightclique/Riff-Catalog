@@ -181,7 +181,7 @@ function decodeFragmentedMp4Inner(blob) {
 
     mp4boxFile.onError = (err) => fail('mp4box demux error: ' + err);
 
-    mp4boxFile.onReady = (info) => {
+    mp4boxFile.onReady = async (info) => {
       steps.push('mp4box onReady');
       const audioTrack = info.tracks.find(t => t.type === 'audio' || t.audio);
       if (!audioTrack) {
@@ -192,6 +192,52 @@ function decodeFragmentedMp4Inner(blob) {
       numberOfChannels = audioTrack.audio?.channel_count || 1;
       samplesExpected = audioTrack.nb_samples;
       steps.push(`track found (codec=${audioTrack.codec}, sr=${sampleRate}, ch=${numberOfChannels}, samples=${samplesExpected})`);
+
+      const decoderConfig = {
+        codec: audioTrack.codec,
+        sampleRate,
+        numberOfChannels,
+      };
+
+      // WebCodecs AAC handling: if `description` is omitted, the decoder
+      // assumes the bitstream is raw ADTS (with sync headers per frame).
+      // MP4-contained AAC samples are NOT ADTS-framed — they're raw AAC
+      // access units meant to pair with the AudioSpecificConfig stored in
+      // the esds box. Without supplying that as `description`, Safari's
+      // decoder can silently accept every chunk and never produce output,
+      // which matches exactly what we're seeing (0 errors, 0 output).
+      try {
+        const trak = mp4boxFile.getTrackById(audioTrack.id);
+        const stsdEntry = trak?.mdia?.minf?.stbl?.stsd?.entries?.[0];
+        const esds = stsdEntry?.esds;
+        if (esds?.esd?.descs) {
+          // Find the DecoderSpecificInfo (tag 0x05) inside the ES descriptor
+          const decoderConfigDescr = esds.esd.descs
+            .find(d => d.tag === 0x04)?.descs
+            ?.find(d => d.tag === 0x05);
+          if (decoderConfigDescr?.data) {
+            decoderConfig.description = decoderConfigDescr.data;
+            steps.push(`extracted AudioSpecificConfig (${decoderConfigDescr.data.length} bytes)`);
+          } else {
+            steps.push('esds found but no DecoderSpecificInfo (tag 0x05) located');
+          }
+        } else {
+          steps.push('no esds/AudioSpecificConfig found on track');
+        }
+      } catch (descErr) {
+        steps.push('description extraction failed: ' + descErr.message);
+      }
+
+      try {
+        const support = await AudioDecoder.isConfigSupported(decoderConfig);
+        steps.push(`isConfigSupported: ${support.supported}`);
+        if (!support.supported) {
+          fail(`This browser reports it does NOT support decoding codec "${audioTrack.codec}" at ${sampleRate}Hz/${numberOfChannels}ch via WebCodecs, even though the AudioDecoder class exists`);
+          return;
+        }
+      } catch (supportErr) {
+        steps.push('isConfigSupported check threw: ' + supportErr.message);
+      }
 
       let decoderConfigured = false;
       try {
@@ -211,11 +257,7 @@ function decodeFragmentedMp4Inner(blob) {
           error: (err) => fail('AudioDecoder error: ' + err.message),
         });
 
-        decoder.configure({
-          codec: audioTrack.codec,
-          sampleRate,
-          numberOfChannels,
-        });
+        decoder.configure(decoderConfig);
         decoderConfigured = true;
         steps.push('decoder configured');
       } catch (configErr) {
