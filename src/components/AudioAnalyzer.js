@@ -221,7 +221,8 @@ function decodeFragmentedMp4Inner(blob) {
             ?.find(d => d.tag === 0x05);
           if (decoderConfigDescr?.data) {
             decoderConfig.description = decoderConfigDescr.data;
-            steps.push(`extracted AudioSpecificConfig (${decoderConfigDescr.data.length} bytes)`);
+            const hex = Array.from(decoderConfigDescr.data).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            steps.push(`extracted AudioSpecificConfig (${decoderConfigDescr.data.length} bytes: ${hex})`);
           } else {
             steps.push('esds found but no DecoderSpecificInfo (tag 0x05) located');
           }
@@ -293,9 +294,16 @@ function decodeFragmentedMp4Inner(blob) {
       onReadyComplete();
     };
 
+    let loggedFirstSample = false;
     mp4boxFile.onSamples = (trackId, ref, samples) => {
       steps.push(`onSamples (${samples.length} samples)`);
       for (const sample of samples) {
+        if (!loggedFirstSample) {
+          loggedFirstSample = true;
+          const dataArr = sample.data instanceof Uint8Array ? sample.data : new Uint8Array(sample.data);
+          const hex = Array.from(dataArr.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ');
+          steps.push(`first sample: ${dataArr.length} bytes, is_sync=${sample.is_sync}, cts=${sample.cts}, timescale=${sample.timescale}, first8=${hex}`);
+        }
         try {
           const chunk = new EncodedAudioChunk({
             type: sample.is_sync ? 'key' : 'delta',
