@@ -1,6 +1,13 @@
 const FOLDER_NAME = 'RiffCatalog';
 
+// Folder IDs don't change during a session. Caching them removes 3+
+// sequential Drive round trips from every upload after the first.
+const folderIdCache = new Map();
+
 async function getOrCreateFolder(accessToken, folderName, parentId = null) {
+  const cacheKey = `${parentId || 'root'}/${folderName}`;
+  if (folderIdCache.has(cacheKey)) return folderIdCache.get(cacheKey);
+
   const query = parentId
     ? `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`
     : `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
@@ -12,6 +19,7 @@ async function getOrCreateFolder(accessToken, folderName, parentId = null) {
   const searchData = await searchRes.json();
 
   if (searchData.files && searchData.files.length > 0) {
+    folderIdCache.set(cacheKey, searchData.files[0].id);
     return searchData.files[0].id;
   }
 
@@ -28,6 +36,7 @@ async function getOrCreateFolder(accessToken, folderName, parentId = null) {
     }),
   });
   const createData = await createRes.json();
+  folderIdCache.set(cacheKey, createData.id);
   return createData.id;
 }
 
@@ -54,17 +63,8 @@ export async function uploadToDrive(accessToken, blob, fileName, mimeType, initi
   formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
   formData.append('file', blob);
 
-  const uploadRes = await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webContentLink',
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: formData,
-    }
-  );
-  const uploadData = await uploadRes.json();
-
-  // Create sidecar JSON immediately after upload
+  // Sidecar only needs monthFolderId, same as the audio file — upload both
+  // at the same time instead of waiting for the audio upload to finish.
   const sidecarName = `${fileName}.json`;
   const sidecarBody = JSON.stringify(initialMetadata, null, 2);
   const sidecarForm = new FormData();
@@ -74,14 +74,25 @@ export async function uploadToDrive(accessToken, blob, fileName, mimeType, initi
   })], { type: 'application/json' }));
   sidecarForm.append('file', new Blob([sidecarBody], { type: 'application/json' }));
 
-  await fetch(
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-    {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-      body: sidecarForm,
-    }
-  );
+  const [uploadRes] = await Promise.all([
+    fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webContentLink',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: formData,
+      }
+    ),
+    fetch(
+      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+        body: sidecarForm,
+      }
+    ),
+  ]);
 
+  const uploadData = await uploadRes.json();
   return uploadData;
 }

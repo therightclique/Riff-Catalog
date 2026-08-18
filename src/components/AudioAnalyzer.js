@@ -420,11 +420,10 @@ export async function analyzeAudio(blob, capturedPcm = null) {
   } catch (err) {
     console.error('Audio analysis failed:', err);
     alert(
-      'Key/BPM analysis failed.\n\n' +
-      'Blob type: ' + blob.type + '\n' +
-      'Blob size: ' + blob.size + ' bytes\n' +
-      'Error name: ' + (err?.name || 'unknown') + '\n' +
-      'Error message: ' + (err?.message || 'unknown error')
+      "Key/BPM analysis isn't available for this clip on this device.\n\n" +
+      "iPhones currently can't re-analyze previously saved recordings due to an Apple browser limitation. " +
+      "New recordings are analyzed automatically when you record them. " +
+      "To analyze this older clip, open Riff Catalog on a computer."
     );
     return null;
   }
