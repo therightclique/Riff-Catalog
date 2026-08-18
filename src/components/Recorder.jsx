@@ -81,6 +81,25 @@ function Recorder({ onRecordingComplete }) {
       source.connect(analyser);
       analyserRef.current = analyser;
 
+      // Capture raw PCM during recording so key/BPM analysis never needs
+      // to decode the compressed file afterward. This sidesteps platform
+      // decoder bugs entirely (iOS Safari cannot reliably decode its own
+      // MediaRecorder fragmented-MP4 output via decodeAudioData or
+      // WebCodecs AudioDecoder as of iOS 27).
+      const pcmChunks = [];
+      const captureSampleRate = audioCtx.sampleRate;
+      const scriptNode = audioCtx.createScriptProcessor(4096, 1, 1);
+      scriptNode.onaudioprocess = (e) => {
+        pcmChunks.push(new Float32Array(e.inputBuffer.getChannelData(0)));
+      };
+      source.connect(scriptNode);
+      // ScriptProcessor must be connected to destination to fire on some
+      // browsers; route through a zero-gain node so nothing is audible.
+      const muteGain = audioCtx.createGain();
+      muteGain.gain.value = 0;
+      scriptNode.connect(muteGain);
+      muteGain.connect(audioCtx.destination);
+
       // Explicitly pick a MIME type MediaRecorder can produce AND
       // AudioContext.decodeAudioData can reliably decode. Leaving this
       // unspecified lets the browser choose its own default, which on
@@ -107,9 +126,17 @@ function Recorder({ onRecordingComplete }) {
 
       mediaRecorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: mediaRecorder.mimeType });
-        onRecordingComplete(blob, mediaRecorder.mimeType);
+
+        // Merge captured PCM into one Float32Array
+        const totalLen = pcmChunks.reduce((s, c) => s + c.length, 0);
+        const pcm = new Float32Array(totalLen);
+        let off = 0;
+        for (const c of pcmChunks) { pcm.set(c, off); off += c.length; }
+
+        onRecordingComplete(blob, mediaRecorder.mimeType, { pcm, sampleRate: captureSampleRate });
         stream.getTracks().forEach(track => track.stop());
         cancelAnimationFrame(animFrameRef.current);
+        scriptNode.disconnect();
         audioCtx.close();
       };
 

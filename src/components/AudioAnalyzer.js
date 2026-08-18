@@ -360,21 +360,27 @@ function decodeFragmentedMp4Inner(blob) {
   });
 }
 
-export async function analyzeAudio(blob) {
+export async function analyzeAudio(blob, capturedPcm = null) {
   try {
     let sampleRate, channelData;
-    try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const audioContext = new AudioContext();
-      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
-      sampleRate = audioBuffer.sampleRate;
-      channelData = audioBuffer.getChannelData(0);
-      await audioContext.close();
-    } catch (directErr) {
-      console.warn('Direct decode failed, demuxing fragmented MP4 instead:', directErr);
-      const decoded = await decodeFragmentedMp4(blob);
-      sampleRate = decoded.sampleRate;
-      channelData = decoded.getChannelData();
+    if (capturedPcm?.pcm?.length > 0 && capturedPcm.sampleRate) {
+      // PCM captured live during recording — no decoding needed at all.
+      sampleRate = capturedPcm.sampleRate;
+      channelData = capturedPcm.pcm;
+    } else {
+      try {
+        const arrayBuffer = await blob.arrayBuffer();
+        const audioContext = new AudioContext();
+        const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+        sampleRate = audioBuffer.sampleRate;
+        channelData = audioBuffer.getChannelData(0);
+        await audioContext.close();
+      } catch (directErr) {
+        console.warn('Direct decode failed, demuxing fragmented MP4 instead:', directErr);
+        const decoded = await decodeFragmentedMp4(blob);
+        sampleRate = decoded.sampleRate;
+        channelData = decoded.getChannelData();
+      }
     }
 
     // Analyze first 2 seconds for opening bias

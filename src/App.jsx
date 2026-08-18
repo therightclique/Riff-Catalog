@@ -117,8 +117,8 @@ function App() {
     driveRequested.current = false;
   };
 
-  const handleRecordingComplete = async (blob, mimeType) => {
-    console.log('Recording complete. Blob type:', blob.type, 'size:', blob.size, 'passed mimeType:', mimeType);
+  const handleRecordingComplete = async (blob, mimeType, capturedPcm = null) => {
+    console.log('Recording complete. Blob type:', blob.type, 'size:', blob.size, 'passed mimeType:', mimeType, 'pcm samples:', capturedPcm?.pcm?.length || 0);
     setPendingRecording({ blob, mimeType });
     setClipName('');
     setLastUpload(null);
@@ -127,7 +127,7 @@ function App() {
     setShowOtherKey(false);
     setDuplicateWarning(null);
     setAnalyzing(true);
-    const result = await analyzeAudio(blob);
+    const result = await analyzeAudio(blob, capturedPcm);
     console.log('Analysis result:', result);
     setAnalysis(result);
     if (result?.candidates?.length > 0) setSelectedKey(result.candidates[0].key);
