@@ -652,15 +652,36 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                 />
               ) : (
                 <div style={{ cursor: 'pointer' }} onClick={() => handleExpand(clip)}>
+                  {/* Line 1 — name */}
                   <div style={{ fontWeight: '500', wordBreak: 'break-word', lineHeight: '1.3' }}>
                     {baseName(clip.name)}
                   </div>
-                  <div style={{ fontSize: '12px', color: '#888', marginTop: '2px' }}>
-                    {formatDate(clip.createdTime)}
-                    {durationMap[clip.id] ? ` · ${formatDuration(durationMap[clip.id])}` : clip.size ? ` · ${formatSize(clip.size)}` : ''}
-                    {metadataMap[clip.id]?.key ? ` · ${metadataMap[clip.id].key}` : ''}
-                    {metadataMap[clip.id]?.bpm ? ` · ${metadataMap[clip.id].bpm} BPM` : ''}
-                    {metadataMap[clip.id]?.needsLyrics ? ' · 📝 needs lyrics' : ''}
+
+                  {/* Line 2 — key + tempo (each kept whole on one line) */}
+                  {(metadataMap[clip.id]?.key || metadataMap[clip.id]?.bpm) && (
+                    <div style={{ fontSize: '12px', color: '#666', marginTop: '3px', display: 'flex', flexWrap: 'wrap', gap: '0 8px' }}>
+                      {metadataMap[clip.id]?.key && (
+                        <span style={{ whiteSpace: 'nowrap', fontWeight: '600' }}>
+                          {metadataMap[clip.id].key}
+                        </span>
+                      )}
+                      {metadataMap[clip.id]?.bpm && (
+                        <span style={{ whiteSpace: 'nowrap' }}>
+                          {metadataMap[clip.id].bpm} BPM
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Line 3 — date + duration */}
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '3px', display: 'flex', flexWrap: 'wrap', gap: '0 8px' }}>
+                    <span style={{ whiteSpace: 'nowrap' }}>{formatDate(clip.createdTime)}</span>
+                    {durationMap[clip.id] && (
+                      <span style={{ whiteSpace: 'nowrap' }}>{formatDuration(durationMap[clip.id])}</span>
+                    )}
+                    {metadataMap[clip.id]?.needsLyrics && (
+                      <span style={{ whiteSpace: 'nowrap' }}>📝 needs lyrics</span>
+                    )}
                   </div>
                 </div>
               )}
@@ -705,6 +726,11 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
 
           {expandedId === clip.id && metadataMap[clip.id] && (
             <div style={{ padding: '0 12px 12px' }}>
+              <div style={{ fontSize: '11px', color: '#999', marginBottom: '6px' }}>
+                {clip.size ? formatSize(clip.size) : ''}
+                {clip.size && durationMap[clip.id] ? ' · ' : ''}
+                {durationMap[clip.id] ? formatDuration(durationMap[clip.id]) : ''}
+              </div>
               <MetadataEditor
                 metadata={metadataMap[clip.id]}
                 onChange={(newMeta) => handleMetadataChange(clip.id, newMeta)}
