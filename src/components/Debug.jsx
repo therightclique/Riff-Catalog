@@ -117,18 +117,39 @@ export default function Debug({ accessToken }) {
             No entries.
           </p>
         ) : (
-          shown.map((e, i) => (
-            <div key={i} style={{
-              fontFamily: '"Courier New", monospace', fontSize: '11px',
-              lineHeight: '1.5', marginBottom: '6px', paddingBottom: '6px',
-              borderBottom: '1px solid #1e1e1e', whiteSpace: 'pre-wrap',
-              wordBreak: 'break-word', color: LEVEL_COLORS[e.level] || '#d0d0d0',
-            }}>
-              <span style={{ color: '#666' }}>{e.time.slice(11)} </span>
-              <strong>{e.level.toUpperCase()}</strong>{' '}
-              {e.text}
-            </div>
-          ))
+          (() => {
+            let lastDate = null;
+            return shown.map((e, i) => {
+              // e.time is "YYYY-MM-DD HH:MM:SS.mmm"
+              const date = e.time.slice(0, 10);
+              const time = e.time.slice(11);
+              const showDivider = date !== lastDate;
+              lastDate = date;
+              return (
+                <div key={i}>
+                  {showDivider && (
+                    <div style={{
+                      fontFamily: '"Courier New", monospace', fontSize: '11px',
+                      color: '#888', fontWeight: 'bold', margin: i === 0 ? '0 0 8px' : '14px 0 8px',
+                      paddingBottom: '4px', borderBottom: '1px solid #333',
+                    }}>
+                      {date}
+                    </div>
+                  )}
+                  <div style={{
+                    fontFamily: '"Courier New", monospace', fontSize: '11px',
+                    lineHeight: '1.5', marginBottom: '6px', paddingBottom: '6px',
+                    borderBottom: '1px solid #1e1e1e', whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-word', color: LEVEL_COLORS[e.level] || '#d0d0d0',
+                  }}>
+                    <span style={{ color: '#666' }}>{time} </span>
+                    <strong>{e.level.toUpperCase()}</strong>{' '}
+                    {e.text}
+                  </div>
+                </div>
+              );
+            });
+          })()
         )}
       </div>
 
