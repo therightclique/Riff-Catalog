@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { uploadTextFile, listTextFiles, readTextFile } from './DriveUploader';
 
 // ── Shuffle helpers ──────────────────────────────────────────────────────
@@ -166,7 +166,16 @@ export default function Randomizer({ accessToken }) {
   const [dragging, setDragging] = useState(false);
   const [snapping, setSnapping] = useState(false);
   const [result, setResult] = useState(null);
-  const [accumulated, setAccumulated] = useState('');
+  // Persisted so the accumulating idea survives switching tabs (this
+  // component fully unmounts then) and even closing/reopening the app —
+  // it only clears when the user hits Clear.
+  const [accumulated, setAccumulated] = useState(() => {
+    try {
+      return localStorage.getItem('rc_randomizer_idea') || '';
+    } catch {
+      return '';
+    }
+  });
   const [setName, setSetName] = useState('');
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
@@ -178,6 +187,15 @@ export default function Randomizer({ accessToken }) {
   const dragState = useRef(null);
 
   const category = CATEGORIES.find(c => c.id === categoryId);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('rc_randomizer_idea', accumulated);
+    } catch {
+      // storage full/unavailable — the idea still works for this session,
+      // it just won't survive a reload
+    }
+  }, [accumulated]);
 
   const clearPendingTimers = () => {
     clearTimeout(spinTimeout.current);
