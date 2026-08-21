@@ -71,6 +71,21 @@ export default function Debug({ accessToken }) {
         </button>
         <button onClick={handleCopy} style={btn('#555')}>📋 Copy</button>
         <button onClick={handleClear} style={btn('#cc0000')}>🗑 Clear</button>
+        <button
+          onClick={async () => {
+            try {
+              if (window.caches?.keys) {
+                const keys = await window.caches.keys();
+                await Promise.all(keys.map(k => window.caches.delete(k)));
+              }
+            } catch (err) {
+              console.warn('Cache clear failed:', err);
+            }
+            window.location.replace(window.location.pathname + '?r=' + Date.now());
+          }}
+          style={btn('#444')}>
+          ↻ Refresh app
+        </button>
       </div>
 
       <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginBottom: '12px' }}>
@@ -118,7 +133,7 @@ export default function Debug({ accessToken }) {
       </div>
 
       <p style={{ fontSize: '11px', color: '#666', textAlign: 'center', marginTop: '10px' }}>
-        {entries.length} total entries • uploads go to RiffCatalog/Debug in your Drive
+        {entries.length} entries, saved across app sessions • tap Clear to reset • uploads go to RiffCatalog/Debug in your Drive
       </p>
     </div>
   );

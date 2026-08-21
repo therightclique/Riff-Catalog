@@ -101,6 +101,7 @@ function App() {
   const [showOtherKey, setShowOtherKey] = useState(false);
   const [duplicateWarning, setDuplicateWarning] = useState(null); // { original, suggested }
   const driveRequested = useRef(false);
+  const [reconnecting, setReconnecting] = useState(false);
 
   const requestDriveAccess = () => {
     if (driveRequested.current) return;
@@ -144,6 +145,31 @@ function App() {
     };
     document.body.appendChild(script);
   }, []);
+
+  // A standalone home-screen app on iOS is frequently fully unloaded by the
+  // OS while backgrounded, then reloaded from scratch when reopened — this
+  // fires the same way a fresh launch does. Browsers won't let us silently
+  // pop an OAuth window without a real tap, so a background retry can only
+  // ever try the silent (no-UI) path; it can't complete a full reconnect on
+  // its own. This at least catches the cases where silent auth *can*
+  // succeed (token merely expired but Google still recognizes the session)
+  // without making the person do anything, and skips the attempt entirely
+  // if a still-valid stored token was already found.
+  useEffect(() => {
+    const tryReconnectOnForeground = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (accessToken) return; // already have a valid token, nothing to do
+      if (!user || !window.google?.accounts?.oauth2) return;
+      driveRequested.current = false; // allow another attempt
+      requestDriveAccess();
+    };
+    document.addEventListener('visibilitychange', tryReconnectOnForeground);
+    window.addEventListener('pageshow', tryReconnectOnForeground);
+    return () => {
+      document.removeEventListener('visibilitychange', tryReconnectOnForeground);
+      window.removeEventListener('pageshow', tryReconnectOnForeground);
+    };
+  }, [accessToken, user]);
 
   const handleLogout = () => {
     window.google.accounts.id.disableAutoSelect();
@@ -254,55 +280,63 @@ function App() {
     fontWeight: isSelected || isFirst ? '600' : '400',
   });
 
-  const handleRefreshApp = async () => {
-    // Reconnect Drive if needed. Try silently first — most of the time
-    // (token merely expired, or Google still recognizes the browser) this
-    // succeeds instantly with no UI at all. Only fall back to an
-    // interactive prompt if the silent attempt genuinely fails, and even
-    // then avoid forcing the full permissions screen — the scope was
-    // already granted previously, so a light prompt is usually enough.
-    if (!accessToken && window.google?.accounts?.oauth2) {
-      try {
-        const gotToken = await new Promise((resolve) => {
-          const tokenClient = window.google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            prompt: '',
-            callback: (tokenResponse) => {
-              if (tokenResponse.access_token) {
-                storeToken(tokenResponse.access_token, tokenResponse.expires_in);
-                resolve(true);
-              } else {
-                resolve(false);
-              }
-            },
-          });
-          tokenClient.requestAccessToken({ prompt: '' });
-          setTimeout(() => resolve(false), 3000);
+  // Tries silent reconnect first (no UI); if that genuinely fails, falls
+  // back to the lightest interactive prompt Google will show. Returns true
+  // if a token was obtained. Used by both the global banner (one tap) and
+  // the Record-tab refresh link.
+  const reconnectDrive = async () => {
+    if (!window.google?.accounts?.oauth2) return false;
+    try {
+      const gotToken = await new Promise((resolve) => {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          prompt: '',
+          callback: (tokenResponse) => {
+            if (tokenResponse.access_token) {
+              storeToken(tokenResponse.access_token, tokenResponse.expires_in);
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          },
         });
+        tokenClient.requestAccessToken({ prompt: '' });
+        setTimeout(() => resolve(false), 3000);
+      });
 
-        if (!gotToken) {
-          // Silent path genuinely failed — this is the only case that
-          // needs a visible prompt, and we deliberately omit `prompt` so
-          // Google shows the lightest UI it can (often just an account
-          // tap) rather than the full re-consent screen.
-          await new Promise((resolve) => {
-            const tokenClient = window.google.accounts.oauth2.initTokenClient({
-              client_id: CLIENT_ID,
-              scope: SCOPES,
-              callback: (tokenResponse) => {
-                if (tokenResponse.access_token) storeToken(tokenResponse.access_token, tokenResponse.expires_in);
-                resolve();
-              },
-            });
-            tokenClient.requestAccessToken();
-          });
-        }
-        return;
-      } catch (err) {
-        console.warn('Drive reconnect attempt failed:', err);
-        // fall through to the full refresh below
-      }
+      if (gotToken) return true;
+
+      // Silent path genuinely failed — this is the only case that needs a
+      // visible prompt, and we deliberately omit `prompt` so Google shows
+      // the lightest UI it can (often just an account tap) rather than the
+      // full re-consent screen.
+      return await new Promise((resolve) => {
+        const tokenClient = window.google.accounts.oauth2.initTokenClient({
+          client_id: CLIENT_ID,
+          scope: SCOPES,
+          callback: (tokenResponse) => {
+            if (tokenResponse.access_token) {
+              storeToken(tokenResponse.access_token, tokenResponse.expires_in);
+              resolve(true);
+            } else {
+              resolve(false);
+            }
+          },
+        });
+        tokenClient.requestAccessToken();
+      });
+    } catch (err) {
+      console.warn('Drive reconnect attempt failed:', err);
+      return false;
+    }
+  };
+
+  const handleRefreshApp = async () => {
+    if (!accessToken) {
+      const reconnected = await reconnectDrive();
+      if (reconnected) return;
+      // fall through to the full refresh below
     }
 
     // In standalone (home-screen) mode there's no address bar or browser
@@ -344,6 +378,20 @@ function App() {
             &nbsp;·&nbsp;
             <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '14px' }}>Sign out</button>
           </p>
+
+          {!accessToken && (
+            <button
+              onClick={async () => { setReconnecting(true); await reconnectDrive(); setReconnecting(false); }}
+              disabled={reconnecting}
+              style={{
+                display: 'block', width: '100%', margin: '0 0 16px', padding: '10px 14px',
+                backgroundColor: '#fff4e0', border: '1px solid #f0c060', borderRadius: '8px',
+                color: '#7a5000', fontSize: '13px', cursor: reconnecting ? 'default' : 'pointer',
+                textAlign: 'center',
+              }}>
+              {reconnecting ? '⏳ Reconnecting to Drive…' : '⏳ Drive disconnected — tap to reconnect'}
+            </button>
+          )}
 
           <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap' }}>
             <button style={tabStyle(view === 'record')} onClick={() => setView('record')}>Record</button>

@@ -1,10 +1,50 @@
-// Captures console output and unhandled errors into an in-memory buffer
-// so they can be viewed on the Debug tab without a desktop browser.
+// Captures console output and unhandled errors into a buffer that persists
+// across reloads and app relaunches (localStorage), so nothing important
+// is lost right when it matters most — e.g. right before a crash. Only
+// clearEntries() (the Debug tab's Clear button) empties it.
 
 const MAX_ENTRIES = 800;
-const entries = [];
+const STORAGE_KEY = 'rc_debug_log';
 const listeners = new Set();
 let initialized = false;
+
+function loadStoredEntries() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return []; // corrupted storage — start fresh rather than crash
+  }
+}
+
+const entries = loadStoredEntries();
+
+let persistTimer = null;
+function persist() {
+  // Writing to localStorage on every single log call adds up during rapid
+  // bursts (audio analysis alone can log dozens of entries in a second).
+  // Debounce the actual write; the in-memory array (and subscribers) stay
+  // instant regardless.
+  clearTimeout(persistTimer);
+  persistTimer = setTimeout(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+    } catch {
+      // Storage full or unavailable (e.g. private browsing) — logging
+      // still works for the current session via the in-memory array, it
+      // just won't survive a reload. Never let this break the app.
+    }
+  }, 250);
+}
+
+window.addEventListener('pagehide', () => {
+  // Make sure the last burst of entries before the app closes actually
+  // gets written — this is exactly the moment persistence matters most.
+  clearTimeout(persistTimer);
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(entries)); } catch { /* ignore */ }
+});
 
 function notify() {
   listeners.forEach(fn => fn(entries));
@@ -45,6 +85,7 @@ export function addEntry(level, args) {
     text: args.map(serialize).join(' '),
   });
   if (entries.length > MAX_ENTRIES) entries.splice(0, entries.length - MAX_ENTRIES);
+  persist();
   notify();
 }
 
@@ -56,6 +97,7 @@ export function subscribe(fn) {
 
 export function clearEntries() {
   entries.length = 0;
+  persist();
   notify();
 }
 
@@ -111,5 +153,5 @@ export function initDebugLog() {
     addEntry('error', ['Unhandled promise rejection:', e.reason]);
   });
 
-  addEntry('info', ['Debug logging started']);
+  addEntry('info', [`── Session started (${entries.length} earlier entries retained) ──`]);
 }
