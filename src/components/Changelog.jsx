@@ -2,6 +2,28 @@ import { useState } from 'react';
 
 const CHANGELOG = [
   {
+    date: '2026-08-21',
+    displayDate: 'August 21, 2026',
+    version: '1.8',
+    entries: [
+      {
+        title: 'Faster, less disruptive Drive reconnects',
+        items: [
+          'The app now automatically retries connecting to Google Drive the moment it comes back to the screen after being backgrounded or reloaded, with no tap needed when it succeeds silently',
+          'When a tap is needed, a banner appears right under the header on any tab — no more hunting for a link buried in the Record tab',
+        ],
+      },
+      {
+        title: 'Debug log improvements',
+        items: [
+          'The debug log now persists across app sessions instead of clearing every time the app closes or reloads — only the Clear button empties it',
+          'Log writes are batched so rapid bursts of activity (like audio analysis) don\u2019t hit storage on every single line, with a final flush right before the app closes so nothing from right before a crash is lost',
+          'Entries now show a date divider whenever the day changes, so it\u2019s clear which entries are from which session when the log spans multiple days',
+        ],
+      },
+    ],
+  },
+  {
     date: '2026-08-17',
     displayDate: 'August 17, 2026',
     version: '1.7',
