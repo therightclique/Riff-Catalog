@@ -106,9 +106,13 @@ function transposeBoxLick(notes, lickRoot, targetRoot) {
 // 5th are the primary "target" tones (they outline the chord, so phrases
 // often resolve to them); everything else (4th, b7th, b5 blue note, 2nd,
 // 6th) is a passing tone and stays neutral so the target tones stand out.
+// Root/3rd/5th are spaced evenly around the color wheel (red/green/blue)
+// rather than red/amber/blue, since red and amber sit close together and
+// are harder to tell apart at a glance — root also gets its own circle
+// shape (Matt's suggestion) so it's identifiable by shape alone too.
 const DEGREE_COLORS = {
-  '1': '#ff5c5c',              // root — red
-  '3': '#ffb347', 'b3': '#ffb347', // 3rd (major or minor) — amber
+  '1': '#ff5c5c',              // root — red (+ circled)
+  '3': '#4ade80', 'b3': '#4ade80', // 3rd (major or minor) — green
   '5': '#5cb3ff',              // 5th — blue
 };
 
@@ -121,13 +125,23 @@ function renderSingleNoteWithRoot(notes) {
   for (let i = 0; i < 6; i++) rows[i] = [];
   notes.forEach(({ s, f, degree }) => {
     const cell = String(f);
-    const pad = cell.padEnd(COL, '-');
+    const isRoot = degree === '1';
     const color = DEGREE_COLORS[degree];
+    const padCount = Math.max(COL, cell.length + 1) - cell.length;
     for (let i = 0; i < 6; i++) {
       if (i === s) {
         rows[i].push(
-          <span key={rows[i].length} style={color ? { color, fontWeight: '700' } : undefined}>
-            {pad}
+          <span key={rows[i].length}>
+            <span style={
+              isRoot
+                ? { display: 'inline-block', minWidth: '1.5em', textAlign: 'center',
+                    borderRadius: '50%', backgroundColor: color, color: '#111',
+                    fontWeight: '800', lineHeight: '1.4em', boxSizing: 'border-box' }
+                : color ? { color, fontWeight: '700' } : undefined
+            }>
+              {cell}
+            </span>
+            {'-'.repeat(padCount)}
           </span>
         );
       } else {
@@ -2205,8 +2219,8 @@ export default function Practice() {
         <>
           {isBoxMode && (
             <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '8px' }}>
-              <span style={{ color: '#ff5c5c', fontWeight: '700' }}>Root</span>{' · '}
-              <span style={{ color: '#ffb347', fontWeight: '700' }}>3rd</span>{' · '}
+              <span style={{ display:'inline-block', width:'1.3em', height:'1.3em', borderRadius:'50%', backgroundColor:'#ff5c5c', color:'#111', fontWeight:'800', fontSize:'10px', lineHeight:'1.3em', textAlign:'center' }}>R</span>{' Root · '}
+              <span style={{ color: '#4ade80', fontWeight: '700' }}>3rd</span>{' · '}
               <span style={{ color: '#5cb3ff', fontWeight: '700' }}>5th</span>
               {' — the rest are passing tones'}
             </p>
@@ -2219,8 +2233,8 @@ export default function Practice() {
         <>
           {isBoxMode && (
             <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '8px' }}>
-              <span style={{ color: '#ff5c5c', fontWeight: '700' }}>Root</span>{' · '}
-              <span style={{ color: '#ffb347', fontWeight: '700' }}>3rd</span>{' · '}
+              <span style={{ display:'inline-block', width:'1.3em', height:'1.3em', borderRadius:'50%', backgroundColor:'#ff5c5c', color:'#111', fontWeight:'800', fontSize:'10px', lineHeight:'1.3em', textAlign:'center' }}>R</span>{' Root · '}
+              <span style={{ color: '#4ade80', fontWeight: '700' }}>3rd</span>{' · '}
               <span style={{ color: '#5cb3ff', fontWeight: '700' }}>5th</span>
               {' — the rest are passing tones'}
             </p>
