@@ -40,14 +40,14 @@ async function getOrCreateFolder(accessToken, folderName, parentId = null) {
   return createData.id;
 }
 
-export async function uploadTextFile(accessToken, fileName, text) {
+export async function uploadTextFile(accessToken, fileName, text, subfolder = 'Debug') {
   const rootFolderId = await getOrCreateFolder(accessToken, FOLDER_NAME);
-  const debugFolderId = await getOrCreateFolder(accessToken, 'Debug', rootFolderId);
+  const subFolderId = await getOrCreateFolder(accessToken, subfolder, rootFolderId);
 
   const form = new FormData();
   form.append('metadata', new Blob([JSON.stringify({
     name: fileName,
-    parents: [debugFolderId],
+    parents: [subFolderId],
   })], { type: 'application/json' }));
   form.append('file', new Blob([text], { type: 'text/plain' }));
 
@@ -61,6 +61,46 @@ export async function uploadTextFile(accessToken, fileName, text) {
   );
   if (!res.ok) throw new Error(`Drive upload failed (${res.status})`);
   return res.json();
+}
+
+// Lists saved text files in RiffCatalog/<subfolder>. Returns [] if the
+// subfolder doesn't exist yet (nothing saved there), rather than creating
+// it — listing shouldn't have the side effect of creating folders.
+export async function listTextFiles(accessToken, subfolder) {
+  const rootQuery = `name='${FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and 'root' in parents and trashed=false`;
+  const rootRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(rootQuery)}&fields=files(id,name)`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const rootData = await rootRes.json();
+  if (!rootData.files?.length) return [];
+  const rootId = rootData.files[0].id;
+
+  const subQuery = `name='${subfolder}' and mimeType='application/vnd.google-apps.folder' and '${rootId}' in parents and trashed=false`;
+  const subRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(subQuery)}&fields=files(id,name)`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const subData = await subRes.json();
+  if (!subData.files?.length) return [];
+  const subFolderId = subData.files[0].id;
+
+  const filesQuery = `'${subFolderId}' in parents and trashed=false`;
+  const filesRes = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(filesQuery)}&fields=files(id,name,createdTime)&orderBy=createdTime desc&pageSize=100`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  const filesData = await filesRes.json();
+  return filesData.files || [];
+}
+
+export async function readTextFile(accessToken, fileId) {
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+  if (!res.ok) throw new Error(`Read failed (${res.status})`);
+  return res.text();
 }
 
 export async function uploadToDrive(accessToken, blob, fileName, mimeType, initialMetadata = {}) {

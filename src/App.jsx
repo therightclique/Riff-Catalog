@@ -8,6 +8,7 @@ import KeyFinder from './components/KeyFinder';
 import Practice from './components/Practice';
 import Changelog, { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog';
 import Debug from './components/Debug';
+import Randomizer from './components/Randomizer';
 import { initDebugLog } from './components/DebugLog';
 
 initDebugLog();
@@ -398,6 +399,7 @@ function App() {
             <button style={tabStyle(view === 'library')} onClick={() => setView('library')}>Library</button>
             <button style={tabStyle(view === 'keyfinder')} onClick={() => setView('keyfinder')}>Key Finder</button>
             <button style={tabStyle(view === 'practice')} onClick={() => setView('practice')}>Practice</button>
+            <button style={tabStyle(view === 'randomizer')} onClick={() => setView('randomizer')}>Randomizer</button>
             <button style={tabStyle(view === 'debug')} onClick={() => setView('debug')}>Debug</button>
           </div>
 
@@ -538,6 +540,7 @@ function App() {
           {view === 'practice' && <Practice />}
           {view === 'changelog' && <Changelog />}
           {view === 'debug' && <Debug accessToken={accessToken} />}
+          {view === 'randomizer' && <Randomizer accessToken={accessToken} />}
         </div>
       )}
     </div>
