@@ -386,7 +386,7 @@ export default function Randomizer({ accessToken }) {
         Spin the wheel, or drag it yourself, to seed a song idea one piece at a time.
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
         <button
           onClick={() => {
             const idx = CATEGORIES.findIndex(c => c.id === categoryId);
@@ -411,6 +411,9 @@ export default function Randomizer({ accessToken }) {
           ▶
         </button>
       </div>
+      <p style={{ textAlign: 'center', fontSize: '11px', color: '#888', marginBottom: '16px' }}>
+        {CATEGORIES.findIndex(c => c.id === categoryId) + 1} of {CATEGORIES.length}
+      </p>
 
       <Wheel
         options={category.options}

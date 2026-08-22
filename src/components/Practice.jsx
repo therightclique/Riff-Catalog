@@ -145,25 +145,36 @@ function renderSingleNoteWithRoot(notes) {
     const isThirdOrFifth = degree === '3' || degree === 'b3' || degree === '5';
     const color = DEGREE_COLORS[degree];
     const padCount = Math.max(COL, cell.length + 1) - cell.length;
+    // Fixed em-based width AND height (not `ch`, which is a width metric
+    // and isn't reliably honored for `height` across browsers — this was
+    // the actual cause of the oval shape). A single fixed square size for
+    // every badge, regardless of 1 vs 2-digit fret numbers, is what
+    // guarantees an actual circle every time.
+    const badgeSize = cell.length > 1 ? '1.9em' : '1.5em';
     const badgeStyle = isRoot
-      ? { display: 'inline-block', width: `${cell.length}ch`, textAlign: 'center',
-          borderRadius: '50%', backgroundColor: color, color: '#111',
-          fontWeight: '800', boxSizing: 'border-box' }
+      ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: badgeSize, height: badgeSize, borderRadius: '50%',
+          backgroundColor: color, color: '#111', fontWeight: '800',
+          fontSize: '0.85em', boxSizing: 'border-box' }
       : isThirdOrFifth
-      ? { display: 'inline-block', width: `${cell.length}ch`, textAlign: 'center',
-          borderRadius: '50%', border: `1.5px solid ${color}`, color,
-          fontWeight: '700', boxSizing: 'border-box' }
-      : { color: '#fff' };
+      ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: badgeSize, height: badgeSize, borderRadius: '50%',
+          border: `1.5px solid ${color}`, color, fontWeight: '700',
+          fontSize: '0.85em', boxSizing: 'border-box' }
+      // Plain color alone (#fff) barely differs from the tab's existing
+      // light-grey text (#e0e0e0) — bold weight is what actually makes
+      // passing tones read as visually distinct, not just the color.
+      : { color: '#fff', fontWeight: '700' };
     for (let i = 0; i < 6; i++) {
       if (i === s) {
         rows[i].push(
           <span key={rows[i].length}>
             <span style={badgeStyle}>{cell}</span>
-            {'-'.repeat(padCount)}
+            <span style={{ color: '#555' }}>{'-'.repeat(padCount)}</span>
           </span>
         );
       } else {
-        rows[i].push('-'.repeat(Math.max(COL, cell.length + 1)));
+        rows[i].push(<span key={rows[i].length} style={{ color: '#555' }}>{'-'.repeat(Math.max(COL, cell.length + 1))}</span>);
       }
     }
   });
@@ -173,7 +184,9 @@ function renderSingleNoteWithRoot(notes) {
         const si = 5 - li;
         return (
           <div key={li}>
-            {label} |--{rows[si]}--|
+            <span style={{ color: '#555' }}>{label} |--</span>
+            {rows[si]}
+            <span style={{ color: '#555' }}>--|</span>
           </div>
         );
       })}
