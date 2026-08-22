@@ -128,15 +128,19 @@ const DEGREE_COLORS = {
 // Same layout as renderSingleNote, but returns JSX with root/3rd/5th
 // notes badge-marked instead of plain text — root gets a solid filled
 // circle, 3rd/5th get a hollow (outline-only) circle in their own color,
-// everything else renders plain white. Every badge is fixed to exactly
-// `cell.length` characters wide (in `ch` units, which are defined as the
-// width of one character in the current font) rather than a generic
-// em-based min-width — that's what keeps it aligned with the plain-dash
-// columns in every other row at the same time-step; a size that doesn't
-// match the monospace character grid exactly is what caused the pipe
-// misalignment previously.
+// everything else renders plain white. Character-counted dash padding
+// can't guarantee alignment against a circular badge, because the badge
+// is sized in `em` (needed for it to actually look round) while the
+// dashes are sized by the monospace font's character grid — those two
+// units don't reliably convert to the same pixel width. The fix: give
+// EVERY column (badge or plain) the same explicit fixed pixel width via
+// CSS, so alignment is enforced directly rather than approximated by
+// counting characters.
 function renderSingleNoteWithRoot(notes) {
   const COL = 4;
+  const COL_PX = 42; // fixed width for every column, generous enough to
+                      // fit a 2-digit badge plus a couple of trailing dashes
+  const DIM = '#aaaaaa'; // midpoint between the tab's near-white default and pure white — dim enough to let white passing tones stand out, not so dark it looks broken
   const rows = {};
   for (let i = 0; i < 6; i++) rows[i] = [];
   notes.forEach(({ s, f, degree }) => {
@@ -145,11 +149,6 @@ function renderSingleNoteWithRoot(notes) {
     const isThirdOrFifth = degree === '3' || degree === 'b3' || degree === '5';
     const color = DEGREE_COLORS[degree];
     const padCount = Math.max(COL, cell.length + 1) - cell.length;
-    // Fixed em-based width AND height (not `ch`, which is a width metric
-    // and isn't reliably honored for `height` across browsers — this was
-    // the actual cause of the oval shape). A single fixed square size for
-    // every badge, regardless of 1 vs 2-digit fret numbers, is what
-    // guarantees an actual circle every time.
     const badgeSize = cell.length > 1 ? '1.9em' : '1.5em';
     const badgeStyle = isRoot
       ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -162,19 +161,23 @@ function renderSingleNoteWithRoot(notes) {
           border: `1.5px solid ${color}`, color, fontWeight: '700',
           fontSize: '0.85em', boxSizing: 'border-box' }
       // Plain color alone (#fff) barely differs from the tab's existing
-      // light-grey text (#e0e0e0) — bold weight is what actually makes
-      // passing tones read as visually distinct, not just the color.
+      // light-grey text — bold weight is what actually makes passing
+      // tones read as visually distinct, not just the color.
       : { color: '#fff', fontWeight: '700' };
     for (let i = 0; i < 6; i++) {
       if (i === s) {
         rows[i].push(
-          <span key={rows[i].length}>
+          <span key={rows[i].length} style={{ display: 'inline-flex', alignItems: 'center', width: `${COL_PX}px`, boxSizing: 'border-box' }}>
             <span style={badgeStyle}>{cell}</span>
-            <span style={{ color: '#555' }}>{'-'.repeat(padCount)}</span>
+            <span style={{ color: DIM }}>{'-'.repeat(padCount)}</span>
           </span>
         );
       } else {
-        rows[i].push(<span key={rows[i].length} style={{ color: '#555' }}>{'-'.repeat(Math.max(COL, cell.length + 1))}</span>);
+        rows[i].push(
+          <span key={rows[i].length} style={{ display: 'inline-block', width: `${COL_PX}px`, boxSizing: 'border-box', color: DIM }}>
+            {'-'.repeat(Math.max(COL, cell.length + 1))}
+          </span>
+        );
       }
     }
   });
@@ -183,10 +186,10 @@ function renderSingleNoteWithRoot(notes) {
       {STR_LABELS_TTB.map((label, li) => {
         const si = 5 - li;
         return (
-          <div key={li}>
-            <span style={{ color: '#555' }}>{label} |--</span>
+          <div key={li} style={{ whiteSpace: 'nowrap' }}>
+            <span style={{ color: DIM }}>{label} |--</span>
             {rows[si]}
-            <span style={{ color: '#555' }}>--|</span>
+            <span style={{ color: DIM }}>--|</span>
           </div>
         );
       })}
@@ -2042,6 +2045,14 @@ const DIFF_COLORS = {
   Advanced:     {bg:'#fde8e8',color:'#8b1a1a',border:'#f0b8b8'},
 };
 
+// The widest actual tab in the whole app is an 8-note box lick at ~398px
+// (verified by scanning every lick/double-stop/chord-riff in the data,
+// not guessed). Every TabCard uses this same fixed width with the real
+// (unchanged) content centered inside it, so diagrams no longer jump
+// around in size depending on which lick happens to be showing — shorter
+// items just sit centered in the same-size card as the longest one.
+const TAB_CARD_WIDTH = 440; // 398px content + pre padding + safety margin
+
 function TabCard({ title, subtitle, tab, difficulty }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
@@ -2057,10 +2068,12 @@ function TabCard({ title, subtitle, tab, difficulty }) {
           </span>
         )}
       </div>
-      <div style={{padding:'12px 16px'}}>
-        <pre style={{fontFamily:'"Courier New",monospace',fontSize:'13px',lineHeight:'1.9',backgroundColor:'#111',color:'#e0e0e0',padding:'10px 14px',borderRadius:'8px',margin:0,overflowX:'auto',whiteSpace:'pre'}}>
-          {tab}
-        </pre>
+      <div style={{padding:'12px 16px', display:'flex', justifyContent:'center'}}>
+        <div style={{width: `${TAB_CARD_WIDTH}px`, maxWidth:'100%', display:'flex', justifyContent:'center', overflowX:'auto'}}>
+          <pre style={{fontFamily:'"Courier New",monospace',fontSize:'13px',lineHeight:'1.9',backgroundColor:'#111',color:'#e0e0e0',padding:'10px 14px',borderRadius:'8px',margin:0,whiteSpace:'pre',display:'inline-block'}}>
+            {tab}
+          </pre>
+        </div>
       </div>
     </div>
   );
