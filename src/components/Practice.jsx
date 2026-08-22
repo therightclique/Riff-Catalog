@@ -151,6 +151,23 @@ function renderSingleNoteWithRoot(notes, targetColumns = notes.length) {
   const DIM = '#aaaaaa'; // midpoint between the tab's near-white default and pure white — dim enough to let white passing tones stand out, not so dark it looks broken
   const rows = {};
   for (let i = 0; i < 6; i++) rows[i] = [];
+  // Split the filler evenly around the real notes rather than dumping it
+  // all at the end — this is what makes the actual lick sit centered
+  // within the fixed-length measure instead of hugging the left pipe
+  // with a big trail of empty dashes after it. Any odd leftover column
+  // goes on the right, an arbitrary but consistent choice.
+  const totalFiller = Math.max(0, targetColumns - notes.length);
+  const leftFiller = Math.floor(totalFiller / 2);
+  const rightFiller = totalFiller - leftFiller;
+  if (leftFiller > 0) {
+    for (let i = 0; i < 6; i++) {
+      rows[i].push(
+        <span key={`filler-left-${i}`} style={{ color: DIM }}>
+          {'-'.repeat(COL * leftFiller)}
+        </span>
+      );
+    }
+  }
   notes.forEach(({ s, f, degree }) => {
     const cell = String(f);
     const isRoot = degree === '1';
@@ -188,18 +205,15 @@ function renderSingleNoteWithRoot(notes, targetColumns = notes.length) {
       }
     }
   });
-  // Pad every row out to `targetColumns` with plain COL-width filler
-  // dashes — identical in width to a real column (see the padCount math
-  // above, which always resolves to COL characters regardless of 1 or
-  // 2-digit fret numbers) — so a 5-note lick's row is exactly as long as
-  // an 8-note lick's row. This is what makes the closing "--|" land in
-  // the same position on every card, without relying on CSS centering.
-  const fillerCount = Math.max(0, targetColumns - notes.length);
-  if (fillerCount > 0) {
+  // Trailing filler — see leftFiller/rightFiller split above. Together
+  // with the leading filler, every row still resolves to exactly
+  // `targetColumns` columns regardless of how the notes are distributed,
+  // so the closing "--|" still lands in the same place on every card.
+  if (rightFiller > 0) {
     for (let i = 0; i < 6; i++) {
       rows[i].push(
-        <span key={`filler-${i}`} style={{ color: DIM }}>
-          {'-'.repeat(COL * fillerCount)}
+        <span key={`filler-right-${i}`} style={{ color: DIM }}>
+          {'-'.repeat(COL * rightFiller)}
         </span>
       );
     }
@@ -2080,20 +2094,18 @@ const MAX_BOX_LICK_NOTES = Object.values(BOX_LICK_DATA)
   .flat()
   .reduce((max, lick) => Math.max(max, lick.notes.length), 0);
 
-// The widest actual tab in the whole app is an 8-note box lick at ~398px
-// (verified by scanning every lick/double-stop/chord-riff in the data,
-// not guessed). Every TabCard uses this same fixed width with the real
-// (unchanged) content centered inside it, so diagrams no longer jump
-// around in size depending on which lick happens to be showing — shorter
-// items just sit centered in the same-size card as the longest one.
+// Every non-box TabCard (free licks, double stops, chords) uses this
+// same fixed width with its content centered inside it, so those
+// diagrams don't jump around in size depending on which item is showing.
 //
-// IMPORTANT: this has to be a true fixed `width`, not `width:'fit-content'`
-// — fit-content means "shrink-wrap to whatever's inside," which is the
-// opposite of a uniform size and was the actual bug in the previous
-// attempt (every card was still sizing itself to its own content).
+// Box-mode cards are handled differently (see `fitContent` below): since
+// every box-mode row is now padded to an identical fixed length
+// (MAX_BOX_LICK_NOTES), there's no longer any need to guess a pixel
+// width for them — the box can size exactly to its own content with
+// zero slack, which is what guarantees no leftover gap on either side.
 const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding — comfortably fits the widest real content (~340px) with margin to spare
 
-function TabCard({ title, subtitle, tab, difficulty, align = 'center' }) {
+function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
     <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
@@ -2109,19 +2121,23 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center' }) {
         )}
       </div>
       <div style={{padding:'12px 16px', display:'flex', justifyContent:'center'}}>
-        {/* Box-mode content is now padded to a fixed reference length
-            (see MAX_BOX_LICK_NOTES), so its rows are pixel-identical in
-            width across every card — left-aligning it (align="left")
-            means the closing pipe always lands at the exact same offset
-            from the pre's own edge, with zero dependence on how the
-            browser distributes centering slack. Free licks, double
-            stops, and chord riffs don't have a fixed-length concept, so
-            they keep the original centered behavior. */}
+        {/* fitContent (box mode only): every box-mode row is now padded
+            to the exact same character count, so `width: 'fit-content'`
+            sizes the box identically on every card WITHOUT needing a
+            hand-calculated pixel value — the box just hugs its own
+            (now-guaranteed-identical) content exactly, so there's no
+            slack left over for a browser to distribute unevenly between
+            the left and right sides. Font size stays fixed at 13px
+            either way — this only changes the box's own width, nothing
+            is ever scaled or stretched. Non-box modes keep the original
+            fixed 460px width with centered content, since their content
+            length isn't standardized the same way. */}
         <pre style={{
           fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
           backgroundColor:'#111', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
           margin:0, whiteSpace:'pre', textAlign: align,
-          width: `${TAB_CARD_WIDTH}px`, maxWidth: '100%', boxSizing: 'border-box',
+          width: fitContent ? 'fit-content' : `${TAB_CARD_WIDTH}px`,
+          maxWidth: '100%', boxSizing: 'border-box',
           overflowX: 'auto',
         }}>
           {tab}
@@ -2220,7 +2236,7 @@ export default function Practice() {
     if (mode === 'licks') {
       if (isBoxMode) {
         const notes = root ? transposeBoxLick(item.notes, item.root, root) : item.notes;
-        return <TabCard key={item.id||idx} title={`${effectiveGroup} — Box ${selectedBox}`} subtitle={selectedKey?`in ${selectedKey}`:`ref. root ${item.root}`} tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES)} difficulty={item.difficulty} align="left" />;
+        return <TabCard key={item.id||idx} title={`${effectiveGroup} — Box ${selectedBox}`} subtitle={selectedKey?`in ${selectedKey}`:`ref. root ${item.root}`} tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES)} difficulty={item.difficulty} align="left" fitContent />;
       }
       const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
       return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderSingleNote(notes)} difficulty={item.difficulty} />;
