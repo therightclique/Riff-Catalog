@@ -2058,7 +2058,12 @@ const DIFF_COLORS = {
 // (unchanged) content centered inside it, so diagrams no longer jump
 // around in size depending on which lick happens to be showing — shorter
 // items just sit centered in the same-size card as the longest one.
-const TAB_CARD_WIDTH = 500; // widest real content (~312-340px) plus a generous safety margin — sized up deliberately rather than tightly calculated, per instruction to grow the box rather than risk clipping
+//
+// IMPORTANT: this has to be a true fixed `width`, not `width:'fit-content'`
+// — fit-content means "shrink-wrap to whatever's inside," which is the
+// opposite of a uniform size and was the actual bug in the previous
+// attempt (every card was still sizing itself to its own content).
+const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding — comfortably fits the widest real content (~340px) with margin to spare
 
 function TabCard({ title, subtitle, tab, difficulty }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2076,11 +2081,15 @@ function TabCard({ title, subtitle, tab, difficulty }) {
         )}
       </div>
       <div style={{padding:'12px 16px', display:'flex', justifyContent:'center'}}>
-        <div style={{width: `${TAB_CARD_WIDTH}px`, maxWidth:'100%', overflowX:'auto'}}>
-          <pre style={{fontFamily:'"Courier New",monospace',fontSize:'13px',lineHeight:'1.9',backgroundColor:'#111',color:'#e0e0e0',padding:'10px 14px',borderRadius:'8px',width:'fit-content',margin:'0 auto',whiteSpace:'pre'}}>
-            {tab}
-          </pre>
-        </div>
+        <pre style={{
+          fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
+          backgroundColor:'#111', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
+          margin:0, whiteSpace:'pre', textAlign:'center',
+          width: `${TAB_CARD_WIDTH}px`, maxWidth: '100%', boxSizing: 'border-box',
+          overflowX: 'auto',
+        }}>
+          {tab}
+        </pre>
       </div>
     </div>
   );
