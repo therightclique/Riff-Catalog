@@ -2117,7 +2117,7 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:34 PDT — fixed infinite re-render loop';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:53 PDT — removed maxWidth/flex-shrink cap';
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, debugInfo = null, computedWidth = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2134,7 +2134,18 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
           </span>
         )}
       </div>
-      <div style={{padding:'12px 16px', display:'flex', justifyContent:'center'}}>
+      <div style={{
+        padding:'12px 16px', display:'flex',
+        // justifyContent:'center' combined with overflow-x:auto has a
+        // documented bad interaction: when content is wider than the
+        // container, a centered scrollable box defaults to showing the
+        // MIDDLE of the content, clipping both ends — which would hide
+        // the label AND the pipe simultaneously. Left-aligning avoids
+        // that entirely for box mode, where the pre can now be wider
+        // than this wrapper once a real computedWidth is set.
+        justifyContent: fitContent ? 'flex-start' : 'center',
+        overflowX: fitContent ? 'auto' : 'visible',
+      }}>
         {/* fitContent (box mode only): `display:inline-block` with no
             width was measured to undersize the box relative to its real
             content (14px left gap vs. a measured 1px right gap — proof
@@ -2153,8 +2164,27 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
           margin:0, whiteSpace:'pre', textAlign: align,
           display: fitContent && !computedWidth ? 'inline-block' : 'block',
           width: fitContent ? (computedWidth ? `${computedWidth}px` : 'auto') : `${TAB_CARD_WIDTH}px`,
-          maxWidth: '100%', boxSizing: 'border-box',
+          // maxWidth:'100%' would cap this box back down to whatever the
+          // card's available space happens to be — CSS resolves an
+          // explicit width against max-width:100% by taking whichever is
+          // SMALLER, which is exactly what was silently overriding the
+          // computed width back to 334px every time. Once a real
+          // computedWidth is set, the box is allowed to be exactly that
+          // size, growing past the card's own width if it has to —
+          // matching "grow the box, don't shrink the content" from
+          // earlier. Falls back to maxWidth:100% only before the first
+          // measurement (computedWidth still null), so nothing overflows
+          // wildly during that brief initial paint.
+          maxWidth: fitContent && computedWidth ? 'none' : '100%',
+          boxSizing: 'border-box',
           overflowX: 'auto',
+          // The immediate parent is `display:flex`, which makes this pre
+          // a flex item — flex items default to flex-shrink:1, meaning
+          // the flex algorithm can shrink an item back down below its
+          // own explicit width if the container is tight on space. That
+          // shrinking happens independently of max-width, so fixing the
+          // max-width cap alone isn't necessarily enough on its own.
+          flexShrink: fitContent && computedWidth ? 0 : undefined,
         }}>
           {tab}
         </pre>
