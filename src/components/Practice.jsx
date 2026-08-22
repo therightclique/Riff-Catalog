@@ -138,6 +138,14 @@ const DEGREE_COLORS = {
 // circle, 3rd/5th get a hollow (outline-only) circle in their own color,
 // everything else renders plain white (dimmed labels/dashes make it
 // stand out by contrast, see DIM below).
+//
+// The badge circle is drawn with `position: absolute`, sitting behind the
+// digit rather than sizing the layout around it. This means the digit
+// occupies EXACTLY the same width plain text would (position:absolute
+// elements are removed from normal flow, so they can't add extra width) —
+// which is what actually guarantees alignment with every other row,
+// rather than approximating it with a specific em/ch/px size that may or
+// may not match the surrounding character grid.
 function renderSingleNoteWithRoot(notes) {
   const COL = 4;
   const DIM = '#aaaaaa'; // midpoint between the tab's near-white default and pure white — dim enough to let white passing tones stand out, not so dark it looks broken
@@ -149,26 +157,25 @@ function renderSingleNoteWithRoot(notes) {
     const isThirdOrFifth = degree === '3' || degree === 'b3' || degree === '5';
     const color = DEGREE_COLORS[degree];
     const padCount = Math.max(COL, cell.length + 1) - cell.length;
-    const badgeSize = cell.length > 1 ? '1.9em' : '1.5em';
-    const badgeStyle = isRoot
-      ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: badgeSize, height: badgeSize, borderRadius: '50%',
-          backgroundColor: color, color: '#111', fontWeight: '800',
-          fontSize: '0.85em', boxSizing: 'border-box' }
+    const circleStyle = isRoot
+      ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          width: '1.6em', height: '1.6em', borderRadius: '50%',
+          backgroundColor: color, zIndex: 0 }
       : isThirdOrFifth
-      ? { display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          width: badgeSize, height: badgeSize, borderRadius: '50%',
-          border: `1.5px solid ${color}`, color, fontWeight: '700',
-          fontSize: '0.85em', boxSizing: 'border-box' }
-      // Plain color alone (#fff) barely differs from the tab's existing
-      // light-grey text — bold weight is what actually makes passing
-      // tones read as visually distinct, not just the color.
-      : { color: '#fff', fontWeight: '700' };
+      ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+          width: '1.6em', height: '1.6em', borderRadius: '50%',
+          border: `1.5px solid ${color}`, zIndex: 0 }
+      : null;
+    const textStyle = { position: 'relative', zIndex: 1, fontWeight: '700',
+      color: isRoot ? '#111' : isThirdOrFifth ? color : '#fff' };
     for (let i = 0; i < 6; i++) {
       if (i === s) {
         rows[i].push(
           <span key={rows[i].length}>
-            <span style={badgeStyle}>{cell}</span>
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              {circleStyle && <span style={circleStyle} />}
+              <span style={textStyle}>{cell}</span>
+            </span>
             <span style={{ color: DIM }}>{'-'.repeat(padCount)}</span>
           </span>
         );
@@ -2051,7 +2058,7 @@ const DIFF_COLORS = {
 // (unchanged) content centered inside it, so diagrams no longer jump
 // around in size depending on which lick happens to be showing — shorter
 // items just sit centered in the same-size card as the longest one.
-const TAB_CARD_WIDTH = 440; // 398px content + pre padding + safety margin
+const TAB_CARD_WIDTH = 500; // widest real content (~312-340px) plus a generous safety margin — sized up deliberately rather than tightly calculated, per instruction to grow the box rather than risk clipping
 
 function TabCard({ title, subtitle, tab, difficulty }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
