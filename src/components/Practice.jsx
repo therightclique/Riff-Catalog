@@ -2105,6 +2105,14 @@ const MAX_BOX_LICK_NOTES = Object.values(BOX_LICK_DATA)
 // zero slack, which is what guarantees no leftover gap on either side.
 const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding — comfortably fits the widest real content (~340px) with margin to spare
 
+// Bumped by hand on every Practice.jsx change so a screenshot can be
+// checked against this string to confirm which build is actually
+// deployed — added specifically because a recent round of changes
+// produced zero visible difference despite a confirmed correct deploy
+// and app refresh, which needs to be distinguishable from "the fix
+// didn't work" going forward.
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:16 PDT — inline-block sizing attempt';
+
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
@@ -2143,6 +2151,11 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
           {tab}
         </pre>
       </div>
+      {fitContent && (
+        <p style={{ textAlign: 'center', fontSize: '9px', color: '#bbb', margin: '2px 0 8px' }}>
+          {PRACTICE_BUILD_TAG}
+        </p>
+      )}
     </div>
   );
 }
