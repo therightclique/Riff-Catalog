@@ -2122,21 +2122,21 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
       </div>
       <div style={{padding:'12px 16px', display:'flex', justifyContent:'center'}}>
         {/* fitContent (box mode only): every box-mode row is now padded
-            to the exact same character count, so `width: 'fit-content'`
-            sizes the box identically on every card WITHOUT needing a
-            hand-calculated pixel value — the box just hugs its own
-            (now-guaranteed-identical) content exactly, so there's no
-            slack left over for a browser to distribute unevenly between
-            the left and right sides. Font size stays fixed at 13px
-            either way — this only changes the box's own width, nothing
-            is ever scaled or stretched. Non-box modes keep the original
-            fixed 460px width with centered content, since their content
-            length isn't standardized the same way. */}
+            to the exact same character count. Rather than lean on the
+            CSS keyword `fit-content` for width — which visibly did NOT
+            shrink-wrap as expected — this uses `display: 'inline-block'`
+            with no explicit width at all. Shrink-to-fit-content is the
+            basic, decades-old default behavior of inline-block elements
+            in every browser, not a value that can silently fail to be
+            honored. Non-box modes keep the original fixed 460px block
+            width with centered content, since their content length
+            isn't standardized the same way. */}
         <pre style={{
           fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
-          backgroundColor:'#111', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
+          backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
           margin:0, whiteSpace:'pre', textAlign: align,
-          width: fitContent ? 'fit-content' : `${TAB_CARD_WIDTH}px`,
+          display: fitContent ? 'inline-block' : 'block',
+          width: fitContent ? 'auto' : `${TAB_CARD_WIDTH}px`,
           maxWidth: '100%', boxSizing: 'border-box',
           overflowX: 'auto',
         }}>
