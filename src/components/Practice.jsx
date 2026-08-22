@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { FretboardDiagram } from './FretboardDiagram';
 
 const ALL_KEYS = [
@@ -146,7 +146,7 @@ const DEGREE_COLORS = {
 // which is what actually guarantees alignment with every other row,
 // rather than approximating it with a specific em/ch/px size that may or
 // may not match the surrounding character grid.
-function renderSingleNoteWithRoot(notes, targetColumns = notes.length) {
+function renderSingleNoteWithRoot(notes, targetColumns = notes.length, labelRef = null, pipeRef = null) {
   const COL = 4;
   const DIM = '#aaaaaa'; // midpoint between the tab's near-white default and pure white — dim enough to let white passing tones stand out, not so dark it looks broken
   const rows = {};
@@ -224,9 +224,9 @@ function renderSingleNoteWithRoot(notes, targetColumns = notes.length) {
         const si = 5 - li;
         return (
           <div key={li} style={{ whiteSpace: 'nowrap' }}>
-            <span style={{ color: DIM }}>{label} |--</span>
+            <span ref={li === 0 ? labelRef : null} style={{ color: DIM }}>{label} |--</span>
             {rows[si]}
-            <span style={{ color: DIM }}>--|</span>
+            <span ref={li === 0 ? pipeRef : null} style={{ color: DIM }}>--|</span>
           </div>
         );
       })}
@@ -2111,9 +2111,9 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:16 PDT — inline-block sizing attempt';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:22 PDT — live measurement debug';
 
-function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false }) {
+function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, debugInfo = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
     <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
@@ -2139,7 +2139,7 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
             honored. Non-box modes keep the original fixed 460px block
             width with centered content, since their content length
             isn't standardized the same way. */}
-        <pre style={{
+        <pre ref={boxRef} style={{
           fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
           backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
           margin:0, whiteSpace:'pre', textAlign: align,
@@ -2154,6 +2154,14 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
       {fitContent && (
         <p style={{ textAlign: 'center', fontSize: '9px', color: '#bbb', margin: '2px 0 8px' }}>
           {PRACTICE_BUILD_TAG}
+          {debugInfo && (
+            <>
+              <br />
+              <span style={{ color: '#e8b84b' }}>
+                DEBUG — box width: {debugInfo.boxWidth}px · left gap: {debugInfo.leftGap}px · right gap: {debugInfo.rightGap}px
+              </span>
+            </>
+          )}
         </p>
       )}
     </div>
@@ -2192,6 +2200,40 @@ export default function Practice() {
   const [selectedBox, setSelectedBox] = useState(''); // '' = free-roam, '1'-'5' = box position
   const [current, setCurrent] = useState(null);
   const [showAll, setShowAll] = useState(false);
+
+  // Debug-only: measures the ACTUAL rendered pixel gap on each side of
+  // the first box-mode card, directly from the live DOM, instead of
+  // guessing from CSS theory. debugBoxRef sits on the <pre> (the visible
+  // black box); debugLabelRef sits on the very first inline span (the
+  // "e |--" label); debugPipeRef sits on the very last inline span (the
+  // closing "--|"). Comparing their real getBoundingClientRect() values
+  // gives exact, undeniable numbers instead of a hypothesis.
+  const debugBoxRef = useRef(null);
+  const debugLabelRef = useRef(null);
+  const debugPipeRef = useRef(null);
+  const [debugGaps, setDebugGaps] = useState(null);
+
+  useEffect(() => {
+    const measure = () => {
+      if (!debugBoxRef.current || !debugLabelRef.current || !debugPipeRef.current) {
+        setDebugGaps(null);
+        return;
+      }
+      const box = debugBoxRef.current.getBoundingClientRect();
+      const label = debugLabelRef.current.getBoundingClientRect();
+      const pipe = debugPipeRef.current.getBoundingClientRect();
+      setDebugGaps({
+        boxWidth: Math.round(box.width),
+        leftGap: Math.round(label.left - box.left),
+        rightGap: Math.round(box.right - pipe.right),
+      });
+    };
+    // Measure after paint, and re-measure on resize/orientation change
+    // since the gap could legitimately differ across screen widths.
+    const raf = requestAnimationFrame(measure);
+    window.addEventListener('resize', measure);
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure); };
+  });
 
   const root = selectedKey ? selectedKey.split(' ').slice(0,-1).join(' ') : null;
   const keyMode = selectedKey ? selectedKey.split(' ').slice(-1)[0] : null; // 'Major' or 'Minor'
@@ -2249,7 +2291,18 @@ export default function Practice() {
     if (mode === 'licks') {
       if (isBoxMode) {
         const notes = root ? transposeBoxLick(item.notes, item.root, root) : item.notes;
-        return <TabCard key={item.id||idx} title={`${effectiveGroup} — Box ${selectedBox}`} subtitle={selectedKey?`in ${selectedKey}`:`ref. root ${item.root}`} tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES)} difficulty={item.difficulty} align="left" fitContent />;
+        const isFirst = idx === 0;
+        return <TabCard
+          key={item.id||idx}
+          title={`${effectiveGroup} — Box ${selectedBox}`}
+          subtitle={selectedKey?`in ${selectedKey}`:`ref. root ${item.root}`}
+          tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? debugLabelRef : null, isFirst ? debugPipeRef : null)}
+          difficulty={item.difficulty}
+          align="left"
+          fitContent
+          boxRef={isFirst ? debugBoxRef : null}
+          debugInfo={isFirst ? debugGaps : null}
+        />;
       }
       const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
       return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderSingleNote(notes)} difficulty={item.difficulty} />;
