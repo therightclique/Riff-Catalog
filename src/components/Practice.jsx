@@ -146,7 +146,7 @@ const DEGREE_COLORS = {
 // which is what actually guarantees alignment with every other row,
 // rather than approximating it with a specific em/ch/px size that may or
 // may not match the surrounding character grid.
-function renderSingleNoteWithRoot(notes, targetColumns = notes.length, labelRef = null, pipeRef = null) {
+function renderSingleNoteWithRoot(notes, targetColumns = notes.length, labelRef = null, pipeRef = null, rowRefsContainer = null) {
   const COL = 4;
   const DIM = '#aaaaaa'; // midpoint between the tab's near-white default and pure white — dim enough to let white passing tones stand out, not so dark it looks broken
   const rows = {};
@@ -224,9 +224,15 @@ function renderSingleNoteWithRoot(notes, targetColumns = notes.length, labelRef 
         const si = 5 - li;
         return (
           <div key={li} style={{ whiteSpace: 'nowrap' }}>
-            <span ref={li === 0 ? labelRef : null} style={{ color: DIM }}>{label} |--</span>
-            {rows[si]}
-            <span ref={li === 0 ? pipeRef : null} style={{ color: DIM }}>--|</span>
+            {/* This inline-block wrapper is what actually gets measured
+                (via rowRefsContainer) to compute the box's real width —
+                unlike the parent <pre>'s own shrink-to-fit calculation,
+                which measurably undercounted the true content width. */}
+            <span ref={el => { if (rowRefsContainer) rowRefsContainer.current[li] = el; }} style={{ display: 'inline-block' }}>
+              <span ref={li === 0 ? labelRef : null} style={{ color: DIM }}>{label} |--</span>
+              {rows[si]}
+              <span ref={li === 0 ? pipeRef : null} style={{ color: DIM }}>--|</span>
+            </span>
           </div>
         );
       })}
@@ -2111,9 +2117,9 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:22 PDT — live measurement debug';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:30 PDT — measured explicit width fix';
 
-function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, debugInfo = null }) {
+function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, debugInfo = null, computedWidth = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
     <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
@@ -2129,22 +2135,24 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
         )}
       </div>
       <div style={{padding:'12px 16px', display:'flex', justifyContent:'center'}}>
-        {/* fitContent (box mode only): every box-mode row is now padded
-            to the exact same character count. Rather than lean on the
-            CSS keyword `fit-content` for width — which visibly did NOT
-            shrink-wrap as expected — this uses `display: 'inline-block'`
-            with no explicit width at all. Shrink-to-fit-content is the
-            basic, decades-old default behavior of inline-block elements
-            in every browser, not a value that can silently fail to be
-            honored. Non-box modes keep the original fixed 460px block
-            width with centered content, since their content length
-            isn't standardized the same way. */}
+        {/* fitContent (box mode only): `display:inline-block` with no
+            width was measured to undersize the box relative to its real
+            content (14px left gap vs. a measured 1px right gap — proof
+            the browser's own shrink-to-fit math was wrong here, not a
+            theory). Once `computedWidth` is available (measured directly
+            from each row's actual rendered content, see rowRefsContainer
+            in Practice()), that explicit pixel value is used instead —
+            a declared width the browser doesn't have to calculate itself,
+            so there's nothing left for it to get wrong. inline-block/auto
+            is only a placeholder for the very first paint, before the
+            first measurement has run. Non-box modes keep the original
+            fixed 460px width with centered content. */}
         <pre ref={boxRef} style={{
           fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
           backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
           margin:0, whiteSpace:'pre', textAlign: align,
-          display: fitContent ? 'inline-block' : 'block',
-          width: fitContent ? 'auto' : `${TAB_CARD_WIDTH}px`,
+          display: fitContent && !computedWidth ? 'inline-block' : 'block',
+          width: fitContent ? (computedWidth ? `${computedWidth}px` : 'auto') : `${TAB_CARD_WIDTH}px`,
           maxWidth: '100%', boxSizing: 'border-box',
           overflowX: 'auto',
         }}>
@@ -2158,7 +2166,7 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
             <>
               <br />
               <span style={{ color: '#e8b84b' }}>
-                DEBUG — box width: {debugInfo.boxWidth}px · left gap: {debugInfo.leftGap}px · right gap: {debugInfo.rightGap}px
+                DEBUG — box width: {debugInfo.boxWidth}px · left gap: {debugInfo.leftGap}px · right gap: {debugInfo.rightGap}px · computed: {computedWidth ?? '—'}px
               </span>
             </>
           )}
@@ -2201,20 +2209,34 @@ export default function Practice() {
   const [current, setCurrent] = useState(null);
   const [showAll, setShowAll] = useState(false);
 
-  // Debug-only: measures the ACTUAL rendered pixel gap on each side of
-  // the first box-mode card, directly from the live DOM, instead of
-  // guessing from CSS theory. debugBoxRef sits on the <pre> (the visible
-  // black box); debugLabelRef sits on the very first inline span (the
-  // "e |--" label); debugPipeRef sits on the very last inline span (the
-  // closing "--|"). Comparing their real getBoundingClientRect() values
-  // gives exact, undeniable numbers instead of a hypothesis.
+  // Measures each row's own inline content width directly (bypassing the
+  // browser's shrink-to-fit calculation for the box entirely), and uses
+  // the actual widest row to compute an EXPLICIT pixel width for the box.
+  // The earlier attempt trusted `display:inline-block` to size the box
+  // correctly on its own — the measured 14px-vs-1px gap asymmetry proved
+  // that trust was misplaced (the box came out ~13px narrower than the
+  // real content, so content overflowed past the right padding). Setting
+  // an explicit width computed from real measurements removes the
+  // browser's auto-sizing from the equation altogether.
   const debugBoxRef = useRef(null);
   const debugLabelRef = useRef(null);
   const debugPipeRef = useRef(null);
+  const rowRefsContainer = useRef([]);
   const [debugGaps, setDebugGaps] = useState(null);
+  const [computedBoxWidth, setComputedBoxWidth] = useState(null);
 
   useEffect(() => {
     const measure = () => {
+      const rowEls = rowRefsContainer.current.filter(Boolean);
+      if (rowEls.length > 0) {
+        const widths = rowEls.map(el => el.getBoundingClientRect().width);
+        const maxContentWidth = Math.max(...widths);
+        // 28 = 14px left padding + 14px right padding on the pre. Adding
+        // a small extra safety margin (4px) since real content can vary
+        // slightly card to card (different digit widths, badge shapes).
+        const newWidth = Math.ceil(maxContentWidth) + 28 + 4;
+        setComputedBoxWidth(prev => (prev === newWidth ? prev : newWidth));
+      }
       if (!debugBoxRef.current || !debugLabelRef.current || !debugPipeRef.current) {
         setDebugGaps(null);
         return;
@@ -2296,12 +2318,13 @@ export default function Practice() {
           key={item.id||idx}
           title={`${effectiveGroup} — Box ${selectedBox}`}
           subtitle={selectedKey?`in ${selectedKey}`:`ref. root ${item.root}`}
-          tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? debugLabelRef : null, isFirst ? debugPipeRef : null)}
+          tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? debugLabelRef : null, isFirst ? debugPipeRef : null, isFirst ? rowRefsContainer : null)}
           difficulty={item.difficulty}
           align="left"
           fitContent
           boxRef={isFirst ? debugBoxRef : null}
           debugInfo={isFirst ? debugGaps : null}
+          computedWidth={computedBoxWidth}
         />;
       }
       const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
