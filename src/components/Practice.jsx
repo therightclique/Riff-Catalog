@@ -2117,7 +2117,7 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:30 PDT — measured explicit width fix';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:34 PDT — fixed infinite re-render loop';
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, debugInfo = null, computedWidth = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2244,11 +2244,24 @@ export default function Practice() {
       const box = debugBoxRef.current.getBoundingClientRect();
       const label = debugLabelRef.current.getBoundingClientRect();
       const pipe = debugPipeRef.current.getBoundingClientRect();
-      setDebugGaps({
+      const next = {
         boxWidth: Math.round(box.width),
         leftGap: Math.round(label.left - box.left),
         rightGap: Math.round(box.right - pipe.right),
-      });
+      };
+      // Without this equality check, setDebugGaps fires with a brand-new
+      // object every single effect pass (even when the numbers haven't
+      // changed), and since this effect has no dependency array, that
+      // triggers an endless render → measure → setState → render loop
+      // that never settles — which is exactly what produced an earlier
+      // screenshot showing a stale box width alongside a newer computed
+      // width in the same render. Only update state when a value has
+      // actually changed.
+      setDebugGaps(prev => (
+        prev && prev.boxWidth === next.boxWidth && prev.leftGap === next.leftGap && prev.rightGap === next.rightGap
+          ? prev
+          : next
+      ));
     };
     // Measure after paint, and re-measure on resize/orientation change
     // since the gap could legitimately differ across screen widths.
