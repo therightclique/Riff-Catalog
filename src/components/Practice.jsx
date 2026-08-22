@@ -133,13 +133,13 @@ const DEGREE_COLORS = {
 // is sized in `em` (needed for it to actually look round) while the
 // dashes are sized by the monospace font's character grid — those two
 // units don't reliably convert to the same pixel width. The fix: give
-// EVERY column (badge or plain) the same explicit fixed pixel width via
-// CSS, so alignment is enforced directly rather than approximated by
-// counting characters.
+// Same layout as renderSingleNote, but returns JSX with root/3rd/5th
+// notes badge-marked instead of plain text — root gets a solid filled
+// circle, 3rd/5th get a hollow (outline-only) circle in their own color,
+// everything else renders plain white (dimmed labels/dashes make it
+// stand out by contrast, see DIM below).
 function renderSingleNoteWithRoot(notes) {
   const COL = 4;
-  const COL_PX = 42; // fixed width for every column, generous enough to
-                      // fit a 2-digit badge plus a couple of trailing dashes
   const DIM = '#aaaaaa'; // midpoint between the tab's near-white default and pure white — dim enough to let white passing tones stand out, not so dark it looks broken
   const rows = {};
   for (let i = 0; i < 6; i++) rows[i] = [];
@@ -167,14 +167,14 @@ function renderSingleNoteWithRoot(notes) {
     for (let i = 0; i < 6; i++) {
       if (i === s) {
         rows[i].push(
-          <span key={rows[i].length} style={{ display: 'inline-flex', alignItems: 'center', width: `${COL_PX}px`, boxSizing: 'border-box' }}>
+          <span key={rows[i].length}>
             <span style={badgeStyle}>{cell}</span>
             <span style={{ color: DIM }}>{'-'.repeat(padCount)}</span>
           </span>
         );
       } else {
         rows[i].push(
-          <span key={rows[i].length} style={{ display: 'inline-block', width: `${COL_PX}px`, boxSizing: 'border-box', color: DIM }}>
+          <span key={rows[i].length} style={{ color: DIM }}>
             {'-'.repeat(Math.max(COL, cell.length + 1))}
           </span>
         );
@@ -2069,8 +2069,8 @@ function TabCard({ title, subtitle, tab, difficulty }) {
         )}
       </div>
       <div style={{padding:'12px 16px', display:'flex', justifyContent:'center'}}>
-        <div style={{width: `${TAB_CARD_WIDTH}px`, maxWidth:'100%', display:'flex', justifyContent:'center', overflowX:'auto'}}>
-          <pre style={{fontFamily:'"Courier New",monospace',fontSize:'13px',lineHeight:'1.9',backgroundColor:'#111',color:'#e0e0e0',padding:'10px 14px',borderRadius:'8px',margin:0,whiteSpace:'pre',display:'inline-block'}}>
+        <div style={{width: `${TAB_CARD_WIDTH}px`, maxWidth:'100%', overflowX:'auto'}}>
+          <pre style={{fontFamily:'"Courier New",monospace',fontSize:'13px',lineHeight:'1.9',backgroundColor:'#111',color:'#e0e0e0',padding:'10px 14px',borderRadius:'8px',width:'fit-content',margin:'0 auto',whiteSpace:'pre'}}>
             {tab}
           </pre>
         </div>
