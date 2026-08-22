@@ -320,7 +320,9 @@ export default function Randomizer({ accessToken }) {
     setStatus('Saving…');
     try {
       const name = setName.trim() || 'Untitled idea';
-      const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+      const d = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const stamp = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}--${pad(d.getHours())}-${pad(d.getMinutes())}`;
       const fileName = `${name} (${stamp}).txt`;
       await uploadTextFile(accessToken, fileName, accumulated, 'Randomizer');
       setStatus(`Saved: ${fileName}`);
@@ -384,10 +386,30 @@ export default function Randomizer({ accessToken }) {
         Spin the wheel, or drag it yourself, to seed a song idea one piece at a time.
       </p>
 
-      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+        <button
+          onClick={() => {
+            const idx = CATEGORIES.findIndex(c => c.id === categoryId);
+            const prevIdx = (idx - 1 + CATEGORIES.length) % CATEGORIES.length;
+            handleCategoryChange(CATEGORIES[prevIdx].id);
+          }}
+          aria-label="Previous category"
+          style={{ background: 'none', border: '1px solid #444', borderRadius: '6px', color: '#ccc', width: '32px', height: '32px', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          ◀
+        </button>
         <select value={categoryId} onChange={e => handleCategoryChange(e.target.value)} style={selectStyle}>
           {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
         </select>
+        <button
+          onClick={() => {
+            const idx = CATEGORIES.findIndex(c => c.id === categoryId);
+            const nextIdx = (idx + 1) % CATEGORIES.length;
+            handleCategoryChange(CATEGORIES[nextIdx].id);
+          }}
+          aria-label="Next category"
+          style={{ background: 'none', border: '1px solid #444', borderRadius: '6px', color: '#ccc', width: '32px', height: '32px', cursor: 'pointer', fontSize: '14px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          ▶
+        </button>
       </div>
 
       <Wheel

@@ -34,9 +34,22 @@ export function FretboardDiagram({ selectedKey }) {
   const scaleNotes = getScaleNotes(selectedKey);
   if (!scaleNotes.length) return null;
 
+  // Map chromatic note -> degree ('1'..'7') so we can color root/3rd/5th
+  // distinctly, same red/orange/yellow convention used in Practice's box
+  // licks, rather than only distinguishing root vs. "any other note."
+  const degreeByNote = {};
+  scaleNotes.forEach(n => { degreeByNote[n.chromaticNote] = n.degree; });
   const scaleSet = new Set(scaleNotes.map(n => n.chromaticNote));
   const parts = selectedKey.split(' ');
   const rootNote = parts.slice(0, -1).join(' ');
+
+  const colorForNote = (note) => {
+    const degree = degreeByNote[note];
+    if (degree === '1') return '#ff4444';
+    if (degree === '3') return '#ff9d2e';
+    if (degree === '5') return '#ffe14d';
+    return '#1a73e8';
+  };
 
   const numFrets = 12, stringCount = 6, fretW = 44, stringH = 28;
   const leftPad = 28, topPad = 20;
@@ -46,10 +59,14 @@ export function FretboardDiagram({ selectedKey }) {
   return (
     <div style={{ marginTop: '16px' }}>
       <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '6px' }}>
-        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#cc0000', verticalAlign: 'middle', marginRight: '4px' }}></span>
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ff4444', verticalAlign: 'middle', marginRight: '4px' }}></span>
         Root &nbsp;
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ff9d2e', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
+        3rd &nbsp;
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ffe14d', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
+        5th &nbsp;
         <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#1a73e8', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
-        Scale note — {selectedKey}
+        Other — {selectedKey}
       </div>
       <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         style={{ width: '100%', maxWidth: `${svgWidth}px`, display: 'block', margin: '0 auto' }}>
@@ -73,19 +90,28 @@ export function FretboardDiagram({ selectedKey }) {
         {[1, 3, 5, 7, 9, 12].map(f => (
           <text key={f} x={leftPad + fretW * f - fretW / 2} y={svgHeight - 8} textAnchor="middle" fontSize="11" fill="#888">{f}</text>
         ))}
-        {OPEN_STRINGS.map((s, i) => (
-          <text key={i} x={leftPad - 8} y={topPad + stringH * i + 4} textAnchor="middle" fontSize="11" fill="#aaa">{s}</text>
-        ))}
+        {OPEN_STRINGS.map((s, i) => {
+          // Color the open-string tuning label to match whatever degree
+          // that open note is in the current key, so it's never showing
+          // a colored note circle right next to an uncolored plain label.
+          const inScale = scaleSet.has(s);
+          return (
+            <text key={i} x={leftPad - 8} y={topPad + stringH * i + 4} textAnchor="middle" fontSize="11"
+              fontWeight={inScale ? '700' : '400'}
+              fill={inScale ? colorForNote(s) : '#aaa'}>
+              {s}
+            </text>
+          );
+        })}
         {OPEN_STRINGS.map((openNote, stringIdx) =>
           Array.from({ length: numFrets + 1 }, (_, fret) => {
             const note = getFretNote(openNote, fret);
             if (!scaleSet.has(note)) return null;
-            const isRoot = note === rootNote;
             const cx = fret === 0 ? leftPad - 14 : leftPad + fretW * fret - fretW / 2;
             const cy = topPad + stringH * stringIdx;
             return (
               <g key={`${stringIdx}-${fret}`}>
-                <circle cx={cx} cy={cy} r="11" fill={isRoot ? '#cc0000' : '#1a73e8'} opacity="0.9" />
+                <circle cx={cx} cy={cy} r="11" fill={colorForNote(note)} opacity="0.9" />
                 <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fill="white" fontWeight="600">{note}</text>
               </g>
             );
