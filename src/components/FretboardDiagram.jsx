@@ -51,6 +51,11 @@ export function FretboardDiagram({ selectedKey }) {
     return '#1a73e8';
   };
 
+  // White text is hard to read against the yellow 5th-degree background
+  // specifically — every other background (red, orange, blue) is dark
+  // enough for white to stay legible.
+  const textColorForNote = (note) => (degreeByNote[note] === '5' ? '#111' : 'white');
+
   const numFrets = 12, stringCount = 6, fretW = 44, stringH = 28;
   const leftPad = 28, topPad = 20;
   const svgWidth = leftPad + fretW * (numFrets + 1);
@@ -112,7 +117,7 @@ export function FretboardDiagram({ selectedKey }) {
             return (
               <g key={`${stringIdx}-${fret}`}>
                 <circle cx={cx} cy={cy} r="11" fill={colorForNote(note)} opacity="0.9" />
-                <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fill="white" fontWeight="600">{note}</text>
+                <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fill={textColorForNote(note)} fontWeight="600">{note}</text>
               </g>
             );
           })
