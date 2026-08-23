@@ -799,14 +799,46 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                   "Save Metadata" is pressed below, same as every other
                   field on this card. */}
               <div style={{ backgroundColor: '#f5f0ff', border: '1px solid #d8c8f5', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px', flexWrap: 'wrap' }}>
                   <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b3b8c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Song Idea
                   </label>
-                  <button onClick={() => openSongIdeaPicker(clip.id)}
-                    style={{ padding: '4px 12px', backgroundColor: '#5b3b8c', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
-                    Load
-                  </button>
+                  {songIdeaPickerFor === clip.id ? (
+                    // Only rendered once a fetch has actually been
+                    // triggered — a <select> populated asynchronously can
+                    // have its native picker open before options exist if
+                    // it's present (even disabled) from the start, so this
+                    // stays out of the DOM entirely until there's real
+                    // data (or a firm "none found") to show.
+                    <select
+                      autoFocus
+                      disabled={loadingRandomizerFiles}
+                      defaultValue=""
+                      onChange={e => {
+                        const file = randomizerFiles?.find(f => f.id === e.target.value);
+                        if (file) loadSongIdea(clip, file);
+                      }}
+                      style={{
+                        padding: '4px 8px', fontSize: '12px', borderRadius: '6px',
+                        border: '1px solid #ccc', backgroundColor: 'white', color: '#222',
+                        maxWidth: '200px',
+                      }}
+                    >
+                      <option value="" disabled>
+                        {loadingRandomizerFiles
+                          ? 'Loading…'
+                          : (randomizerFiles?.length ? 'Select an idea…' : 'No saved ideas found')}
+                      </option>
+                      {randomizerFiles?.map(file => (
+                        <option key={file.id} value={file.id}>{file.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <button onClick={() => openSongIdeaPicker(clip.id)}
+                      style={{ padding: '4px 12px', backgroundColor: '#5b3b8c', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                      Load
+                    </button>
+                  )}
                 </div>
                 <textarea
                   value={metadataMap[clip.id]?.songIdea || ''}
@@ -818,25 +850,6 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                     backgroundColor: 'white', color: '#222', resize: 'vertical',
                   }}
                 />
-                {songIdeaPickerFor === clip.id && (
-                  <div style={{ marginTop: '8px', border: '1px solid #d8c8f5', borderRadius: '6px', backgroundColor: 'white', maxHeight: '160px', overflowY: 'auto' }}>
-                    {loadingRandomizerFiles ? (
-                      <p style={{ fontSize: '12px', color: '#888', padding: '10px', margin: 0 }}>Loading saved ideas…</p>
-                    ) : randomizerFiles && randomizerFiles.length > 0 ? (
-                      randomizerFiles.map(file => (
-                        <div key={file.id}
-                          onClick={() => loadSongIdea(clip, file)}
-                          style={{ padding: '8px 10px', fontSize: '13px', cursor: 'pointer', borderBottom: '1px solid #f0eaf7' }}>
-                          {file.name}
-                        </div>
-                      ))
-                    ) : (
-                      <p style={{ fontSize: '12px', color: '#888', padding: '10px', margin: 0 }}>
-                        No saved ideas found in RiffCatalog/Randomizer yet.
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
 
               <MetadataEditor
