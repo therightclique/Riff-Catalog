@@ -364,6 +364,17 @@ function App() {
   };
 
   const handleRefreshApp = async () => {
+    // Refreshing mid-review discards whatever hasn't been saved to Drive
+    // yet. This used to only be flagged as a warning note next to the
+    // Record tab's own refresh link — now that refresh is reachable from
+    // any tab via the header button, the protection has to live in the
+    // action itself so it still applies no matter where it's triggered
+    // from.
+    if (pendingRecording) {
+      const proceed = window.confirm('Refreshing will discard your unsaved recording. Continue?');
+      if (!proceed) return;
+    }
+
     if (!accessToken) {
       const reconnected = await reconnectDrive();
       if (reconnected) return;
@@ -384,14 +395,6 @@ function App() {
     window.location.replace(window.location.pathname + '?r=' + Date.now());
   };
 
-  const RefreshLink = () => (
-    <button
-      onClick={handleRefreshApp}
-      style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
-      {accessToken ? '🔄 Refresh app' : '🔄 Reconnect Drive & refresh'}
-    </button>
-  );
-
   return (
     <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '16px' }}>
@@ -411,8 +414,7 @@ function App() {
         </button>
         <h1 style={{ textAlign: 'center', margin: 0 }}>🎸 Riff Catalog</h1>
         {/* Same full-app-reset handleRefreshApp already used on the Record
-            tab (RefreshLink) — this just makes it reachable from any tab
-            instead of only there. */}
+            tab — now the only place it lives, reachable from any tab. */}
         <button
           onClick={handleRefreshApp}
           aria-label="Refresh app"
@@ -420,10 +422,13 @@ function App() {
           style={{
             position: 'absolute', right: 0, background: 'none', border: '1px solid #ccc',
             borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
-            fontSize: '16px', color: '#444',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+            color: '#444', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
           }}>
-          🔄
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="23 4 23 10 17 10" />
+            <polyline points="1 20 1 14 7 14" />
+            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+          </svg>
         </button>
       </div>
       {!user ? (
@@ -475,9 +480,6 @@ function App() {
                   )}
                   <p style={{ marginTop: '24px', fontSize: '13px', color: '#888', textAlign: 'center', maxWidth: '400px' }}>
                     🗂 Your recordings are saved to your Google Drive in a folder called <strong>RiffCatalog</strong>. Only you can access them — this app cannot see anything else in your Drive.
-                  </p>
-                  <p style={{ marginTop: '12px', fontSize: '13px', textAlign: 'center' }}>
-                    <RefreshLink />
                   </p>
                   <p style={{ marginTop: '6px', fontSize: '13px', textAlign: 'center' }}>
                     <button onClick={() => goToView('changelog')} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
@@ -584,12 +586,6 @@ function App() {
                       Discard
                     </button>
                   </div>
-                  <p style={{ marginTop: '16px', fontSize: '13px', textAlign: 'center' }}>
-                    <RefreshLink />
-                  </p>
-                  <p style={{ marginTop: '4px', fontSize: '11px', color: '#999', textAlign: 'center' }}>
-                    Refreshing discards this unsaved recording.
-                  </p>
                 </div>
               )}
             </div>

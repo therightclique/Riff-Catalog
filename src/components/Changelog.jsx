@@ -51,9 +51,12 @@ const CHANGELOG = [
         ],
       },
       {
-        title: 'App-wide back button',
+        title: 'App-wide back and refresh buttons',
         items: [
           'A back button at the top of the app now returns to whatever tab and state you were last on — filters, expanded cards, scroll position, and all — instead of losing it when you switch tabs',
+          'The back button stays visible at all times, dimmed and inactive when there\u2019s nowhere to go back to, rather than disappearing entirely',
+          'A matching refresh button now sits in the top right — the same full app reset (silent Drive reconnect first, then a full cache-clear reload if that doesn\u2019t work) that used to only be available as a link on the Record tab, now reachable from anywhere',
+          'If you\u2019re mid-recording with an unsaved take, refreshing now asks for confirmation first instead of silently discarding it',
         ],
       },
       {
