@@ -2117,7 +2117,7 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:21 PDT — measuring actual outer gap directly';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:25 PDT — smaller font so content fits without scroll';
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, wrapperRef = null, debugInfo = null, computedWidth = null, computedMarginLeft = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2158,7 +2158,16 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
             first measurement has run. Non-box modes keep the original
             fixed 460px width with centered content. */}
         <pre ref={boxRef} style={{
-          fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
+          // Box mode specifically drops to 12px — the measured overflow
+          // on the phone (content needing 349px against ~334px actually
+          // available) is a real physical fit problem, not a centering
+          // bug. A small font reduction here is enough to make the
+          // content genuinely fit without needing to scroll at all, and
+          // since the width is computed from a live measurement (not a
+          // hardcoded character-width assumption), it'll automatically
+          // recompute correctly for whatever this renders at — no other
+          // number in this file needs to change for this to work.
+          fontFamily:'"Courier New",monospace', fontSize: fitContent ? '12px' : '13px', lineHeight:'1.9',
           backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
           // Explicit computed marginLeft (see computedMarginLeft in
           // Practice()) instead of CSS margin:'0 auto' — auto-centering
