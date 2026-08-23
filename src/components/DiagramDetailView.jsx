@@ -63,9 +63,14 @@ const DIFF_COLORS = {
 //   happened to render at
 // - landscape support: re-measures and re-fits on resize/orientation
 //   change, so flipping the phone actually resizes the diagram
-// - an optional toggle next to the back button to switch to a second
-//   related diagram (e.g. a lick <-> the fretboard for its key, or a
-//   chord shape <-> the fretboard for its key) when one is supplied
+// - an optional toggle to switch to a second related diagram (e.g. a
+//   lick <-> the fretboard for its key, or a chord shape <-> the
+//   fretboard for its key) when one is supplied
+// - only the back button is fixed on screen — title, subtitle, the
+//   toggle, and the footer hint all live inside the same pinch-zoom/pan
+//   frame as the diagram itself, so zooming in can push that chrome
+//   off-screen and let the diagram genuinely fill the display (this
+//   matters most in landscape, where vertical space is already tight)
 export function DiagramDetailView({
   title, subtitle, difficulty,
   content, secondaryContent, secondaryLabel = 'Show fretboard', primaryLabel = 'Show diagram',
@@ -181,41 +186,24 @@ export function DiagramDetailView({
   return (
     <div style={{
       position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.97)', zIndex: 1000,
-      display: 'flex', flexDirection: 'column', touchAction: 'none',
+      touchAction: 'none',
     }}>
-      <div style={{ display: 'flex', flexDirection: 'column', flexShrink: 0, padding: '16px', gap: '10px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <button onClick={onClose} aria-label="Back" style={{ ...iconBtnStyle, borderRadius: '50%', width: '36px', padding: 0 }}>
-            ←
-          </button>
-          {canToggle && (
-            <button onClick={() => setShowSecondary(v => !v)} style={iconBtnStyle}>
-              {showSecondary ? `🎸 ${primaryLabel}` : `🎼 ${secondaryLabel}`}
-            </button>
-          )}
-        </div>
-        {(title || subtitle || diff) && (
-          <div style={{ color: '#fff', minWidth: 0 }}>
-            {title && <div style={{ fontWeight: '600', fontSize: '16px' }}>{title}</div>}
-            {(subtitle || diff) && (
-              <div style={{ fontSize: '13px', color: '#aaa', marginTop: '2px' }}>
-                {subtitle}
-                {diff && (
-                  <span style={{
-                    marginLeft: '8px', padding: '2px 8px', borderRadius: '20px', fontSize: '11px',
-                    fontWeight: '600', backgroundColor: diff.bg, color: diff.color,
-                  }}>
-                    {difficulty}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
+      {/* Only the back button stays fixed outside the zoomable frame —
+          everything else (title, toggle, diagram, hint text) zooms and
+          pans together as one page, so zooming in can push the chrome
+          off-screen and let the diagram genuinely fill the display,
+          especially useful in landscape where vertical space is tight. */}
+      <button onClick={onClose} aria-label="Back" style={{
+        position: 'absolute', top: '16px', left: '16px', zIndex: 10,
+        background: 'rgba(20,20,20,0.85)', border: '1px solid #555', borderRadius: '50%',
+        width: '40px', height: '40px', color: '#fff', fontSize: '18px', cursor: 'pointer',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+      }}>
+        ←
+      </button>
       <div
         ref={viewportRef}
-        style={{ flex: 1, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+        style={{ position: 'absolute', inset: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -225,13 +213,48 @@ export function DiagramDetailView({
           transform: `translate(${translate.x}px, ${translate.y}px) scale(${scale})`,
           transformOrigin: 'center center',
           transition: scale === fitScale ? 'transform 0.2s ease' : 'none',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px',
+          padding: '0 16px',
         }}>
+          {(canToggle || title || subtitle || diff) && (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+              {canToggle && (
+                <button
+                  // Stops the tap from also being interpreted as the
+                  // start of a pan gesture by the viewport's touch
+                  // handlers, since this button now lives inside that
+                  // same touch-tracked area.
+                  onClick={(e) => { e.stopPropagation(); setShowSecondary(v => !v); }}
+                  style={iconBtnStyle}>
+                  {showSecondary ? `🎸 ${primaryLabel}` : `🎼 ${secondaryLabel}`}
+                </button>
+              )}
+              {(title || subtitle || diff) && (
+                <div style={{ color: '#fff', minWidth: 0, textAlign: 'center' }}>
+                  {title && <div style={{ fontWeight: '600', fontSize: '16px' }}>{title}</div>}
+                  {(subtitle || diff) && (
+                    <div style={{ fontSize: '13px', color: '#aaa', marginTop: '2px' }}>
+                      {subtitle}
+                      {diff && (
+                        <span style={{
+                          marginLeft: '8px', padding: '2px 8px', borderRadius: '20px', fontSize: '11px',
+                          fontWeight: '600', backgroundColor: diff.bg, color: diff.color,
+                        }}>
+                          {difficulty}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {active}
+          <p style={{ textAlign: 'center', color: '#666', fontSize: '12px', margin: 0 }}>
+            Pinch to zoom · drag to pan when zoomed · double-tap to reset
+          </p>
         </div>
       </div>
-      <p style={{ textAlign: 'center', color: '#666', fontSize: '12px', padding: '10px', flexShrink: 0 }}>
-        Pinch to zoom · drag to pan when zoomed · double-tap to reset
-      </p>
     </div>
   );
 }
