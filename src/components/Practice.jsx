@@ -45,42 +45,6 @@ function degreeFor(s, f, rootNote, group) {
   return map[interval] || null;
 }
 
-// Chord riffs are a different case from scale-based licks — each
-// position in a riff is its OWN chord with its OWN root (e.g. the "F#m"
-// in "A-F#m-D"), not one shared scale root for the whole card. The chord
-// name string is parsed to recover that per-position root and quality.
-function parseChordName(name) {
-  const m = name.match(/^([A-G][#b]?)(.*)$/);
-  if (!m) return null;
-  const suffix = m[2];
-  const isDim = suffix.toLowerCase().includes('dim');
-  const isMinor = !isDim && suffix.startsWith('m') && !suffix.toLowerCase().startsWith('maj');
-  return { root: m[1], quality: isDim ? 'dim' : isMinor ? 'minor' : 'major' };
-}
-
-const CHORD_QUALITY_INTERVALS = {
-  major: { 0: '1', 4: '3', 7: '5' },
-  minor: { 0: '1', 3: '3', 7: '5' },
-  dim:   { 0: '1', 3: '3', 6: '5' }, // flatted 5th filling the same functional "5th" role
-};
-
-// CHROMATIC only has sharp spellings, but a chord name could in principle
-// use a flat root (e.g. "Ebm") — not currently present in the real data,
-// but normalizing here means that stays true by construction rather than
-// by accident, instead of silently falling back to no coloring for a
-// chord that happens to use flat notation.
-const FLAT_TO_SHARP = { Db:'C#', Eb:'D#', Gb:'F#', Ab:'G#', Bb:'A#' };
-
-function chordDegreeFor(s, f, chordRootInfo) {
-  if (!chordRootInfo) return null;
-  const root = FLAT_TO_SHARP[chordRootInfo.root] || chordRootInfo.root;
-  const rootIdx = CHROMATIC.indexOf(root);
-  if (rootIdx === -1) return null;
-  const interval = (pitchClass(s, f) - rootIdx + 12) % 12;
-  const map = CHORD_QUALITY_INTERVALS[chordRootInfo.quality] || CHORD_QUALITY_INTERVALS.major;
-  return map[interval] || null;
-}
-
 // Transposes a moveable shape by ONE fret delta applied uniformly to
 // every note, which is the only way to guarantee relative fret spacing
 // is preserved exactly. The previous approach computed each note's new
@@ -214,78 +178,69 @@ function renderDoubleStop(pairs, group, rootNote, targetColumns = pairs.length, 
   );
 }
 
-// chordRoots is an array parallel to `chords`, one { root, quality } (or
-// null) per column — since each position in a chord riff is its own
-// chord with its own root, unlike the single shared root every other
-// mode uses. See parseChordName / chordDegreeFor above.
-function renderChords(chords, chordRoots, targetColumns = chords.length, rowRefsContainer = null) {
+// Deliberately NOT colored by root/3rd/5th like every other mode — each
+// position in a riff is its own chord with its own root (the "F#m" in
+// "A-F#m-D"), and coloring individual chord tones relative to whichever
+// chord they belong to (rather than the riff's overall key) read as
+// confusing rather than helpful. Fretted notes still get bright white
+// against the dimmed grid for the same readability boost every other
+// mode has, just without the degree badges.
+function renderChords(chords, targetColumns = chords.length, rowRefsContainer = null) {
   const DIM = '#aaaaaa';
+  // A full extra column of dashes between chord positions, for
+  // readability. Inserted between EVERY adjacent column — including
+  // filler slots, not just real chords — so the separator count stays a
+  // constant (targetColumns - 1) regardless of how many chords any given
+  // riff actually has. Doing it only between real chords would add a
+  // different amount of total width to a 2-chord riff than a 4-chord
+  // one, breaking the uniform width every card is supposed to share.
+  const SEP = CHORD_COL_WIDTH;
   const rows = {};
   for (let i = 0; i < 6; i++) rows[i] = [];
   const totalFiller = Math.max(0, targetColumns - chords.length);
   const leftFiller = Math.floor(totalFiller / 2);
   const rightFiller = totalFiller - leftFiller;
+  const totalCols = leftFiller + chords.length + rightFiller;
 
-  const pushFiller = (count) => {
-    if (count <= 0) return;
+  let colCursor = 0;
+  const pushColumn = (renderCell) => {
+    const isLast = colCursor === totalCols - 1;
     for (let i = 0; i < 6; i++) {
-      rows[i].push(
-        <span key={`filler-${rows[i].length}`} style={{ color: DIM }}>
-          {'-'.repeat(CHORD_COL_WIDTH * count)}
-        </span>
-      );
+      rows[i].push(<span key={`c${colCursor}-${i}`}>{renderCell(i)}</span>);
+      if (!isLast) {
+        rows[i].push(<span key={`s${colCursor}-${i}`} style={{ color: DIM }}>{'-'.repeat(SEP)}</span>);
+      }
     }
+    colCursor++;
   };
-  pushFiller(leftFiller);
 
-  chords.forEach((c, colIdx) => {
-    const rootInfo = chordRoots ? chordRoots[colIdx] : null;
-    for (let i = 0; i < 6; i++) {
+  const fillerCell = () => <span style={{ color: DIM }}>{'-'.repeat(CHORD_COL_WIDTH)}</span>;
+  for (let k = 0; k < leftFiller; k++) pushColumn(fillerCell);
+
+  chords.forEach((c) => {
+    pushColumn((i) => {
       const raw = c[i];
       const isFretted = raw !== undefined && raw !== 'x';
       if (isFretted) {
         const cell = String(raw);
-        const degree = chordDegreeFor(i, raw, rootInfo);
-        const isRoot = degree === '1';
-        const isThirdOrFifth = degree === '3' || degree === '5';
-        const color = DEGREE_COLORS[degree];
         const padCount = CHORD_COL_WIDTH - cell.length;
-        const circleStyle = isRoot
-          ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-              width: '1.6em', height: '1.6em', borderRadius: '50%',
-              backgroundColor: color, zIndex: 0 }
-          : isThirdOrFifth
-          ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-              width: '1.6em', height: '1.6em', borderRadius: '50%',
-              border: `1.5px solid ${color}`, zIndex: 0 }
-          : null;
-        const textStyle = { position: 'relative', zIndex: 1, fontWeight: '700',
-          color: isRoot ? '#111' : isThirdOrFifth ? color : '#fff' };
-        rows[i].push(
-          <span key={rows[i].length}>
-            <span style={{ position: 'relative', display: 'inline-block' }}>
-              {circleStyle && <span style={circleStyle} />}
-              <span style={textStyle}>{cell}</span>
-            </span>
+        return (
+          <>
+            <span style={{ fontWeight: '700', color: '#fff' }}>{cell}</span>
             <span style={{ color: DIM }}>{'-'.repeat(padCount)}</span>
-          </span>
-        );
-      } else {
-        // 'x' (explicitly muted string) still shows the character;
-        // a genuinely absent string (not part of the voicing) is just
-        // dashes — same distinction the plain-text version had.
-        const cell = raw === 'x' ? 'x' : '';
-        const padCount = CHORD_COL_WIDTH - cell.length;
-        rows[i].push(
-          <span key={rows[i].length} style={{ color: DIM }}>
-            {cell}{'-'.repeat(padCount)}
-          </span>
+          </>
         );
       }
-    }
+      // 'x' (explicitly muted string) still shows the character;
+      // a genuinely absent string (not part of the voicing) is just
+      // dashes — same distinction the plain-text version had.
+      const cell = raw === 'x' ? 'x' : '';
+      const padCount = CHORD_COL_WIDTH - cell.length;
+      return <span style={{ color: DIM }}>{cell}{'-'.repeat(padCount)}</span>;
+    });
   });
 
-  pushFiller(rightFiller);
+  for (let k = 0; k < rightFiller; k++) pushColumn(fillerCell);
 
   return (
     <>
@@ -2628,16 +2583,12 @@ export default function Practice() {
         Object.entries(c).forEach(([k,v]) => { out[parseInt(k)] = v === 'x' ? 'x' : parseInt(v); });
         return out;
       });
-      // Each position in a riff is its own chord (e.g. the "F#m" in
-      // "A-F#m-D") — parse the name string to recover each one's own
-      // root/quality for per-chord degree coloring.
-      const chordRoots = item.name.split('-').map(parseChordName);
       const isFirst = idx === 0;
       return <TabCard
         key={item.name+item.key+idx}
         title={item.name}
         subtitle={`Key of ${item.key}`}
-        tab={renderChords(chords, chordRoots, MAX_CHORD_COUNT, isFirst ? rowRefsContainer : null)}
+        tab={renderChords(chords, MAX_CHORD_COUNT, isFirst ? rowRefsContainer : null)}
         wrapperRef={isFirst ? wrapperMeasureRef : null}
         computedWidth={computedBoxWidth}
         computedMarginLeft={computedMarginLeft}

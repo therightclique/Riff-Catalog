@@ -28,9 +28,12 @@ const CHANGELOG = [
       {
         title: 'Scale-degree coloring, root/3rd/5th',
         items: [
-          'Root, 3rd, and 5th are individually color-coded (red / orange / yellow) across box licks and the fretboard overview',
+          'Root, 3rd, and 5th are individually color-coded (red / orange / yellow) across every lick and scale diagram \u2014 box licks, free licks, double stops, and the fretboard overview',
           'Root shown as a filled circle, 3rd and 5th as hollow circles in their own color; every other note renders in white for contrast against the grid',
+          'Free licks and double stops compute each note\u2019s degree live from its pitch, since \u2014 unlike box licks \u2014 that isn\u2019t stored in their data, but the coloring result is identical either way',
+          'Chord riffs intentionally don\u2019t get this treatment: each chord in a riff has its own root, and coloring notes relative to whichever chord they belong to (rather than one shared key) read as confusing rather than helpful. Fretted notes there are still bright white against the dimmed grid',
           'Fretboard\u2019s open-string tuning labels now match the coloring of whatever scale degree that string plays',
+          'The 3rd\u2019s color is now consistent across every diagram type \u2014 previously a lighter orange in box-mode tabs than on the fretboard',
         ],
       },
       {
@@ -39,6 +42,7 @@ const CHANGELOG = [
           'Fixed misaligned pipes and dashes that made some strings\u2019 measures wider than others',
           'Every card \u2014 box licks, free licks, double stops, and chord riffs \u2014 is now a consistent size, with content centered and sized to fit the screen without needing to scroll',
           'Shorter licks within each type now center within a fixed-length measure instead of clustering against the left edge, and double-stop/chord column widths no longer vary from lick to lick',
+          'Chord riffs now have a full extra dash-column between each chord for easier reading',
         ],
       },
       {
@@ -57,6 +61,7 @@ const CHANGELOG = [
           'A back button at the top of the app now returns to whatever tab and state you were last on — filters, expanded cards, scroll position, and all — instead of losing it when you switch tabs',
           'The back button stays visible at all times, dimmed and inactive when there\u2019s nowhere to go back to, rather than disappearing entirely',
           'A matching refresh button now sits in the top right — the same full app reset (silent Drive reconnect first, then a full cache-clear reload if that doesn\u2019t work) that used to only be available as a link on the Record tab, now reachable from anywhere',
+          'Both buttons use simple line-art icons in the same minimal style — the refresh icon replaces an earlier, more cluttered one that didn\u2019t match, and the separate "Refresh app" link on the Record tab is gone now that it\u2019s redundant',
           'If you\u2019re mid-recording with an unsaved take, refreshing now asks for confirmation first instead of silently discarding it',
         ],
       },
