@@ -2117,7 +2117,7 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:10 PDT — explicit computed margin, not CSS auto';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:17 PDT — fixed padding double-count in margin calc';
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, wrapperRef = null, debugInfo = null, computedWidth = null, computedMarginLeft = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2287,8 +2287,23 @@ export default function Practice() {
         // compute the centering offset by hand, the same way the width
         // itself was fixed.
         if (debugWrapperRef.current) {
-          const wrapperWidth = debugWrapperRef.current.getBoundingClientRect().width;
-          const newMargin = Math.max(0, Math.floor((wrapperWidth - newWidth) / 2));
+          const wrapperEl = debugWrapperRef.current;
+          // getBoundingClientRect().width on the wrapper includes the
+          // wrapper's OWN padding (12px 16px) — but the pre is centered
+          // within the wrapper's CONTENT box, inside that padding, not
+          // against its outer edge. Using the padding-inclusive width
+          // overestimated available space by the padding amount, which
+          // is exactly what pushed the box too far right on every
+          // screen size (worse in absolute pixels on wider screens,
+          // which is why it looked fine-ish on the phone but clearly
+          // wrong on desktop). Reading the actual computed padding
+          // (rather than hardcoding it) keeps this correct even if the
+          // wrapper's padding is ever changed later.
+          const cs = window.getComputedStyle(wrapperEl);
+          const padLeft = parseFloat(cs.paddingLeft) || 0;
+          const padRight = parseFloat(cs.paddingRight) || 0;
+          const contentWidth = wrapperEl.clientWidth - padLeft - padRight;
+          const newMargin = Math.max(0, Math.floor((contentWidth - newWidth) / 2));
           setComputedMarginLeft(prev => (prev === newMargin ? prev : newMargin));
         }
       }
