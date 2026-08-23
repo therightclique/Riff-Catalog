@@ -2117,7 +2117,7 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:17 PDT — fixed padding double-count in margin calc';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:21 PDT — measuring actual outer gap directly';
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, wrapperRef = null, debugInfo = null, computedWidth = null, computedMarginLeft = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2203,7 +2203,7 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
             <>
               <br />
               <span style={{ color: '#e8b84b' }}>
-                DEBUG — box width: {debugInfo.boxWidth}px · left gap: {debugInfo.leftGap}px · right gap: {debugInfo.rightGap}px · computed: {computedWidth ?? '—'}px · margin: {computedMarginLeft ?? '—'}px
+                DEBUG — box width: {debugInfo.boxWidth}px · inner L/R: {debugInfo.leftGap}/{debugInfo.rightGap}px · margin applied: {computedMarginLeft ?? '—'}px · <strong>outer L/R (measured): {debugInfo.outerLeftGap ?? '—'}/{debugInfo.outerRightGap ?? '—'}px</strong>
               </span>
             </>
           )}
@@ -2314,10 +2314,26 @@ export default function Practice() {
       const box = debugBoxRef.current.getBoundingClientRect();
       const label = debugLabelRef.current.getBoundingClientRect();
       const pipe = debugPipeRef.current.getBoundingClientRect();
+      let outerLeftGap = null, outerRightGap = null;
+      if (debugWrapperRef.current) {
+        const wrapper = debugWrapperRef.current.getBoundingClientRect();
+        const cs = window.getComputedStyle(debugWrapperRef.current);
+        const padLeft = parseFloat(cs.paddingLeft) || 0;
+        const padRight = parseFloat(cs.paddingRight) || 0;
+        // This measures the ACTUAL rendered gap between the box and the
+        // wrapper's content edges — the real outcome, not the formula's
+        // input. The computed margin value alone wasn't enough to catch
+        // the padding double-count bug; this catches it directly instead
+        // of trusting the math that produced it.
+        outerLeftGap = Math.round(box.left - (wrapper.left + padLeft));
+        outerRightGap = Math.round((wrapper.right - padRight) - box.right);
+      }
       const next = {
         boxWidth: Math.round(box.width),
         leftGap: Math.round(label.left - box.left),
         rightGap: Math.round(box.right - pipe.right),
+        outerLeftGap,
+        outerRightGap,
       };
       // Without this equality check, setDebugGaps fires with a brand-new
       // object every single effect pass (even when the numbers haven't
@@ -2329,6 +2345,7 @@ export default function Practice() {
       // actually changed.
       setDebugGaps(prev => (
         prev && prev.boxWidth === next.boxWidth && prev.leftGap === next.leftGap && prev.rightGap === next.rightGap
+          && prev.outerLeftGap === next.outerLeftGap && prev.outerRightGap === next.outerRightGap
           ? prev
           : next
       ));
