@@ -46,7 +46,7 @@ export function FretboardDiagram({ selectedKey }) {
   const colorForNote = (note) => {
     const degree = degreeByNote[note];
     if (degree === '1') return '#ff4444';
-    if (degree === '3') return '#ff9d2e';
+    if (degree === '3') return '#a84f13';
     if (degree === '5') return '#ffe14d';
     return '#1a73e8';
   };
