@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchClips, getAudioUrl, trashFile, renameFile } from './DriveLibrary';
 import { loadMetadata, loadAllMetadata, saveMetadata } from './MetadataService';
+import { listTextFiles, readTextFile } from './DriveUploader';
 import MetadataEditor from './MetadataEditor';
 import { analyzeAudio } from './AudioAnalyzer';
 import FilterBar from './FilterBar';
@@ -150,7 +151,6 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
   const [renamingId, setRenamingId] = useState(null);
   const [renameValue, setRenameValue] = useState('');
   const [busyId, setBusyId] = useState(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [analysisCandidates, setAnalysisCandidates] = useState({});
   const [filters, setFilters] = useState({
     key: '', keyMode: 'exact', instrument: '', quality: '',
@@ -159,7 +159,12 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
   const [sortBy, setSortBy] = useState('newest');
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [undoSnapshot, setUndoSnapshot] = useState(null);
+  const [randomizerFiles, setRandomizerFiles] = useState(null); // null = not fetched yet
+  const [loadingRandomizerFiles, setLoadingRandomizerFiles] = useState(false);
+  const [songIdeaPickerFor, setSongIdeaPickerFor] = useState(null); // clip id whose picker is open
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -321,22 +326,66 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
     setBusyId(null);
   };
 
-  const handleDelete = async (clip) => {
-    setBusyId(clip.id);
-    try {
-      await trashFile(accessToken, clip.id);
-      const sidecarId = metadataMap[clip.id]?._sidecarId;
-      if (sidecarId) {
-        await trashFile(accessToken, sidecarId).catch(e => console.warn('Sidecar delete failed:', e));
-      }
-      setClips(prev => prev.filter(c => c.id !== clip.id));
-      setConfirmDeleteId(null);
-      if (expandedId === clip.id) setExpandedId(null);
-    } catch (err) {
-      console.error('Delete failed:', err);
-      alert('Delete failed: ' + err.message);
+  // Downloads every selected clip. Triggering several `a.click()` downloads
+  // back-to-back in the same tick gets silently blocked as a popup flood by
+  // some browsers, so these fire on a short stagger instead.
+  const handleBulkDownload = async () => {
+    const toDownload = clips.filter(c => selectedIds.has(c.id));
+    for (let i = 0; i < toDownload.length; i++) {
+      const clip = toDownload[i];
+      setTimeout(() => handleDownload(clip), i * 400);
     }
-    setBusyId(null);
+  };
+
+  const handleBulkDelete = async () => {
+    setBulkBusy(true);
+    const idsToDelete = [...selectedIds];
+    try {
+      for (const clipId of idsToDelete) {
+        await trashFile(accessToken, clipId);
+        const sidecarId = metadataMap[clipId]?._sidecarId;
+        if (sidecarId) {
+          await trashFile(accessToken, sidecarId).catch(e => console.warn('Sidecar delete failed:', e));
+        }
+      }
+      setClips(prev => prev.filter(c => !selectedIds.has(c.id)));
+      if (selectedIds.has(expandedId)) setExpandedId(null);
+      setSelectedIds(new Set());
+      setConfirmBulkDelete(false);
+    } catch (err) {
+      console.error('Bulk delete failed:', err);
+      alert('Bulk delete failed: ' + err.message);
+    }
+    setBulkBusy(false);
+  };
+
+  // Fetches the saved Randomizer song-idea text files once and caches the
+  // list, rather than re-listing Drive every time any clip's picker opens.
+  const openSongIdeaPicker = async (clipId) => {
+    if (songIdeaPickerFor === clipId) { setSongIdeaPickerFor(null); return; }
+    setSongIdeaPickerFor(clipId);
+    if (randomizerFiles === null) {
+      setLoadingRandomizerFiles(true);
+      try {
+        const files = await listTextFiles(accessToken, 'Randomizer');
+        setRandomizerFiles(files);
+      } catch (err) {
+        console.error('Failed to list Randomizer ideas:', err);
+        setRandomizerFiles([]);
+      }
+      setLoadingRandomizerFiles(false);
+    }
+  };
+
+  const loadSongIdea = async (clip, file) => {
+    try {
+      const text = await readTextFile(accessToken, file.id);
+      handleMetadataChange(clip.id, { ...metadataMap[clip.id], songIdea: text });
+    } catch (err) {
+      console.error('Failed to load song idea:', err);
+      alert('Failed to load that song idea: ' + err.message);
+    }
+    setSongIdeaPickerFor(null);
   };
 
   const toggleFavorite = async (clip) => {
@@ -497,6 +546,17 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
     padding: '4px 8px', cursor: 'pointer', fontSize: '16px', color: '#444', flexShrink: 0, lineHeight: 1,
   };
 
+  // Same footprint as iconBtnStyle (fixed width/height instead of
+  // padding-driven sizing) so a bigger glyph reads clearly as a pencil
+  // without the button itself growing — flex centering keeps the larger
+  // character contained inside that fixed box rather than overflowing it.
+  const renameBtnStyle = {
+    background: 'none', border: '1px solid #ddd', borderRadius: '6px',
+    width: '32px', height: '32px', boxSizing: 'border-box',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', fontSize: '19px', color: '#444', flexShrink: 0, padding: 0,
+  };
+
   const speedBtnStyle = (active) => ({
     padding: '3px 8px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer',
     border: active ? '2px solid #1a73e8' : '1px solid #ccc',
@@ -573,7 +633,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
       {sortedClips.length === 0 && <p style={{ color: '#888' }}>No clips match the current filters.</p>}
 
       {sortedClips.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px', fontSize: '13px', color: '#555' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', fontSize: '13px', color: '#555' }}>
           <input type="checkbox"
             checked={selectedIds.size === sortedClips.length && sortedClips.length > 0}
             onChange={e => e.target.checked ? selectAll(sortedClips) : deselectAll()}
@@ -586,12 +646,41 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
               Edit selected
             </button>
           )}
-          {selectedIds.size > 0 && (
-            <button onClick={deselectAll}
-              style={{ background: 'none', border: 'none', color: '#888', fontSize: '12px', cursor: 'pointer' }}>
-              Clear
-            </button>
-          )}
+        </div>
+      )}
+
+      {/* Download / Delete grouped on the left, Clear pushed to the far
+          right with real distance from Delete — icon-only, no labels.
+          Only shown once something is actually checked. */}
+      {selectedIds.size > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button onClick={handleBulkDownload} style={iconBtnStyle} title="Download selected">⬇</button>
+            <button onClick={() => setConfirmBulkDelete(true)} style={{ ...iconBtnStyle, color: '#c00' }} title="Delete selected">🗑</button>
+          </div>
+          <button onClick={deselectAll} style={iconBtnStyle} title="Clear selection">✕</button>
+        </div>
+      )}
+
+      {confirmBulkDelete && (
+        <div style={{
+          padding: '10px 14px', backgroundColor: '#3a1414', border: '1px solid #5a2020',
+          borderRadius: '8px', marginBottom: '10px', display: 'flex', alignItems: 'center',
+          gap: '10px', flexWrap: 'wrap',
+        }}>
+          <span style={{ fontSize: '13px', color: '#ffb4b4', flex: 1, minWidth: '160px' }}>
+            Move {selectedIds.size} clip{selectedIds.size !== 1 ? 's' : ''} to Drive trash?
+          </span>
+          <button onClick={handleBulkDelete} disabled={bulkBusy}
+            style={{ padding: '6px 14px', backgroundColor: '#cc0000', color: 'white',
+              border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+            {bulkBusy ? 'Deleting…' : 'Delete'}
+          </button>
+          <button onClick={() => setConfirmBulkDelete(false)} disabled={bulkBusy}
+            style={{ padding: '6px 14px', backgroundColor: 'transparent', color: '#ccc',
+              border: '1px solid #666', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+            Cancel
+          </button>
         </div>
       )}
 
@@ -651,78 +740,49 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                   }}
                 />
               ) : (
-                <div style={{ cursor: 'pointer' }} onClick={() => handleExpand(clip)}>
+                <div style={{ cursor: 'pointer', textAlign: 'center' }} onClick={() => handleExpand(clip)}>
                   {/* Line 1 — name */}
                   <div style={{ fontWeight: '500', wordBreak: 'break-word', lineHeight: '1.3' }}>
                     {baseName(clip.name)}
                   </div>
 
-                  {/* Line 2 — key + tempo (each kept whole on one line) */}
-                  {(metadataMap[clip.id]?.key || metadataMap[clip.id]?.bpm) && (
-                    <div style={{ fontSize: '12px', color: '#666', marginTop: '3px', display: 'flex', flexWrap: 'wrap', gap: '0 8px' }}>
-                      {metadataMap[clip.id]?.key && (
-                        <span style={{ whiteSpace: 'nowrap', fontWeight: '600' }}>
-                          {metadataMap[clip.id].key}
-                        </span>
-                      )}
-                      {metadataMap[clip.id]?.bpm && (
-                        <span style={{ whiteSpace: 'nowrap' }}>
-                          {metadataMap[clip.id].bpm} BPM
-                        </span>
-                      )}
+                  {/* Line 2 — key, its own line, centered with the name */}
+                  {metadataMap[clip.id]?.key && (
+                    <div style={{ fontSize: '12px', color: '#666', fontWeight: '600', marginTop: '3px' }}>
+                      {metadataMap[clip.id].key}
                     </div>
                   )}
 
-                  {/* Line 3 — date + duration */}
-                  <div style={{ fontSize: '12px', color: '#999', marginTop: '3px', display: 'flex', flexWrap: 'wrap', gap: '0 8px' }}>
-                    <span style={{ whiteSpace: 'nowrap' }}>{formatDate(clip.createdTime)}</span>
-                    {durationMap[clip.id] && (
-                      <span style={{ whiteSpace: 'nowrap' }}>{formatDuration(durationMap[clip.id])}</span>
-                    )}
-                    {metadataMap[clip.id]?.needsLyrics && (
-                      <span style={{ whiteSpace: 'nowrap' }}>📝 needs lyrics</span>
-                    )}
+                  {/* Line 3 — tempo, its own line, centered with the name */}
+                  {metadataMap[clip.id]?.bpm && (
+                    <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
+                      {metadataMap[clip.id].bpm} BPM
+                    </div>
+                  )}
+
+                  {/* Line 4 — date, its own line, centered with the name */}
+                  <div style={{ fontSize: '12px', color: '#999', marginTop: '3px' }}>
+                    {formatDate(clip.createdTime)}
                   </div>
+
+                  {/* Duration / needs-lyrics weren't part of the requested
+                      split (only key, tempo, date), so they stay together
+                      on one more centered line beneath the date. */}
+                  {(durationMap[clip.id] || metadataMap[clip.id]?.needsLyrics) && (
+                    <div style={{ fontSize: '12px', color: '#999', marginTop: '3px' }}>
+                      {durationMap[clip.id] && formatDuration(durationMap[clip.id])}
+                      {durationMap[clip.id] && metadataMap[clip.id]?.needsLyrics ? ' · ' : ''}
+                      {metadataMap[clip.id]?.needsLyrics && '📝 needs lyrics'}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
-            <button onClick={(e) => { e.stopPropagation(); startRename(clip); }} style={iconBtnStyle} title="Rename">✎</button>
-            <button onClick={() => handleExpand(clip)} style={iconBtnStyle}>
+            <button onClick={(e) => { e.stopPropagation(); startRename(clip); }} style={renameBtnStyle} title="Rename">✏️</button>
+            <button onClick={() => handleExpand(clip)} style={{ ...renameBtnStyle, fontSize: '16px' }}>
               {expandedId === clip.id ? '▲' : '▼'}
             </button>
           </div>
-
-          {/* Secondary actions on their own line so the clip name gets full width */}
-          <div style={{
-            display: 'flex', justifyContent: 'flex-end', gap: '8px',
-            padding: '0 12px 10px', marginTop: '-4px',
-          }}>
-            <button onClick={() => handleDownload(clip)} style={iconBtnStyle} title="Download">⬇</button>
-            <button onClick={(e) => { e.stopPropagation(); setConfirmDeleteId(clip.id); }}
-              style={{ ...iconBtnStyle, color: '#c00' }} title="Delete">🗑</button>
-          </div>
-
-          {confirmDeleteId === clip.id && (
-            <div style={{
-              padding: '10px 12px', backgroundColor: '#3a1414',
-              borderTop: '1px solid #5a2020', display: 'flex',
-              alignItems: 'center', gap: '10px', flexWrap: 'wrap',
-            }}>
-              <span style={{ fontSize: '13px', color: '#ffb4b4', flex: 1, minWidth: '160px' }}>
-                Move “{baseName(clip.name)}” to Drive trash?
-              </span>
-              <button onClick={() => handleDelete(clip)} disabled={busyId === clip.id}
-                style={{ padding: '6px 14px', backgroundColor: '#cc0000', color: 'white',
-                  border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                {busyId === clip.id ? 'Deleting…' : 'Delete'}
-              </button>
-              <button onClick={() => setConfirmDeleteId(null)}
-                style={{ padding: '6px 14px', backgroundColor: 'transparent', color: '#ccc',
-                  border: '1px solid #666', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
-                Cancel
-              </button>
-            </div>
-          )}
 
           {expandedId === clip.id && metadataMap[clip.id] && (
             <div style={{ padding: '0 12px 12px' }}>
@@ -731,6 +791,54 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                 {clip.size && durationMap[clip.id] ? ' · ' : ''}
                 {durationMap[clip.id] ? formatDuration(durationMap[clip.id]) : ''}
               </div>
+
+              {/* Song Idea box — separate from MetadataEditor's own Notes
+                  field, since this specifically pulls from ideas already
+                  saved on the Randomizer tab rather than being typed here
+                  from scratch. Saved together with everything else when
+                  "Save Metadata" is pressed below, same as every other
+                  field on this card. */}
+              <div style={{ backgroundColor: '#f5f0ff', border: '1px solid #d8c8f5', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b3b8c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Song Idea
+                  </label>
+                  <button onClick={() => openSongIdeaPicker(clip.id)}
+                    style={{ padding: '4px 12px', backgroundColor: '#5b3b8c', color: 'white', border: 'none', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}>
+                    Load
+                  </button>
+                </div>
+                <textarea
+                  value={metadataMap[clip.id]?.songIdea || ''}
+                  onChange={e => handleMetadataChange(clip.id, { ...metadataMap[clip.id], songIdea: e.target.value })}
+                  placeholder="Load a saved idea from the Randomizer, or type your own..."
+                  style={{
+                    width: '100%', minHeight: '60px', padding: '8px', fontSize: '14px',
+                    border: '1px solid #d8c8f5', borderRadius: '6px', boxSizing: 'border-box',
+                    backgroundColor: 'white', color: '#222', resize: 'vertical',
+                  }}
+                />
+                {songIdeaPickerFor === clip.id && (
+                  <div style={{ marginTop: '8px', border: '1px solid #d8c8f5', borderRadius: '6px', backgroundColor: 'white', maxHeight: '160px', overflowY: 'auto' }}>
+                    {loadingRandomizerFiles ? (
+                      <p style={{ fontSize: '12px', color: '#888', padding: '10px', margin: 0 }}>Loading saved ideas…</p>
+                    ) : randomizerFiles && randomizerFiles.length > 0 ? (
+                      randomizerFiles.map(file => (
+                        <div key={file.id}
+                          onClick={() => loadSongIdea(clip, file)}
+                          style={{ padding: '8px 10px', fontSize: '13px', cursor: 'pointer', borderBottom: '1px solid #f0eaf7' }}>
+                          {file.name}
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ fontSize: '12px', color: '#888', padding: '10px', margin: 0 }}>
+                        No saved ideas found in RiffCatalog/Randomizer yet.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <MetadataEditor
                 metadata={metadataMap[clip.id]}
                 onChange={(newMeta) => handleMetadataChange(clip.id, newMeta)}
