@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { FretboardDiagram } from './FretboardDiagram';
+import { DiagramDetailView, ZoomableFretboard, BigTabDisplay } from './DiagramDetailView';
 
 const ALL_KEYS = [
   'A Major','A# Major','B Major','C Major','C# Major','D Major',
@@ -2111,7 +2112,33 @@ const MAX_BOX_LICK_NOTES = Object.values(BOX_LICK_DATA)
 // zero slack, which is what guarantees no leftover gap on either side.
 const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding — comfortably fits the widest real content (~340px) with margin to spare
 
-function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, wrapperRef = null, computedWidth = null, computedMarginLeft = null }) {
+const GROUP_IS_MAJOR = {
+  'Major Pentatonic': true, 'Major': true,
+  'Minor Pentatonic': false, 'Natural Minor': false, 'Blues': false,
+};
+
+// Figures out which "Note Major/Minor" key string the detail view's
+// fretboard-toggle button should show for a given item. Chord riffs
+// already store an exact key. Everything else uses whichever key the
+// user actually selected (since that's what the notes were transposed
+// into) when one is picked, or derives it from the item's own reference
+// root plus its scale group's implied major/minor-ness when it isn't.
+function deriveFretboardKey({ mode, effectiveGroup, item, selectedKey }) {
+  if (mode === 'chords') return item.key || null;
+  if (selectedKey) return selectedKey;
+  const isMajor = GROUP_IS_MAJOR[effectiveGroup];
+  if (isMajor === undefined) return null;
+  if (item.root) return `${item.root} ${isMajor ? 'Major' : 'Minor'}`;
+  // Free licks/double stops don't carry a separate root field — their
+  // `scale` label already starts with "<Root> <Major|Minor> ...".
+  if (item.scale) {
+    const parts = item.scale.split(' ');
+    if (parts.length >= 2) return `${parts[0]} ${parts[1]}`;
+  }
+  return null;
+}
+
+function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, wrapperRef = null, computedWidth = null, computedMarginLeft = null, onOpenDetail = null, fretboardKey = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
     <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
@@ -2120,11 +2147,30 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
           <span style={{fontWeight:'600',fontSize:'14px'}}>{title}</span>
           {subtitle && <span style={{marginLeft:'10px',fontSize:'12px',color:'#666'}}>{subtitle}</span>}
         </div>
-        {diff && (
-          <span style={{padding:'2px 8px',borderRadius:'20px',fontSize:'12px',fontWeight:'600',backgroundColor:diff.bg,color:diff.color,border:`1px solid ${diff.border}`}}>
-            {difficulty}
-          </span>
-        )}
+        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
+          {diff && (
+            <span style={{padding:'2px 8px',borderRadius:'20px',fontSize:'12px',fontWeight:'600',backgroundColor:diff.bg,color:diff.color,border:`1px solid ${diff.border}`}}>
+              {difficulty}
+            </span>
+          )}
+          {onOpenDetail && (
+            <button
+              onClick={() => onOpenDetail({
+                title, subtitle, difficulty,
+                content: <BigTabDisplay>{tab}</BigTabDisplay>,
+                secondaryContent: fretboardKey ? <FretboardDiagram selectedKey={fretboardKey} /> : null,
+              })}
+              aria-label="View full screen"
+              style={{
+                background:'none', border:'1px solid #ccc', borderRadius:'6px',
+                width:'28px', height:'28px', display:'flex', alignItems:'center',
+                justifyContent:'center', cursor:'pointer', fontSize:'14px', flexShrink:0,
+                color:'#555', padding:0,
+              }}>
+              🔍
+            </button>
+          )}
+        </div>
       </div>
       <div ref={wrapperRef} style={{
         padding:'12px 16px', display:'flex',
@@ -2206,8 +2252,10 @@ function BoxLegend() {
   );
 }
 
+
 export default function Practice() {
   const [mode, setMode] = useState('licks');
+  const [detailView, setDetailView] = useState(null);
   const [selectedKey, setSelectedKey] = useState('');
   const [selectedGroup, setSelectedGroup] = useState('Minor Pentatonic');
   const [selectedDifficulty, setSelectedDifficulty] = useState('');
@@ -2328,14 +2376,16 @@ export default function Practice() {
           wrapperRef={isFirst ? wrapperMeasureRef : null}
           computedWidth={computedBoxWidth}
           computedMarginLeft={computedMarginLeft}
+          onOpenDetail={setDetailView}
+          fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })}
         />;
       }
       const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
-      return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderSingleNote(notes)} difficulty={item.difficulty} />;
+      return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderSingleNote(notes)} difficulty={item.difficulty} onOpenDetail={setDetailView} fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })} />;
     }
     if (mode === 'doublestops') {
       const pairs = root ? transposeDS(item.pairs, effectiveGroup, root) : item.pairs;
-      return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderDoubleStop(pairs)} difficulty={item.difficulty} />;
+      return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderDoubleStop(pairs)} difficulty={item.difficulty} onOpenDetail={setDetailView} fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })} />;
     }
     if (mode === 'chords') {
       const chords = item.chords.map(c => {
@@ -2343,7 +2393,7 @@ export default function Practice() {
         Object.entries(c).forEach(([k,v]) => { out[parseInt(k)] = v === 'x' ? 'x' : parseInt(v); });
         return out;
       });
-      return <TabCard key={item.name+item.key+idx} title={item.name} subtitle={`Key of ${item.key}`} tab={renderChords(chords)} />;
+      return <TabCard key={item.name+item.key+idx} title={item.name} subtitle={`Key of ${item.key}`} tab={renderChords(chords)} onOpenDetail={setDetailView} fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })} />;
     }
   };
 
@@ -2439,7 +2489,7 @@ export default function Practice() {
             <BoxLegend />
           )}
           {renderItem(current, 0)}
-          {selectedKey && <FretboardDiagram selectedKey={selectedKey} />}
+          {selectedKey && <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />}
         </>
       )}
       {showAll && (
@@ -2448,10 +2498,11 @@ export default function Practice() {
             <BoxLegend />
           )}
           <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>{items.map((item,i)=>renderItem(item,i))}</div>
-          {selectedKey && <FretboardDiagram selectedKey={selectedKey} />}
+          {selectedKey && <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />}
         </>
       )}
       {items.length===0 && <p style={{textAlign:'center',color:'#888'}}>No items found for this selection.</p>}
+      {detailView && <DiagramDetailView {...detailView} onClose={() => setDetailView(null)} />}
     </div>
   );
 }

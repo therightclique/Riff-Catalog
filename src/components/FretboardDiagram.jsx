@@ -46,7 +46,7 @@ export function FretboardDiagram({ selectedKey }) {
   const colorForNote = (note) => {
     const degree = degreeByNote[note];
     if (degree === '1') return '#ff4444';
-    if (degree === '3') return '#a84f13';
+    if (degree === '3') return '#bf5916';
     if (degree === '5') return '#ffe14d';
     return '#1a73e8';
   };
@@ -66,7 +66,7 @@ export function FretboardDiagram({ selectedKey }) {
       <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '6px' }}>
         <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ff4444', verticalAlign: 'middle', marginRight: '4px' }}></span>
         Root &nbsp;
-        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ff9d2e', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#bf5916', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         3rd &nbsp;
         <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ffe14d', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         5th &nbsp;

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
+import { DiagramDetailView, ZoomableFretboard, ZoomButton } from './DiagramDetailView';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -165,6 +166,7 @@ function ChordDiagram({ shape, chordName, rootNote }) {
 
 function KeyFinder({ onFilterByKey }) {
   const [selectedKey, setSelectedKey] = useState('');
+  const [detailView, setDetailView] = useState(null);
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
 
   // Reverse key lookup
@@ -379,7 +381,7 @@ function KeyFinder({ onFilterByKey }) {
           </div>
 
           {/* Fretboard */}
-          <FretboardDiagram selectedKey={selectedKey} />
+          <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />
 
           {/* Chord diagrams below fretboard */}
           <div style={{ marginTop: '28px', marginBottom: '8px' }}>
@@ -394,7 +396,25 @@ function KeyFinder({ onFilterByKey }) {
                 return (
                   <div key={degree} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                     <span style={{ fontSize: '11px', color: '#888' }}>{degree}{quality}</span>
-                    <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
+                    <div
+                      onClick={() => setDetailView({
+                        title: chordLabel, subtitle: `${degree}${quality} of ${selectedKey}`, difficulty: null,
+                        content: <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />,
+                        secondaryContent: <FretboardDiagram selectedKey={selectedKey} />,
+                        secondaryLabel: 'Show fretboard', primaryLabel: 'Show chord',
+                      })}
+                      style={{ cursor: 'pointer', position: 'relative' }}
+                    >
+                      <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
+                      <ZoomButton
+                        onClick={() => {}}
+                        style={{
+                          position: 'absolute', top: '-4px', right: '-4px',
+                          width: '18px', height: '18px', fontSize: '9px',
+                          backgroundColor: 'white', pointerEvents: 'none',
+                        }}
+                      />
+                    </div>
                   </div>
                 );
               })}
@@ -402,6 +422,7 @@ function KeyFinder({ onFilterByKey }) {
           </div>
         </>
       )}
+      {detailView && <DiagramDetailView {...detailView} onClose={() => setDetailView(null)} />}
     </div>
   );
 }
