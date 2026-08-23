@@ -59,52 +59,76 @@ function transposeDS(pairs, group, targetRoot) {
   return pairs.map(pair => transposeByDelta(pair, ref, targetRoot));
 }
 
-function renderSingleNote(notes) {
+function renderSingleNote(notes, targetColumns = notes.length, blockRef = null) {
   const COL = 4;
+  // Split filler evenly around the real notes (same technique as box
+  // mode) so shorter licks sit centered within the fixed-length measure
+  // instead of clustering flush against the left pipe.
+  const totalFiller = Math.max(0, targetColumns - notes.length);
+  const leftFiller = Math.floor(totalFiller / 2);
+  const rightFiller = totalFiller - leftFiller;
   const rows = {};
-  for (let i = 0; i < 6; i++) rows[i] = '';
+  for (let i = 0; i < 6; i++) rows[i] = '-'.repeat(COL * leftFiller);
   notes.forEach(({ s, f }) => {
     const cell = String(f);
     for (let i = 0; i < 6; i++)
       rows[i] += i === s ? cell.padEnd(COL,'-') : '-'.repeat(Math.max(COL, cell.length+1));
   });
-  return STR_LABELS_TTB.map((label, li) => {
+  for (let i = 0; i < 6; i++) rows[i] += '-'.repeat(COL * rightFiller);
+  const text = STR_LABELS_TTB.map((label, li) => {
     const si = 5 - li;
     return `${label} |--${rows[si]}--|`;
   }).join('\n');
+  // display:inline-block so this measures its own true content width via
+  // getBoundingClientRect(), independent of whatever width the ancestor
+  // pre currently happens to have — the same technique box mode already
+  // relies on, applied here too now that every card type uses it.
+  return <span ref={blockRef} style={{ display: 'inline-block' }}>{text}</span>;
 }
 
-function renderDoubleStop(pairs) {
-  let maxW = 3;
-  pairs.forEach(pair => pair.forEach(({f}) => { maxW = Math.max(maxW, String(f).length+2); }));
+function renderDoubleStop(pairs, targetColumns = pairs.length, blockRef = null) {
+  // DS_COL_WIDTH is now a global constant (see its definition) rather
+  // than computed from this specific lick's own widest fret — otherwise
+  // two licks with the same pair count could still render at different
+  // widths whenever one happened to have a 2-digit fret and the other
+  // didn't.
+  const totalFiller = Math.max(0, targetColumns - pairs.length);
+  const leftFiller = Math.floor(totalFiller / 2);
+  const rightFiller = totalFiller - leftFiller;
   const rows = {};
-  for (let i = 0; i < 6; i++) rows[i] = '';
+  for (let i = 0; i < 6; i++) rows[i] = '-'.repeat(DS_COL_WIDTH * leftFiller);
   pairs.forEach(pair => {
     const occ = {};
     pair.forEach(({s,f}) => { occ[s] = String(f); });
     for (let i = 0; i < 6; i++)
-      rows[i] += (occ[i] || '-').padEnd(maxW,'-');
+      rows[i] += (occ[i] || '-').padEnd(DS_COL_WIDTH,'-');
   });
-  return STR_LABELS_TTB.map((label, li) => {
+  for (let i = 0; i < 6; i++) rows[i] += '-'.repeat(DS_COL_WIDTH * rightFiller);
+  const text = STR_LABELS_TTB.map((label, li) => {
     const si = 5 - li;
     return `${label} |--${rows[si]}--|`;
   }).join('\n');
+  return <span ref={blockRef} style={{ display: 'inline-block' }}>{text}</span>;
 }
 
-function renderChords(chords) {
-  let maxW = 1;
-  chords.forEach(c => Object.values(c).forEach(v => { maxW = Math.max(maxW, String(v).length); }));
-  const cellW = maxW + 2;
+function renderChords(chords, targetColumns = chords.length, blockRef = null) {
+  // CHORD_COL_WIDTH is likewise a global constant now, for the same
+  // reason as DS_COL_WIDTH above.
+  const totalFiller = Math.max(0, targetColumns - chords.length);
+  const leftFiller = Math.floor(totalFiller / 2);
+  const rightFiller = totalFiller - leftFiller;
   const rows = {};
-  for (let i = 0; i < 6; i++) rows[i] = '';
+  for (let i = 0; i < 6; i++) rows[i] = '-'.repeat(CHORD_COL_WIDTH * leftFiller);
   chords.forEach(c => {
     for (let i = 0; i < 6; i++)
-      rows[i] += (c[i] !== undefined ? String(c[i]) : '-').padEnd(cellW,'-');
+      rows[i] += (c[i] !== undefined ? String(c[i]) : '-').padEnd(CHORD_COL_WIDTH,'-');
   });
-  return STR_LABELS_TTB.map((label, li) => {
+  for (let i = 0; i < 6; i++) rows[i] += '-'.repeat(CHORD_COL_WIDTH * rightFiller);
+  const text = STR_LABELS_TTB.map((label, li) => {
     const si = 5 - li;
     return `${label} |--${rows[si]}--|`;
   }).join('\n');
+  return <span ref={blockRef} style={{ display: 'inline-block' }}>{text}</span>;
 }
 
 // Box licks are generated per-lick against whichever root that specific
@@ -2101,16 +2125,30 @@ const MAX_BOX_LICK_NOTES = Object.values(BOX_LICK_DATA)
   .flat()
   .reduce((max, lick) => Math.max(max, lick.notes.length), 0);
 
-// Every non-box TabCard (free licks, double stops, chords) uses this
-// same fixed width with its content centered inside it, so those
-// diagrams don't jump around in size depending on which item is showing.
-//
-// Box-mode cards are handled differently (see `fitContent` below): since
-// every box-mode row is now padded to an identical fixed length
-// (MAX_BOX_LICK_NOTES), there's no longer any need to guess a pixel
-// width for them — the box can size exactly to its own content with
-// zero slack, which is what guarantees no leftover gap on either side.
-const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding — comfortably fits the widest real content (~340px) with margin to spare
+// Same treatment for the other three tab types, so every card type gets
+// padded to its own fixed measure length instead of just box mode —
+// otherwise any card longer than whichever one happened to render first
+// (which is what the shared computedBoxWidth is measured from) would
+// overflow its box.
+const MAX_FREE_LICK_NOTES = Object.values(LICK_DATA).flat()
+  .reduce((max, lick) => Math.max(max, lick.notes.length), 0);
+const MAX_DS_PAIRS = Object.values(DS_DATA).flat()
+  .reduce((max, ds) => Math.max(max, ds.pairs.length), 0);
+const MAX_CHORD_COUNT = Object.values(CHORD_DATA).flat()
+  .reduce((max, c) => Math.max(max, c.chords.length), 0);
+
+// Double-stop and chord column widths were previously computed PER LICK
+// (from that lick's own widest fret digit count), which meant two licks
+// with the same number of columns could still render at different pixel
+// widths whenever one happened to have a 2-digit fret and the other
+// didn't — undermining uniform width even with column-count padding in
+// place. Computing these once, globally, fixes that at the root.
+const DS_COL_WIDTH = Object.values(DS_DATA).flat()
+  .flatMap(ds => ds.pairs.flat())
+  .reduce((max, n) => Math.max(max, String(n.f).length + 2), 3);
+const CHORD_COL_WIDTH = Object.values(CHORD_DATA).flat()
+  .flatMap(c => c.chords.flatMap(ch => Object.values(ch)))
+  .reduce((max, v) => Math.max(max, String(v).length), 1) + 2;
 
 const GROUP_IS_MAJOR = {
   'Major Pentatonic': true, 'Major': true,
@@ -2138,7 +2176,7 @@ function deriveFretboardKey({ mode, effectiveGroup, item, selectedKey }) {
   return null;
 }
 
-function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, wrapperRef = null, computedWidth = null, computedMarginLeft = null, onOpenDetail = null, fretboardKey = null }) {
+function TabCard({ title, subtitle, tab, difficulty, align = 'center', wrapperRef = null, computedWidth = null, computedMarginLeft = null, onOpenDetail = null, fretboardKey = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   const openDetail = onOpenDetail
     ? () => onOpenDetail({
@@ -2171,39 +2209,42 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
         // this on every device, so this wrapper just needs flex-start
         // plus scroll capability for the rare case content is too wide
         // to fully display.
-        justifyContent: fitContent ? 'flex-start' : 'center',
-        overflowX: fitContent ? 'auto' : 'visible',
+        justifyContent: 'flex-start',
+        overflowX: 'auto',
       }}>
-        {/* fitContent (box mode only): width comes from computedWidth, a
-            pixel value measured directly from each row's real rendered
-            content (see rowRefsContainer in Practice()) rather than left
-            to the browser's own shrink-to-fit sizing. inline-block/auto
-            is only a placeholder for the very first paint, before the
-            first measurement has run. Non-box modes keep the original
-            fixed 460px width with centered content. */}
+        {/* Width comes from computedWidth, a pixel value measured
+            directly from the first card's real rendered content (see
+            rowRefsContainer in Practice()) rather than left to the
+            browser's own shrink-to-fit sizing — every card type (box
+            licks, free licks, double stops, chord riffs) now goes
+            through this same measured path, so they're all uniformly
+            sized and centered rather than box mode being the only one
+            handled this way. inline-block/auto is only a placeholder
+            for the very first paint, before the first measurement has
+            run. */}
         <pre style={{
-          // Box mode uses a smaller font (12px vs 13px) so the padded
-          // 8-column measure comfortably fits on narrow phone screens
-          // without needing to scroll.
-          fontFamily:'"Courier New",monospace', fontSize: fitContent ? '12px' : '13px', lineHeight:'1.9',
+          // 12px everywhere now, not just box mode — matches the same
+          // "fit narrow phone screens without scrolling" goal for every
+          // card type, not just box licks.
+          fontFamily:'"Courier New",monospace', fontSize: '12px', lineHeight:'1.9',
           backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
-          marginLeft: fitContent ? (computedMarginLeft !== null ? `${computedMarginLeft}px` : 'auto') : 0,
+          marginLeft: computedMarginLeft !== null ? `${computedMarginLeft}px` : 'auto',
           marginRight: 0, marginTop: 0, marginBottom: 0,
           whiteSpace:'pre', textAlign: align,
-          display: fitContent && !computedWidth ? 'inline-block' : 'block',
-          width: fitContent ? (computedWidth ? `${computedWidth}px` : 'auto') : `${TAB_CARD_WIDTH}px`,
+          display: computedWidth ? 'block' : 'inline-block',
+          width: computedWidth ? `${computedWidth}px` : 'auto',
           // maxWidth:'100%' would cap this box back down to the card's
           // available space, silently overriding computedWidth — the
           // box needs to be allowed to be exactly computedWidth, growing
           // past the card's own width if it has to. Falls back to
           // maxWidth:100% only before the first measurement.
-          maxWidth: fitContent && computedWidth ? 'none' : '100%',
+          maxWidth: computedWidth ? 'none' : '100%',
           boxSizing: 'border-box',
           overflowX: 'auto',
           // This pre is a flex item (parent is display:flex) — flex
           // items default to flex-shrink:1, which can shrink an item
           // below its own explicit width independently of max-width.
-          flexShrink: fitContent && computedWidth ? 0 : undefined,
+          flexShrink: computedWidth ? 0 : undefined,
         }}>
           {tab}
         </pre>
@@ -2351,6 +2392,14 @@ export default function Practice() {
 
   const items = getItems();
 
+  // For the three plain-text render types, a single measured element is
+  // enough (no per-row badge-width inconsistency to guard against like
+  // box mode has) — but this replaces the WHOLE rowRefsContainer array
+  // rather than just writing to index 0, so switching from box mode
+  // (which populates up to 6 entries) can't leave stale leftover refs
+  // behind that would corrupt the next measurement.
+  const singleBlockRef = (isFirst) => (isFirst ? (el) => { rowRefsContainer.current = [el]; } : null);
+
   const renderItem = (item, idx) => {
     if (mode === 'licks') {
       if (isBoxMode) {
@@ -2363,7 +2412,6 @@ export default function Practice() {
           tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? rowRefsContainer : null)}
           difficulty={item.difficulty}
           align="left"
-          fitContent
           wrapperRef={isFirst ? wrapperMeasureRef : null}
           computedWidth={computedBoxWidth}
           computedMarginLeft={computedMarginLeft}
@@ -2372,11 +2420,35 @@ export default function Practice() {
         />;
       }
       const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
-      return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderSingleNote(notes)} difficulty={item.difficulty} onOpenDetail={setDetailView} fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })} />;
+      const isFirst = idx === 0;
+      return <TabCard
+        key={item.id||idx}
+        title={item.scale}
+        subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'}
+        tab={renderSingleNote(notes, MAX_FREE_LICK_NOTES, singleBlockRef(isFirst))}
+        difficulty={item.difficulty}
+        wrapperRef={isFirst ? wrapperMeasureRef : null}
+        computedWidth={computedBoxWidth}
+        computedMarginLeft={computedMarginLeft}
+        onOpenDetail={setDetailView}
+        fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })}
+      />;
     }
     if (mode === 'doublestops') {
       const pairs = root ? transposeDS(item.pairs, effectiveGroup, root) : item.pairs;
-      return <TabCard key={item.id||idx} title={item.scale} subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'} tab={renderDoubleStop(pairs)} difficulty={item.difficulty} onOpenDetail={setDetailView} fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })} />;
+      const isFirst = idx === 0;
+      return <TabCard
+        key={item.id||idx}
+        title={item.scale}
+        subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'}
+        tab={renderDoubleStop(pairs, MAX_DS_PAIRS, singleBlockRef(isFirst))}
+        difficulty={item.difficulty}
+        wrapperRef={isFirst ? wrapperMeasureRef : null}
+        computedWidth={computedBoxWidth}
+        computedMarginLeft={computedMarginLeft}
+        onOpenDetail={setDetailView}
+        fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })}
+      />;
     }
     if (mode === 'chords') {
       const chords = item.chords.map(c => {
@@ -2384,7 +2456,18 @@ export default function Practice() {
         Object.entries(c).forEach(([k,v]) => { out[parseInt(k)] = v === 'x' ? 'x' : parseInt(v); });
         return out;
       });
-      return <TabCard key={item.name+item.key+idx} title={item.name} subtitle={`Key of ${item.key}`} tab={renderChords(chords)} onOpenDetail={setDetailView} fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })} />;
+      const isFirst = idx === 0;
+      return <TabCard
+        key={item.name+item.key+idx}
+        title={item.name}
+        subtitle={`Key of ${item.key}`}
+        tab={renderChords(chords, MAX_CHORD_COUNT, singleBlockRef(isFirst))}
+        wrapperRef={isFirst ? wrapperMeasureRef : null}
+        computedWidth={computedBoxWidth}
+        computedMarginLeft={computedMarginLeft}
+        onOpenDetail={setDetailView}
+        fretboardKey={deriveFretboardKey({ mode, effectiveGroup, item, selectedKey })}
+      />;
     }
   };
 

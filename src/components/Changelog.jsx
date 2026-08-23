@@ -34,10 +34,11 @@ const CHANGELOG = [
         ],
       },
       {
-        title: 'Box lick diagram alignment and sizing',
+        title: 'Uniform sizing across every lick, double-stop, and chord diagram',
         items: [
           'Fixed misaligned pipes and dashes that made some strings\u2019 measures wider than others',
-          'Every box-mode card is now a consistent size, with content centered and sized to fit the screen without needing to scroll',
+          'Every card \u2014 box licks, free licks, double stops, and chord riffs \u2014 is now a consistent size, with content centered and sized to fit the screen without needing to scroll',
+          'Shorter licks within each type now center within a fixed-length measure instead of clustering against the left edge, and double-stop/chord column widths no longer vary from lick to lick',
         ],
       },
       {
