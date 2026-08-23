@@ -395,16 +395,36 @@ function App() {
   return (
     <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '16px' }}>
-        {viewHistory.length > 0 && (
-          <button onClick={goBack} aria-label="Back" style={{
-            position: 'absolute', left: 0, background: 'none', border: '1px solid #ccc', borderRadius: '50%',
-            width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', color: '#444',
+        <button
+          onClick={goBack}
+          disabled={viewHistory.length === 0}
+          aria-label="Back"
+          style={{
+            position: 'absolute', left: 0, background: 'none',
+            border: `1px solid ${viewHistory.length === 0 ? '#3a3a3a' : '#ccc'}`,
+            borderRadius: '50%', width: '32px', height: '32px',
+            cursor: viewHistory.length === 0 ? 'default' : 'pointer',
+            fontSize: '16px', color: viewHistory.length === 0 ? '#555' : '#444',
             display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
           }}>
-            ←
-          </button>
-        )}
+          ←
+        </button>
         <h1 style={{ textAlign: 'center', margin: 0 }}>🎸 Riff Catalog</h1>
+        {/* Same full-app-reset handleRefreshApp already used on the Record
+            tab (RefreshLink) — this just makes it reachable from any tab
+            instead of only there. */}
+        <button
+          onClick={handleRefreshApp}
+          aria-label="Refresh app"
+          title={accessToken ? 'Refresh app' : 'Reconnect Drive & refresh'}
+          style={{
+            position: 'absolute', right: 0, background: 'none', border: '1px solid #ccc',
+            borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
+            fontSize: '16px', color: '#444',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+          }}>
+          🔄
+        </button>
       </div>
       {!user ? (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '40px' }}>
