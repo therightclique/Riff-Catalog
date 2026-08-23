@@ -74,6 +74,12 @@ const CHANGELOG = [
           'Previous/next buttons on either side of the category dropdown, with a position counter',
         ],
       },
+      {
+        title: 'Key Finder: modes of a key',
+        items: [
+          'Below the chord diagrams for a selected key, the 7 modes of that key are now listed \u2014 e.g. A Minor shows A Aeolian, B Locrian, C Ionian, D Dorian, E Phrygian, F Lydian, G Mixolydian',
+        ],
+      },
     ],
   },
   {

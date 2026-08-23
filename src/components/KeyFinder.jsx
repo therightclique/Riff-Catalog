@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
-import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -14,6 +13,16 @@ const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
 const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
 const MAJOR_QUALITIES = ['M', 'm', 'm', 'M', 'M', 'm', 'dim'];
 const MINOR_QUALITIES = ['m', 'dim', 'M', 'm', 'm', 'M', 'M'];
+
+// getScaleNotes (imported from FretboardDiagram) returns degrees 1–7 in
+// scale order starting from the selected key's own root — so which mode
+// name applies to each entry depends only on whether the key itself is
+// Major or Minor, not on the specific key. A Major key's own degree 1 is
+// Ionian by definition; a Minor key's degree 1 is Aeolian by definition
+// (natural minor IS the Aeolian mode), and the rest of each sequence
+// follows from there.
+const MAJOR_KEY_MODES = ['Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian', 'Aeolian', 'Locrian'];
+const MINOR_KEY_MODES = ['Aeolian', 'Locrian', 'Ionian', 'Dorian', 'Phrygian', 'Lydian', 'Mixolydian'];
 
 // Chord shapes: [string6, string5, string4, string3, string2, string1]
 // Values: fret number (1-based), 0 = open, -1 = muted, 'b' prefix = barre
@@ -166,7 +175,6 @@ function ChordDiagram({ shape, chordName, rootNote }) {
 
 function KeyFinder({ onFilterByKey }) {
   const [selectedKey, setSelectedKey] = useState('');
-  const [detailView, setDetailView] = useState(null);
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
 
   // Reverse key lookup
@@ -380,10 +388,8 @@ function KeyFinder({ onFilterByKey }) {
             </div>
           </div>
 
-          <ZoomHint />
-
           {/* Fretboard */}
-          <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />
+          <FretboardDiagram selectedKey={selectedKey} />
 
           {/* Chord diagrams below fretboard */}
           <div style={{ marginTop: '28px', marginBottom: '8px' }}>
@@ -398,25 +404,40 @@ function KeyFinder({ onFilterByKey }) {
                 return (
                   <div key={degree} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                     <span style={{ fontSize: '11px', color: '#888' }}>{degree}{quality}</span>
-                    <div
-                      onClick={() => setDetailView({
-                        title: chordLabel, subtitle: `${degree}${quality} of ${selectedKey}`, difficulty: null,
-                        content: <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />,
-                        secondaryContent: <FretboardDiagram selectedKey={selectedKey} />,
-                        secondaryLabel: 'Show fretboard', primaryLabel: 'Show chord',
-                      })}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
-                    </div>
+                    <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
                   </div>
                 );
               })}
             </div>
           </div>
+
+          {/* Modes of this key — same 7 degrees as the cards/chords above,
+              just relabeled with their mode name instead of a chord
+              quality. Which mode name lands on which degree depends only
+              on whether the key itself is Major or Minor (see
+              MAJOR_KEY_MODES / MINOR_KEY_MODES above), not on the
+              specific key. */}
+          <div style={{ marginTop: '28px', marginBottom: '8px' }}>
+            <div style={{ fontSize: '13px', color: '#888', textAlign: 'center', marginBottom: '12px' }}>
+              Modes of {selectedKey}
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
+              {(() => {
+                const modeSeq = selectedKey.includes('Major') ? MAJOR_KEY_MODES : MINOR_KEY_MODES;
+                return scaleNotes.map(({ degree, note }, i) => (
+                  <div key={degree} style={{
+                    padding: '8px 12px', borderRadius: '8px', backgroundColor: '#f5f5f5',
+                    border: '1px solid #e0e0e0', textAlign: 'center', minWidth: '84px',
+                  }}>
+                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#222' }}>{note} {modeSeq[i]}</div>
+                    <div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>degree {degree}</div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
         </>
       )}
-      {detailView && <DiagramDetailView {...detailView} onClose={() => setDetailView(null)} />}
     </div>
   );
 }
