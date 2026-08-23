@@ -58,6 +58,13 @@ const CATEGORIES = [
 const SPIN_DURATION_MS = 5000;
 const SNAP_DURATION_MS = 300;
 
+// ── Momentum tuning ──────────────────────────────────────────────────────
+// Velocity is tracked in degrees/millisecond throughout.
+const FLICK_VELOCITY_THRESHOLD = 0.15; // release speed above this counts as a flick, not just a slow drag-release
+const MOMENTUM_MIN_VELOCITY = 0.02;    // below this, momentum has decayed enough to stop and snap
+const MOMENTUM_DECAY_PER_MS = 0.997;   // exponential decay factor — tuned so a hard flick coasts for roughly 1-2 seconds
+const VELOCITY_SAMPLE_WINDOW_MS = 100; // how far back to look when estimating release velocity, so a single noisy last-frame sample doesn't dominate
+
 // ── Geometry helpers ────────────────────────────────────────────────────
 
 function pointAt(deg, r, cx, cy) {
@@ -165,6 +172,7 @@ export default function Randomizer({ accessToken }) {
   const [spinning, setSpinning] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [snapping, setSnapping] = useState(false);
+  const [momentumActive, setMomentumActive] = useState(false);
   const [result, setResult] = useState(null);
   // Persisted so the accumulating idea survives switching tabs (this
   // component fully unmounts then) and even closing/reopening the app —
@@ -185,6 +193,18 @@ export default function Randomizer({ accessToken }) {
   const spinTimeout = useRef(null);
   const snapTimeout = useRef(null);
   const dragState = useRef(null);
+  const momentumRafRef = useRef(null);
+  const velocityHistoryRef = useRef([]);
+
+  useEffect(() => {
+    // Stop any in-flight momentum animation if this component unmounts
+    // mid-coast — matters more now that tabs stay mounted in the
+    // background rather than unmounting on switch, but a stray rAF loop
+    // updating state after unmount is worth guarding against regardless.
+    return () => {
+      if (momentumRafRef.current) cancelAnimationFrame(momentumRafRef.current);
+    };
+  }, []);
 
   const category = CATEGORIES.find(c => c.id === categoryId);
 
@@ -204,16 +224,18 @@ export default function Randomizer({ accessToken }) {
 
   const handleCategoryChange = (id) => {
     clearPendingTimers();
+    stopMomentum();
     setSpinning(false);
     setDragging(false);
     setSnapping(false);
+    setMomentumActive(false);
     setCategoryId(id);
     setResult(null);
     setRotation(0);
   };
 
   const handleSpin = () => {
-    if (spinning || dragging || snapping) return;
+    if (spinning || dragging || snapping || momentumActive) return;
     const options = category.options;
     const idx = Math.floor(Math.random() * options.length);
     const step = 360 / options.length;
@@ -236,7 +258,68 @@ export default function Randomizer({ accessToken }) {
     }, SPIN_DURATION_MS);
   };
 
-  // ── Manual drag-to-select ────────────────────────────────────────────
+  // ── Manual drag-to-select, with momentum ────────────────────────────
+
+  // Computes the snapped rotation for a given rotation value, starts the
+  // snap-settle animation timer, and returns the new rotation — doesn't
+  // set rotation state itself, so callers use it inside a setRotation
+  // functional updater to always work off the true latest value rather
+  // than a value captured in a stale closure (rotation changes rapidly,
+  // many times a frame, during both dragging and momentum coasting).
+  const beginSnap = (currentRotation) => {
+    const n = category.options.length;
+    const idx = nearestSliceIndex(currentRotation, n);
+    const step = 360 / n;
+    const sliceCenter = idx * step + step / 2;
+    const targetMod = (360 - sliceCenter) % 360;
+    const currentMod = ((currentRotation % 360) + 360) % 360;
+    const snapDelta = shortestDelta(currentMod, targetMod);
+    const newRotation = currentRotation + snapDelta;
+
+    setSnapping(true);
+    clearTimeout(snapTimeout.current);
+    snapTimeout.current = setTimeout(() => {
+      setSnapping(false);
+      setResult(category.options[idx]);
+    }, SNAP_DURATION_MS);
+
+    return newRotation;
+  };
+
+  const stopMomentum = () => {
+    if (momentumRafRef.current) {
+      cancelAnimationFrame(momentumRafRef.current);
+      momentumRafRef.current = null;
+    }
+    setMomentumActive(false);
+  };
+
+  // Coasts the wheel at the given release velocity (deg/ms), decaying it
+  // toward zero each frame like real rotational friction, then hands off
+  // to the same snap-to-nearest-slice logic a slow drag-release uses.
+  const startMomentumSpin = (initialVelocity) => {
+    stopMomentum();
+    setMomentumActive(true);
+    let velocity = initialVelocity;
+    let lastTime = performance.now();
+
+    const step = (now) => {
+      const dt = now - lastTime;
+      lastTime = now;
+
+      setRotation(prev => prev + velocity * dt);
+      velocity *= Math.pow(MOMENTUM_DECAY_PER_MS, dt);
+
+      if (Math.abs(velocity) < MOMENTUM_MIN_VELOCITY) {
+        momentumRafRef.current = null;
+        setMomentumActive(false);
+        setRotation(currentRotation => beginSnap(currentRotation));
+        return;
+      }
+      momentumRafRef.current = requestAnimationFrame(step);
+    };
+    momentumRafRef.current = requestAnimationFrame(step);
+  };
 
   const handlePointerMoveWheel = (e) => {
     if (!dragState.current) return;
@@ -245,6 +328,15 @@ export default function Randomizer({ accessToken }) {
     const delta = shortestDelta(lastAngle, angle);
     dragState.current.lastAngle = angle;
     setRotation(prev => prev + delta);
+
+    // Record recent {delta, time} samples so release velocity can be
+    // estimated from a short window of real movement rather than just
+    // the single last (often noisy) pointermove event.
+    const now = performance.now();
+    const history = velocityHistoryRef.current;
+    history.push({ delta, t: now });
+    const cutoff = now - VELOCITY_SAMPLE_WINDOW_MS;
+    while (history.length > 1 && history[0].t < cutoff) history.shift();
   };
 
   const handlePointerUpWheel = (e) => {
@@ -255,35 +347,37 @@ export default function Randomizer({ accessToken }) {
     dragState.current = null;
     setDragging(false);
 
-    setRotation(currentRotation => {
-      const n = category.options.length;
-      const idx = nearestSliceIndex(currentRotation, n);
-      const step = 360 / n;
-      const sliceCenter = idx * step + step / 2;
-      const targetMod = (360 - sliceCenter) % 360;
-      const currentMod = ((currentRotation % 360) + 360) % 360;
-      const snapDelta = shortestDelta(currentMod, targetMod);
-      const newRotation = currentRotation + snapDelta;
+    const history = velocityHistoryRef.current;
+    let releaseVelocity = 0;
+    if (history.length >= 2) {
+      const first = history[0];
+      const last = history[history.length - 1];
+      const totalDelta = history.reduce((sum, h) => sum + h.delta, 0);
+      const dt = last.t - first.t;
+      if (dt > 0) releaseVelocity = totalDelta / dt;
+    }
+    velocityHistoryRef.current = [];
 
-      setSnapping(true);
-      clearTimeout(snapTimeout.current);
-      snapTimeout.current = setTimeout(() => {
-        setSnapping(false);
-        setResult(category.options[idx]);
-      }, SNAP_DURATION_MS);
-
-      return newRotation;
-    });
+    if (Math.abs(releaseVelocity) >= FLICK_VELOCITY_THRESHOLD) {
+      startMomentumSpin(releaseVelocity);
+    } else {
+      setRotation(currentRotation => beginSnap(currentRotation));
+    }
   };
 
   const handlePointerDownWheel = (e) => {
     if (spinning || snapping) return;
+    // Grabbing the wheel stops any in-progress momentum coast, the same
+    // way touching a real spinning wheel would — rather than blocking
+    // interaction until it coasts to a stop on its own.
+    stopMomentum();
     const container = e.currentTarget;
     const rect = container.getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
     const angle = angleFromPointer(e.clientX - cx, e.clientY - cy);
     dragState.current = { cx, cy, lastAngle: angle };
+    velocityHistoryRef.current = [];
     setDragging(true);
     setResult(null);
     clearPendingTimers();
@@ -377,13 +471,13 @@ export default function Randomizer({ accessToken }) {
     cursor: disabled ? 'default' : 'pointer',
   });
 
-  const busy = spinning || dragging || snapping;
+  const busy = spinning || dragging || snapping || momentumActive;
 
   return (
     <div style={{ marginTop: '20px' }}>
       <h2 style={{ textAlign: 'center', marginBottom: '6px' }}>Randomizer</h2>
       <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '18px' }}>
-        Spin the wheel, or drag it yourself, to seed a song idea one piece at a time.
+        Spin the wheel, drag it yourself, or give it a flick to seed a song idea one piece at a time.
       </p>
 
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
@@ -425,7 +519,7 @@ export default function Randomizer({ accessToken }) {
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '20px' }}>
         <button onClick={handleSpin} disabled={busy} style={spinBtnStyle(busy)}>
-          {spinning ? '🎡 Spinning…' : dragging ? '🎡 Drag to pick…' : '🎡 Spin'}
+          {spinning ? '🎡 Spinning…' : momentumActive ? '🎡 Coasting…' : dragging ? '🎡 Drag to pick…' : '🎡 Spin'}
         </button>
 
         <div style={{ minHeight: '28px', fontSize: '16px', fontWeight: '700', color: '#1a73e8' }}>

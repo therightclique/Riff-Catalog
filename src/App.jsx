@@ -92,9 +92,39 @@ function App() {
   const [view, setView] = useState('record');
   const [keyFinderFilter, setKeyFinderFilter] = useState(null);
 
+  // Navigation history for the app-wide back button. viewHistory is a
+  // stack of previously-visited views (not including the current one);
+  // visitedViews tracks which tabs have EVER been mounted, so each one
+  // still only does its normal first-visit work (e.g. Library's initial
+  // Drive fetch) the first time you go there, not eagerly on app load.
+  // Once a tab has been visited, it's never unmounted again — switching
+  // away just toggles CSS display, which is what actually preserves
+  // "everything you were looking at" (scroll position, expanded cards,
+  // filters, in-progress edits — anything living in that tab's own
+  // React state) instead of destroying it every time you switch tabs.
+  const [viewHistory, setViewHistory] = useState([]);
+  const [visitedViews, setVisitedViews] = useState(() => new Set(['record']));
+
+  const goToView = (newView) => {
+    if (newView === view) return;
+    setViewHistory(prev => [...prev, view]);
+    setVisitedViews(prev => (prev.has(newView) ? prev : new Set(prev).add(newView)));
+    setView(newView);
+  };
+
+  const goBack = () => {
+    setViewHistory(prev => {
+      if (prev.length === 0) return prev;
+      const next = [...prev];
+      const last = next.pop();
+      setView(last);
+      return next;
+    });
+  };
+
   const handleFilterByKey = (key) => {
     setKeyFinderFilter(key);
-    setView('library');
+    goToView('library');
   };
   const [analysis, setAnalysis] = useState(null);
   const [analyzing, setAnalyzing] = useState(false);
@@ -364,7 +394,18 @@ function App() {
 
   return (
     <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-      <h1 style={{ textAlign: 'center' }}>🎸 Riff Catalog</h1>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        {viewHistory.length > 0 && (
+          <button onClick={goBack} aria-label="Back" style={{
+            position: 'absolute', left: 0, background: 'none', border: '1px solid #ccc', borderRadius: '50%',
+            width: '32px', height: '32px', cursor: 'pointer', fontSize: '16px', color: '#444',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+          }}>
+            ←
+          </button>
+        )}
+        <h1 style={{ textAlign: 'center', margin: 0 }}>🎸 Riff Catalog</h1>
+      </div>
       {!user ? (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '40px' }}>
           <div id="google-signin-btn"></div>
@@ -395,16 +436,15 @@ function App() {
           )}
 
           <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button style={tabStyle(view === 'record')} onClick={() => setView('record')}>Record</button>
-            <button style={tabStyle(view === 'library')} onClick={() => setView('library')}>Library</button>
-            <button style={tabStyle(view === 'keyfinder')} onClick={() => setView('keyfinder')}>Key Finder</button>
-            <button style={tabStyle(view === 'practice')} onClick={() => setView('practice')}>Practice</button>
-            <button style={tabStyle(view === 'randomizer')} onClick={() => setView('randomizer')}>Randomizer</button>
-            <button style={tabStyle(view === 'debug')} onClick={() => setView('debug')}>Debug</button>
+            <button style={tabStyle(view === 'record')} onClick={() => goToView('record')}>Record</button>
+            <button style={tabStyle(view === 'library')} onClick={() => goToView('library')}>Library</button>
+            <button style={tabStyle(view === 'keyfinder')} onClick={() => goToView('keyfinder')}>Key Finder</button>
+            <button style={tabStyle(view === 'practice')} onClick={() => goToView('practice')}>Practice</button>
+            <button style={tabStyle(view === 'randomizer')} onClick={() => goToView('randomizer')}>Randomizer</button>
+            <button style={tabStyle(view === 'debug')} onClick={() => goToView('debug')}>Debug</button>
           </div>
 
-          {view === 'record' && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+          <div style={{ display: view === 'record' ? 'flex' : 'none', flexDirection: 'column', alignItems: 'center' }}>
               {!pendingRecording ? (
                 <>
                   <Recorder onRecordingComplete={handleRecordingComplete} />
@@ -420,7 +460,7 @@ function App() {
                     <RefreshLink />
                   </p>
                   <p style={{ marginTop: '6px', fontSize: '13px', textAlign: 'center' }}>
-                    <button onClick={() => setView('changelog')} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
+                    <button onClick={() => goToView('changelog')} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
                       View changelog
                     </button>
                   </p>
@@ -533,14 +573,45 @@ function App() {
                 </div>
               )}
             </div>
-          )}
 
-          {view === 'library' && <Library accessToken={accessToken} initialKeyFilter={keyFinderFilter} onFilterConsumed={() => setKeyFinderFilter(null)} />}
-          {view === 'keyfinder' && <KeyFinder onFilterByKey={handleFilterByKey} />}
-          {view === 'practice' && <Practice />}
-          {view === 'changelog' && <Changelog />}
-          {view === 'debug' && <Debug accessToken={accessToken} />}
-          {view === 'randomizer' && <Randomizer accessToken={accessToken} />}
+          {/* Each tab, once first visited, stays mounted (display toggle
+              instead of removal) so switching away and using the back
+              button to return preserves everything — scroll position,
+              expanded cards, in-progress edits, filters, whatever state
+              that tab's own component holds. Not yet visiting a tab this
+              session means it's simply not in the tree at all, so it
+              still only does its normal first-mount work (data fetches,
+              etc.) the first time you actually go there. */}
+          {visitedViews.has('library') && (
+            <div style={{ display: view === 'library' ? 'block' : 'none' }}>
+              <Library accessToken={accessToken} initialKeyFilter={keyFinderFilter} onFilterConsumed={() => setKeyFinderFilter(null)} />
+            </div>
+          )}
+          {visitedViews.has('keyfinder') && (
+            <div style={{ display: view === 'keyfinder' ? 'block' : 'none' }}>
+              <KeyFinder onFilterByKey={handleFilterByKey} />
+            </div>
+          )}
+          {visitedViews.has('practice') && (
+            <div style={{ display: view === 'practice' ? 'block' : 'none' }}>
+              <Practice />
+            </div>
+          )}
+          {visitedViews.has('changelog') && (
+            <div style={{ display: view === 'changelog' ? 'block' : 'none' }}>
+              <Changelog />
+            </div>
+          )}
+          {visitedViews.has('debug') && (
+            <div style={{ display: view === 'debug' ? 'block' : 'none' }}>
+              <Debug accessToken={accessToken} />
+            </div>
+          )}
+          {visitedViews.has('randomizer') && (
+            <div style={{ display: view === 'randomizer' ? 'block' : 'none' }}>
+              <Randomizer accessToken={accessToken} />
+            </div>
+          )}
         </div>
       )}
     </div>
