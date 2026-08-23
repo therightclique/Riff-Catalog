@@ -2117,7 +2117,7 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 16:53 PDT — removed maxWidth/flex-shrink cap';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:03 PDT — margin:auto centering, tighter width';
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, debugInfo = null, computedWidth = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2161,7 +2161,7 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
         <pre ref={boxRef} style={{
           fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
           backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
-          margin:0, whiteSpace:'pre', textAlign: align,
+          margin: fitContent ? '0 auto' : 0, whiteSpace:'pre', textAlign: align,
           display: fitContent && !computedWidth ? 'inline-block' : 'block',
           width: fitContent ? (computedWidth ? `${computedWidth}px` : 'auto') : `${TAB_CARD_WIDTH}px`,
           // maxWidth:'100%' would cap this box back down to whatever the
@@ -2261,10 +2261,13 @@ export default function Practice() {
       if (rowEls.length > 0) {
         const widths = rowEls.map(el => el.getBoundingClientRect().width);
         const maxContentWidth = Math.max(...widths);
-        // 28 = 14px left padding + 14px right padding on the pre. Adding
-        // a small extra safety margin (4px) since real content can vary
-        // slightly card to card (different digit widths, badge shapes).
-        const newWidth = Math.ceil(maxContentWidth) + 28 + 4;
+        // 28 = 14px left padding + 14px right padding on the pre. A
+        // small 1px safety margin is kept (not 0) because this width is
+        // measured from the FIRST card only but then shared across every
+        // card in the list — other cards' content can be a hair wider
+        // (e.g. more 2-digit frets), and 1px is enough slack for normal
+        // rounding without leaving a visibly loose gap like 4px did.
+        const newWidth = Math.ceil(maxContentWidth) + 28 + 1;
         setComputedBoxWidth(prev => (prev === newWidth ? prev : newWidth));
       }
       if (!debugBoxRef.current || !debugLabelRef.current || !debugPipeRef.current) {
