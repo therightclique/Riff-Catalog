@@ -146,7 +146,7 @@ const DEGREE_COLORS = {
 // which is what actually guarantees alignment with every other row,
 // rather than approximating it with a specific em/ch/px size that may or
 // may not match the surrounding character grid.
-function renderSingleNoteWithRoot(notes, targetColumns = notes.length, labelRef = null, pipeRef = null, rowRefsContainer = null) {
+function renderSingleNoteWithRoot(notes, targetColumns = notes.length, rowRefsContainer = null) {
   const COL = 4;
   const DIM = '#aaaaaa'; // midpoint between the tab's near-white default and pure white — dim enough to let white passing tones stand out, not so dark it looks broken
   const rows = {};
@@ -229,9 +229,9 @@ function renderSingleNoteWithRoot(notes, targetColumns = notes.length, labelRef 
                 unlike the parent <pre>'s own shrink-to-fit calculation,
                 which measurably undercounted the true content width. */}
             <span ref={el => { if (rowRefsContainer) rowRefsContainer.current[li] = el; }} style={{ display: 'inline-block' }}>
-              <span ref={li === 0 ? labelRef : null} style={{ color: DIM }}>{label} |--</span>
+              <span style={{ color: DIM }}>{label} |--</span>
               {rows[si]}
-              <span ref={li === 0 ? pipeRef : null} style={{ color: DIM }}>--|</span>
+              <span style={{ color: DIM }}>--|</span>
             </span>
           </div>
         );
@@ -2111,15 +2111,7 @@ const MAX_BOX_LICK_NOTES = Object.values(BOX_LICK_DATA)
 // zero slack, which is what guarantees no leftover gap on either side.
 const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding — comfortably fits the widest real content (~340px) with margin to spare
 
-// Bumped by hand on every Practice.jsx change so a screenshot can be
-// checked against this string to confirm which build is actually
-// deployed — added specifically because a recent round of changes
-// produced zero visible difference despite a confirmed correct deploy
-// and app refresh, which needs to be distinguishable from "the fix
-// didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:30 PDT — flex-centered legend badges';
-
-function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, wrapperRef = null, debugInfo = null, computedWidth = null, computedMarginLeft = null }) {
+function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, wrapperRef = null, computedWidth = null, computedMarginLeft = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
     <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
@@ -2136,88 +2128,49 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
       </div>
       <div ref={wrapperRef} style={{
         padding:'12px 16px', display:'flex',
-        // Centering is now handled by an explicit computed marginLeft on
-        // the pre itself (see computedMarginLeft), not by justify-content
-        // — CSS auto-centering (justify-content:center, then margin:auto)
-        // both visibly failed to center correctly on this device, so
-        // this wrapper just needs flex-start plus scroll capability for
-        // whenever content is too wide to fully display.
+        // Centering is handled by an explicit computed marginLeft on the
+        // pre itself (see computedMarginLeft in Practice()), not by
+        // justify-content — CSS auto-centering didn't reliably center
+        // this on every device, so this wrapper just needs flex-start
+        // plus scroll capability for the rare case content is too wide
+        // to fully display.
         justifyContent: fitContent ? 'flex-start' : 'center',
         overflowX: fitContent ? 'auto' : 'visible',
       }}>
-        {/* fitContent (box mode only): `display:inline-block` with no
-            width was measured to undersize the box relative to its real
-            content (14px left gap vs. a measured 1px right gap — proof
-            the browser's own shrink-to-fit math was wrong here, not a
-            theory). Once `computedWidth` is available (measured directly
-            from each row's actual rendered content, see rowRefsContainer
-            in Practice()), that explicit pixel value is used instead —
-            a declared width the browser doesn't have to calculate itself,
-            so there's nothing left for it to get wrong. inline-block/auto
+        {/* fitContent (box mode only): width comes from computedWidth, a
+            pixel value measured directly from each row's real rendered
+            content (see rowRefsContainer in Practice()) rather than left
+            to the browser's own shrink-to-fit sizing. inline-block/auto
             is only a placeholder for the very first paint, before the
             first measurement has run. Non-box modes keep the original
             fixed 460px width with centered content. */}
-        <pre ref={boxRef} style={{
-          // Box mode specifically drops to 12px — the measured overflow
-          // on the phone (content needing 349px against ~334px actually
-          // available) is a real physical fit problem, not a centering
-          // bug. A small font reduction here is enough to make the
-          // content genuinely fit without needing to scroll at all, and
-          // since the width is computed from a live measurement (not a
-          // hardcoded character-width assumption), it'll automatically
-          // recompute correctly for whatever this renders at — no other
-          // number in this file needs to change for this to work.
+        <pre style={{
+          // Box mode uses a smaller font (12px vs 13px) so the padded
+          // 8-column measure comfortably fits on narrow phone screens
+          // without needing to scroll.
           fontFamily:'"Courier New",monospace', fontSize: fitContent ? '12px' : '13px', lineHeight:'1.9',
           backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
-          // Explicit computed marginLeft (see computedMarginLeft in
-          // Practice()) instead of CSS margin:'0 auto' — auto-centering
-          // was tried twice (justify-content:center, then margin:auto)
-          // and neither visibly centered the box on this device. Falls
-          // back to margin:'0 auto' only before the first measurement.
           marginLeft: fitContent ? (computedMarginLeft !== null ? `${computedMarginLeft}px` : 'auto') : 0,
-          marginRight: fitContent ? 0 : 0,
-          marginTop: 0, marginBottom: 0,
+          marginRight: 0, marginTop: 0, marginBottom: 0,
           whiteSpace:'pre', textAlign: align,
           display: fitContent && !computedWidth ? 'inline-block' : 'block',
           width: fitContent ? (computedWidth ? `${computedWidth}px` : 'auto') : `${TAB_CARD_WIDTH}px`,
-          // maxWidth:'100%' would cap this box back down to whatever the
-          // card's available space happens to be — CSS resolves an
-          // explicit width against max-width:100% by taking whichever is
-          // SMALLER, which is exactly what was silently overriding the
-          // computed width back to 334px every time. Once a real
-          // computedWidth is set, the box is allowed to be exactly that
-          // size, growing past the card's own width if it has to —
-          // matching "grow the box, don't shrink the content" from
-          // earlier. Falls back to maxWidth:100% only before the first
-          // measurement (computedWidth still null), so nothing overflows
-          // wildly during that brief initial paint.
+          // maxWidth:'100%' would cap this box back down to the card's
+          // available space, silently overriding computedWidth — the
+          // box needs to be allowed to be exactly computedWidth, growing
+          // past the card's own width if it has to. Falls back to
+          // maxWidth:100% only before the first measurement.
           maxWidth: fitContent && computedWidth ? 'none' : '100%',
           boxSizing: 'border-box',
           overflowX: 'auto',
-          // The immediate parent is `display:flex`, which makes this pre
-          // a flex item — flex items default to flex-shrink:1, meaning
-          // the flex algorithm can shrink an item back down below its
-          // own explicit width if the container is tight on space. That
-          // shrinking happens independently of max-width, so fixing the
-          // max-width cap alone isn't necessarily enough on its own.
+          // This pre is a flex item (parent is display:flex) — flex
+          // items default to flex-shrink:1, which can shrink an item
+          // below its own explicit width independently of max-width.
           flexShrink: fitContent && computedWidth ? 0 : undefined,
         }}>
           {tab}
         </pre>
       </div>
-      {fitContent && (
-        <p style={{ textAlign: 'center', fontSize: '9px', color: '#bbb', margin: '2px 0 8px' }}>
-          {PRACTICE_BUILD_TAG}
-          {debugInfo && (
-            <>
-              <br />
-              <span style={{ color: '#e8b84b' }}>
-                DEBUG — box width: {debugInfo.boxWidth}px · inner L/R: {debugInfo.leftGap}/{debugInfo.rightGap}px · margin applied: {computedMarginLeft ?? '—'}px · <strong>outer L/R (measured): {debugInfo.outerLeftGap ?? '—'}/{debugInfo.outerRightGap ?? '—'}px</strong>
-              </span>
-            </>
-          )}
-        </p>
-      )}
     </div>
   );
 }
@@ -2262,112 +2215,46 @@ export default function Practice() {
   const [current, setCurrent] = useState(null);
   const [showAll, setShowAll] = useState(false);
 
-  // Measures each row's own inline content width directly (bypassing the
-  // browser's shrink-to-fit calculation for the box entirely), and uses
-  // the actual widest row to compute an EXPLICIT pixel width for the box.
-  // The earlier attempt trusted `display:inline-block` to size the box
-  // correctly on its own — the measured 14px-vs-1px gap asymmetry proved
-  // that trust was misplaced (the box came out ~13px narrower than the
-  // real content, so content overflowed past the right padding). Setting
-  // an explicit width computed from real measurements removes the
-  // browser's auto-sizing from the equation altogether.
-  const debugBoxRef = useRef(null);
-  const debugLabelRef = useRef(null);
-  const debugPipeRef = useRef(null);
-  const debugWrapperRef = useRef(null);
+  // Measures each row's own inline content width directly, and uses the
+  // widest row to compute an explicit pixel width and centering margin
+  // for box-mode diagrams — the browser's own shrink-to-fit and
+  // auto-centering weren't reliable across every device, so these are
+  // computed by hand instead of left to CSS.
+  const wrapperMeasureRef = useRef(null);
   const rowRefsContainer = useRef([]);
-  const [debugGaps, setDebugGaps] = useState(null);
   const [computedBoxWidth, setComputedBoxWidth] = useState(null);
   const [computedMarginLeft, setComputedMarginLeft] = useState(null);
 
   useEffect(() => {
     const measure = () => {
       const rowEls = rowRefsContainer.current.filter(Boolean);
-      if (rowEls.length > 0) {
-        const widths = rowEls.map(el => el.getBoundingClientRect().width);
-        const maxContentWidth = Math.max(...widths);
-        // 28 = 14px left padding + 14px right padding on the pre. A
-        // small 1px safety margin is kept (not 0) because this width is
-        // measured from the FIRST card only but then shared across every
-        // card in the list — other cards' content can be a hair wider
-        // (e.g. more 2-digit frets), and 1px is enough slack for normal
-        // rounding without leaving a visibly loose gap like 4px did.
-        const newWidth = Math.ceil(maxContentWidth) + 28 + 1;
-        setComputedBoxWidth(prev => (prev === newWidth ? prev : newWidth));
+      if (rowEls.length === 0) return;
+      const widths = rowEls.map(el => el.getBoundingClientRect().width);
+      const maxContentWidth = Math.max(...widths);
+      // 28 = 14px left padding + 14px right padding on the pre. A small
+      // 1px safety margin is kept (not 0) because this width is measured
+      // from the FIRST card only but then shared across every card in
+      // the list — other cards' content can be a hair wider (e.g. more
+      // 2-digit frets).
+      const newWidth = Math.ceil(maxContentWidth) + 28 + 1;
+      setComputedBoxWidth(prev => (prev === newWidth ? prev : newWidth));
 
-        // CSS margin:'0 auto' should center a flex item with this much
-        // free space — it visibly didn't on this device (twice now,
-        // first with justify-content:center, then with margin:auto).
-        // Rather than trust another CSS mechanism to get this right,
-        // measure the wrapper's real available width directly and
-        // compute the centering offset by hand, the same way the width
-        // itself was fixed.
-        if (debugWrapperRef.current) {
-          const wrapperEl = debugWrapperRef.current;
-          // getBoundingClientRect().width on the wrapper includes the
-          // wrapper's OWN padding (12px 16px) — but the pre is centered
-          // within the wrapper's CONTENT box, inside that padding, not
-          // against its outer edge. Using the padding-inclusive width
-          // overestimated available space by the padding amount, which
-          // is exactly what pushed the box too far right on every
-          // screen size (worse in absolute pixels on wider screens,
-          // which is why it looked fine-ish on the phone but clearly
-          // wrong on desktop). Reading the actual computed padding
-          // (rather than hardcoding it) keeps this correct even if the
-          // wrapper's padding is ever changed later.
-          const cs = window.getComputedStyle(wrapperEl);
-          const padLeft = parseFloat(cs.paddingLeft) || 0;
-          const padRight = parseFloat(cs.paddingRight) || 0;
-          const contentWidth = wrapperEl.clientWidth - padLeft - padRight;
-          const newMargin = Math.max(0, Math.floor((contentWidth - newWidth) / 2));
-          setComputedMarginLeft(prev => (prev === newMargin ? prev : newMargin));
-        }
-      }
-      if (!debugBoxRef.current || !debugLabelRef.current || !debugPipeRef.current) {
-        setDebugGaps(null);
-        return;
-      }
-      const box = debugBoxRef.current.getBoundingClientRect();
-      const label = debugLabelRef.current.getBoundingClientRect();
-      const pipe = debugPipeRef.current.getBoundingClientRect();
-      let outerLeftGap = null, outerRightGap = null;
-      if (debugWrapperRef.current) {
-        const wrapper = debugWrapperRef.current.getBoundingClientRect();
-        const cs = window.getComputedStyle(debugWrapperRef.current);
+      if (wrapperMeasureRef.current) {
+        const wrapperEl = wrapperMeasureRef.current;
+        // clientWidth includes the wrapper's own padding, but the pre is
+        // centered within the wrapper's CONTENT box, inside that padding
+        // — so the actual padding (read live, not hardcoded) has to be
+        // subtracted before computing the centering offset.
+        const cs = window.getComputedStyle(wrapperEl);
         const padLeft = parseFloat(cs.paddingLeft) || 0;
         const padRight = parseFloat(cs.paddingRight) || 0;
-        // This measures the ACTUAL rendered gap between the box and the
-        // wrapper's content edges — the real outcome, not the formula's
-        // input. The computed margin value alone wasn't enough to catch
-        // the padding double-count bug; this catches it directly instead
-        // of trusting the math that produced it.
-        outerLeftGap = Math.round(box.left - (wrapper.left + padLeft));
-        outerRightGap = Math.round((wrapper.right - padRight) - box.right);
+        const contentWidth = wrapperEl.clientWidth - padLeft - padRight;
+        const newMargin = Math.max(0, Math.floor((contentWidth - newWidth) / 2));
+        setComputedMarginLeft(prev => (prev === newMargin ? prev : newMargin));
       }
-      const next = {
-        boxWidth: Math.round(box.width),
-        leftGap: Math.round(label.left - box.left),
-        rightGap: Math.round(box.right - pipe.right),
-        outerLeftGap,
-        outerRightGap,
-      };
-      // Without this equality check, setDebugGaps fires with a brand-new
-      // object every single effect pass (even when the numbers haven't
-      // changed), and since this effect has no dependency array, that
-      // triggers an endless render → measure → setState → render loop
-      // that never settles — which is exactly what produced an earlier
-      // screenshot showing a stale box width alongside a newer computed
-      // width in the same render. Only update state when a value has
-      // actually changed.
-      setDebugGaps(prev => (
-        prev && prev.boxWidth === next.boxWidth && prev.leftGap === next.leftGap && prev.rightGap === next.rightGap
-          && prev.outerLeftGap === next.outerLeftGap && prev.outerRightGap === next.outerRightGap
-          ? prev
-          : next
-      ));
     };
     // Measure after paint, and re-measure on resize/orientation change
-    // since the gap could legitimately differ across screen widths.
+    // since the available width can legitimately differ across screens.
     const raf = requestAnimationFrame(measure);
     window.addEventListener('resize', measure);
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', measure); };
@@ -2434,13 +2321,11 @@ export default function Practice() {
           key={item.id||idx}
           title={`${effectiveGroup} — Box ${selectedBox}`}
           subtitle={selectedKey?`in ${selectedKey}`:`ref. root ${item.root}`}
-          tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? debugLabelRef : null, isFirst ? debugPipeRef : null, isFirst ? rowRefsContainer : null)}
+          tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? rowRefsContainer : null)}
           difficulty={item.difficulty}
           align="left"
           fitContent
-          boxRef={isFirst ? debugBoxRef : null}
-          wrapperRef={isFirst ? debugWrapperRef : null}
-          debugInfo={isFirst ? debugGaps : null}
+          wrapperRef={isFirst ? wrapperMeasureRef : null}
           computedWidth={computedBoxWidth}
           computedMarginLeft={computedMarginLeft}
         />;
