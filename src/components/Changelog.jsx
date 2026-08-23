@@ -82,6 +82,28 @@ const CHANGELOG = [
     version: '1.8',
     entries: [
       {
+        title: 'New: Randomizer tab',
+        items: [
+          'A spinning wheel to help kickstart a new song idea, one piece at a time',
+          '8 categories: Musical Key, Major/Minor, Style/Genre, Theme, Mood, Time Signature, Chord Progression (by scale degree), and Tempo',
+          'Spin the wheel, or grab and drag it yourself to land on a result manually',
+          'Each result can be added to a running, freely editable text box — spin the same category more than once to build up something like a chord progression note by note',
+          'Undo removes just the last addition; Clear wipes the whole idea',
+          'Name and save an idea to Google Drive, and browse or reload anything saved previously',
+          'The in-progress idea persists across tab switches and even closing and reopening the app, so it\u2019s never lost by accident',
+        ],
+      },
+      {
+        title: 'New: Practice \u2014 Box Position mode for pentatonic licks',
+        items: [
+          'A "Box Position" selector now appears for Minor Pentatonic, Major Pentatonic, and Blues in Single-note Licks mode, covering the classic 5-box pentatonic system',
+          'The 5 box shapes were mathematically derived and cross-checked against real pentatonic fret-position references, including a real, known irregularity on the B string in Box 3 caused by the guitar\u2019s tuning',
+          '750 new licks (50 per box, across all 5 boxes and all 3 scale groups), built from real phrasing techniques \u2014 directional runs, short motifs repeated up or down the scale, doubled notes, call-and-response phrasing \u2014 instead of a random walk between notes',
+          'Root notes are highlighted directly in the tab',
+          'Works with the existing key selector \u2014 box shapes transpose to any key like any other lick',
+        ],
+      },
+      {
         title: 'Faster, less disruptive Drive reconnects',
         items: [
           'The app now automatically retries connecting to Google Drive the moment it comes back to the screen after being backgrounded or reloaded, with no tap needed when it succeeds silently',
@@ -119,6 +141,14 @@ const CHANGELOG = [
           'Clips can be deleted, with an inline confirmation. Deleted clips move to the Google Drive trash rather than being destroyed, so they can be recovered for 30 days',
           'Clips can be starred, with a "Starred only" filter for surfacing favorites quickly',
           'Export the entire library to a CSV file with every metadata field included',
+        ],
+      },
+      {
+        title: 'Clip card layout fixes',
+        items: [
+          'Fixed clip names getting cut off once rename, delete, and favorite controls were added to each card — the row of buttons no longer competes with the name for space',
+          'Download and delete moved to their own line below the name, instead of all four controls squeezed into a single row',
+          'Collapsed clip cards now show name, key + tempo, and date + duration each on their own line, so a key name like "A Minor" can no longer get split across two lines',
         ],
       },
       {
@@ -183,15 +213,6 @@ const CHANGELOG = [
         ],
       },
       {
-        title: 'Mobile layout fixes',
-        items: [
-          'Added proper viewport meta tag so the app renders at actual device width on iOS instead of desktop-scaled-down',
-          'Fixed horizontal overflow across the app',
-          'Moved Changelog out of the tab bar into a link below the Google Drive note, freeing up space on small screens',
-          'Fixed Key Finder scale degree cards so all 7 fit on one row on mobile',
-        ],
-      },
-      {
         title: 'Library performance',
         items: [
           'Fixed library load time growing slower as more recordings were added — metadata was being looked up with one Drive search request per clip; now fetched in a single batched request and matched locally',
@@ -211,47 +232,6 @@ const CHANGELOG = [
     date: '2026-06-11',
     displayDate: 'June 11, 2026',
     version: '1.2',
-    entries: [
-      {
-        title: 'Practice Tab — complete rebuild',
-        items: [
-          '250 single-note licks across 5 scale groups (Minor Pentatonic, Major Pentatonic, Blues, Natural Minor, Major) — max 3 frets between notes, max 1 string jump, 5–8 notes each',
-          '250 double stop riffs with the same scale groups — each column has exactly 2 notes within 5 frets of each other, consecutive diads share a note within 3 semitones, contained within any 4-string span',
-          '480 chord riffs — 20 per key across all 24 keys, using open chords and barre shapes, consecutive chords within 5 frets of each other',
-          'Mode selector dropdown: Single-note Licks / Double Stops / Chord Riffs',
-          'Key selector transposes licks and double stops to the selected key and limits scale options to musically appropriate choices (major keys → major scales, minor keys → minor scales)',
-          'Chord riffs filtered by key — selecting a key shows only progressions in that key',
-          'Scale, Difficulty, and Type dropdowns all labeled',
-          'All tab diagrams now display with low E at the bottom, matching standard guitar notation',
-          'Fretboard diagram from Key Finder appears below each lick or riff when a key is selected',
-        ],
-      },
-      {
-        title: 'Key Finder — refactored',
-        items: [
-          'Extracted Fretboard diagram and scale note logic into a shared FretboardDiagram component used by both Key Finder and Practice',
-        ],
-      },
-      {
-        title: 'Record Tab',
-        items: [
-          'Added a note below the record button explaining that recordings are saved to Google Drive in a folder called RiffCatalog, and that the app cannot see anything else in the user\'s Drive',
-        ],
-      },
-      {
-        title: 'Bug fixes',
-        items: [
-          'Fixed scale selector in Practice tab returning zero results when switching away from Minor Pentatonic',
-          'Fixed key selector not locking scale groups to musically appropriate options for the chosen key',
-          'Fixed string label order on all tab diagrams — high e is now at the top, low E at the bottom',
-        ],
-      },
-    ],
-  },
-  {
-    date: '2026-06-10',
-    displayDate: 'June 10, 2026',
-    version: '1.1',
     entries: [
       {
         title: 'Project setup',
@@ -326,6 +306,55 @@ const CHANGELOG = [
         items: [
           'Inline warning when a recording shares a name with an existing clip',
           'Suggested rename shown automatically',
+        ],
+      },
+      {
+        title: 'Practice Tab — complete rebuild',
+        items: [
+          '250 single-note licks across 5 scale groups (Minor Pentatonic, Major Pentatonic, Blues, Natural Minor, Major) — max 3 frets between notes, max 1 string jump, 5–8 notes each',
+          '250 double stop riffs with the same scale groups — each column has exactly 2 notes within 5 frets of each other, consecutive diads share a note within 3 semitones, contained within any 4-string span',
+          '480 chord riffs — 20 per key across all 24 keys, using open chords and barre shapes, consecutive chords within 5 frets of each other',
+          'Mode selector dropdown: Single-note Licks / Double Stops / Chord Riffs',
+          'Key selector transposes licks and double stops to the selected key and limits scale options to musically appropriate choices (major keys → major scales, minor keys → minor scales)',
+          'Chord riffs filtered by key — selecting a key shows only progressions in that key',
+          'Scale, Difficulty, and Type dropdowns all labeled',
+          'All tab diagrams now display with low E at the bottom, matching standard guitar notation',
+          'Fretboard diagram from Key Finder appears below each lick or riff when a key is selected',
+        ],
+      },
+      {
+        title: 'Key Finder — refactored',
+        items: [
+          'Extracted Fretboard diagram and scale note logic into a shared FretboardDiagram component used by both Key Finder and Practice',
+        ],
+      },
+      {
+        title: 'Record Tab',
+        items: [
+          'Added a note below the record button explaining that recordings are saved to Google Drive in a folder called RiffCatalog, and that the app cannot see anything else in the user\'s Drive',
+        ],
+      },
+      {
+        title: 'Changelog',
+        items: [
+          'Added this changelog, listing what changed in each update — reachable from a link below the Google Drive note on the Record tab',
+        ],
+      },
+      {
+        title: 'Mobile layout',
+        items: [
+          'Added proper viewport meta tag so the app renders at actual device width on iOS instead of desktop-scaled-down',
+          'Fixed horizontal overflow across the app',
+          'Moved Changelog out of the tab bar into a link, freeing up space on small screens',
+          'Fixed Key Finder scale degree cards so all 7 fit on one row on mobile',
+        ],
+      },
+      {
+        title: 'Bug fixes',
+        items: [
+          'Fixed scale selector in Practice tab returning zero results when switching away from Minor Pentatonic',
+          'Fixed key selector not locking scale groups to musically appropriate options for the chosen key',
+          'Fixed string label order on all tab diagrams — high e is now at the top, low E at the bottom',
         ],
       },
     ],
@@ -412,7 +441,7 @@ export default function Changelog() {
             onClick={() => setShowArchive(v => !v)}
             style={{
               width: '100%', padding: '10px 16px', backgroundColor: '#1e1e1e',
-              border: '1px solid #2a2a2a', borderRadius: '8px', color: '#aaa',
+              border: '1px solid #2a2a2a', borderRadius: '8px', color: '#26af55',
               fontSize: '13px', cursor: 'pointer', display: 'flex',
               justifyContent: 'space-between', alignItems: 'center',
             }}
