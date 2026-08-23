@@ -2117,7 +2117,7 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:25 PDT — smaller font so content fits without scroll';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:30 PDT — flex-centered legend badges';
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, wrapperRef = null, debugInfo = null, computedWidth = null, computedMarginLeft = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
@@ -2235,7 +2235,14 @@ const MINOR_KEY_GROUPS = ['Minor Pentatonic', 'Natural Minor', 'Blues'];
 // Mirrors the actual badge styling used in renderSingleNoteWithRoot, so
 // the legend always visually matches what's really in the tab.
 function BoxLegend() {
-  const dotBase = { display: 'inline-block', width: '1.1em', height: '1.1em', borderRadius: '50%', fontSize: '10px', fontWeight: '800', lineHeight: '1.1em', textAlign: 'center', boxSizing: 'border-box' };
+  // inline-flex + alignItems/justifyContent center, not line-height —
+  // line-height-based centering breaks the moment a border is added
+  // (border-box shrinks the content area but line-height doesn't follow
+  // it), which is exactly why "R" (no border) looked fine while "3" and
+  // "5" (1.5px border) sat slightly low. Flex centering doesn't have
+  // that dependency, the same fix already used for the note badges in
+  // the actual tab diagrams.
+  const dotBase = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '1.1em', height: '1.1em', borderRadius: '50%', fontSize: '10px', fontWeight: '800', boxSizing: 'border-box' };
   return (
     <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '8px' }}>
       <span style={{ ...dotBase, backgroundColor: '#ff4444', color: '#111' }}>R</span>{' Root · '}
