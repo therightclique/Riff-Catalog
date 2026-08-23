@@ -2117,9 +2117,9 @@ const TAB_CARD_WIDTH = 460; // border-box width including the pre's own padding 
 // produced zero visible difference despite a confirmed correct deploy
 // and app refresh, which needs to be distinguishable from "the fix
 // didn't work" going forward.
-const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:03 PDT — margin:auto centering, tighter width';
+const PRACTICE_BUILD_TAG = 'build 2026-08-22 17:10 PDT — explicit computed margin, not CSS auto';
 
-function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, debugInfo = null, computedWidth = null }) {
+function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, boxRef = null, wrapperRef = null, debugInfo = null, computedWidth = null, computedMarginLeft = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
   return (
     <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
@@ -2134,15 +2134,14 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
           </span>
         )}
       </div>
-      <div style={{
+      <div ref={wrapperRef} style={{
         padding:'12px 16px', display:'flex',
-        // justifyContent:'center' combined with overflow-x:auto has a
-        // documented bad interaction: when content is wider than the
-        // container, a centered scrollable box defaults to showing the
-        // MIDDLE of the content, clipping both ends — which would hide
-        // the label AND the pipe simultaneously. Left-aligning avoids
-        // that entirely for box mode, where the pre can now be wider
-        // than this wrapper once a real computedWidth is set.
+        // Centering is now handled by an explicit computed marginLeft on
+        // the pre itself (see computedMarginLeft), not by justify-content
+        // — CSS auto-centering (justify-content:center, then margin:auto)
+        // both visibly failed to center correctly on this device, so
+        // this wrapper just needs flex-start plus scroll capability for
+        // whenever content is too wide to fully display.
         justifyContent: fitContent ? 'flex-start' : 'center',
         overflowX: fitContent ? 'auto' : 'visible',
       }}>
@@ -2161,7 +2160,15 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
         <pre ref={boxRef} style={{
           fontFamily:'"Courier New",monospace', fontSize:'13px', lineHeight:'1.9',
           backgroundColor:'#000', color:'#e0e0e0', padding:'10px 14px', borderRadius:'8px',
-          margin: fitContent ? '0 auto' : 0, whiteSpace:'pre', textAlign: align,
+          // Explicit computed marginLeft (see computedMarginLeft in
+          // Practice()) instead of CSS margin:'0 auto' — auto-centering
+          // was tried twice (justify-content:center, then margin:auto)
+          // and neither visibly centered the box on this device. Falls
+          // back to margin:'0 auto' only before the first measurement.
+          marginLeft: fitContent ? (computedMarginLeft !== null ? `${computedMarginLeft}px` : 'auto') : 0,
+          marginRight: fitContent ? 0 : 0,
+          marginTop: 0, marginBottom: 0,
+          whiteSpace:'pre', textAlign: align,
           display: fitContent && !computedWidth ? 'inline-block' : 'block',
           width: fitContent ? (computedWidth ? `${computedWidth}px` : 'auto') : `${TAB_CARD_WIDTH}px`,
           // maxWidth:'100%' would cap this box back down to whatever the
@@ -2196,7 +2203,7 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
             <>
               <br />
               <span style={{ color: '#e8b84b' }}>
-                DEBUG — box width: {debugInfo.boxWidth}px · left gap: {debugInfo.leftGap}px · right gap: {debugInfo.rightGap}px · computed: {computedWidth ?? '—'}px
+                DEBUG — box width: {debugInfo.boxWidth}px · left gap: {debugInfo.leftGap}px · right gap: {debugInfo.rightGap}px · computed: {computedWidth ?? '—'}px · margin: {computedMarginLeft ?? '—'}px
               </span>
             </>
           )}
@@ -2251,9 +2258,11 @@ export default function Practice() {
   const debugBoxRef = useRef(null);
   const debugLabelRef = useRef(null);
   const debugPipeRef = useRef(null);
+  const debugWrapperRef = useRef(null);
   const rowRefsContainer = useRef([]);
   const [debugGaps, setDebugGaps] = useState(null);
   const [computedBoxWidth, setComputedBoxWidth] = useState(null);
+  const [computedMarginLeft, setComputedMarginLeft] = useState(null);
 
   useEffect(() => {
     const measure = () => {
@@ -2269,6 +2278,19 @@ export default function Practice() {
         // rounding without leaving a visibly loose gap like 4px did.
         const newWidth = Math.ceil(maxContentWidth) + 28 + 1;
         setComputedBoxWidth(prev => (prev === newWidth ? prev : newWidth));
+
+        // CSS margin:'0 auto' should center a flex item with this much
+        // free space — it visibly didn't on this device (twice now,
+        // first with justify-content:center, then with margin:auto).
+        // Rather than trust another CSS mechanism to get this right,
+        // measure the wrapper's real available width directly and
+        // compute the centering offset by hand, the same way the width
+        // itself was fixed.
+        if (debugWrapperRef.current) {
+          const wrapperWidth = debugWrapperRef.current.getBoundingClientRect().width;
+          const newMargin = Math.max(0, Math.floor((wrapperWidth - newWidth) / 2));
+          setComputedMarginLeft(prev => (prev === newMargin ? prev : newMargin));
+        }
       }
       if (!debugBoxRef.current || !debugLabelRef.current || !debugPipeRef.current) {
         setDebugGaps(null);
@@ -2369,8 +2391,10 @@ export default function Practice() {
           align="left"
           fitContent
           boxRef={isFirst ? debugBoxRef : null}
+          wrapperRef={isFirst ? debugWrapperRef : null}
           debugInfo={isFirst ? debugGaps : null}
           computedWidth={computedBoxWidth}
+          computedMarginLeft={computedMarginLeft}
         />;
       }
       const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
