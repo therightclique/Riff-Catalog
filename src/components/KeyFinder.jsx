@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
+import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -9,10 +10,6 @@ const ALL_KEYS = [
 ];
 
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
-const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
-const MAJOR_QUALITIES = ['M', 'm', 'm', 'M', 'M', 'm', 'dim'];
-const MINOR_QUALITIES = ['m', 'dim', 'M', 'm', 'm', 'M', 'M'];
 
 // getScaleNotes (imported from FretboardDiagram) returns degrees 1–7 in
 // scale order starting from the selected key's own root — so which mode
@@ -177,6 +174,14 @@ function KeyFinder({ onFilterByKey }) {
   const [selectedKey, setSelectedKey] = useState('');
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
 
+  // Zoom-to-full-screen for the fretboard and chord diagrams — mirrors
+  // the same DiagramDetailView pattern Practice tab uses.
+  const [detailView, setDetailView] = useState(null);
+
+  // Which mode card (by index, 0-6) currently has its full note list
+  // expanded — null when none are expanded.
+  const [expandedMode, setExpandedMode] = useState(null);
+
   // Reverse key lookup
   const [pickedNotes, setPickedNotes] = useState([]);
   const [lookupResults, setLookupResults] = useState(null);
@@ -184,6 +189,7 @@ function KeyFinder({ onFilterByKey }) {
 
   const handleKeyDropdownChange = (key) => {
     setSelectedKey(key);
+    setExpandedMode(null);
     if (key) setLookupExpanded(false);
   };
 
@@ -389,7 +395,8 @@ function KeyFinder({ onFilterByKey }) {
           </div>
 
           {/* Fretboard */}
-          <FretboardDiagram selectedKey={selectedKey} />
+          <ZoomHint />
+          <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />
 
           {/* Chord diagrams below fretboard */}
           <div style={{ marginTop: '28px', marginBottom: '8px' }}>
@@ -402,7 +409,14 @@ function KeyFinder({ onFilterByKey }) {
                 const shape = getChordShape(note, quality);
                 const chordLabel = quality === 'M' ? note : quality === 'dim' ? `${note}°` : `${note}m`;
                 return (
-                  <div key={degree} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                  <div key={degree}
+                    onClick={() => setDetailView({
+                      title: chordLabel, subtitle: `Degree ${degree}${quality}`, difficulty: null,
+                      content: <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />,
+                      secondaryContent: <FretboardDiagram selectedKey={selectedKey} />,
+                      secondaryLabel: 'Show fretboard', primaryLabel: 'Show chord',
+                    })}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
                     <span style={{ fontSize: '11px', color: '#888' }}>{degree}{quality}</span>
                     <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
                   </div>
@@ -416,28 +430,47 @@ function KeyFinder({ onFilterByKey }) {
               quality. Which mode name lands on which degree depends only
               on whether the key itself is Major or Minor (see
               MAJOR_KEY_MODES / MINOR_KEY_MODES above), not on the
-              specific key. */}
+              specific key. Tapping a mode reveals all 7 of its notes —
+              every mode of a given key shares the same 7 pitches as the
+              key itself, just starting from a different root, so this is
+              the scale's own note list rotated to start at that mode's
+              degree. */}
           <div style={{ marginTop: '28px', marginBottom: '8px' }}>
             <div style={{ fontSize: '13px', color: '#888', textAlign: 'center', marginBottom: '12px' }}>
-              Modes of {selectedKey}
+              Modes of {selectedKey} — tap a mode to see its notes
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
               {(() => {
                 const modeSeq = selectedKey.includes('Major') ? MAJOR_KEY_MODES : MINOR_KEY_MODES;
-                return scaleNotes.map(({ degree, note }, i) => (
-                  <div key={degree} style={{
-                    padding: '8px 12px', borderRadius: '8px', backgroundColor: '#f5f5f5',
-                    border: '1px solid #e0e0e0', textAlign: 'center', minWidth: '84px',
-                  }}>
-                    <div style={{ fontSize: '13px', fontWeight: '600', color: '#222' }}>{note} {modeSeq[i]}</div>
-                    <div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>degree {degree}</div>
-                  </div>
-                ));
+                const allNotes = scaleNotes.map(sn => sn.note);
+                return scaleNotes.map(({ degree, note }, i) => {
+                  const isExpanded = expandedMode === i;
+                  const modeNotes = [...allNotes.slice(i), ...allNotes.slice(0, i)];
+                  return (
+                    <div key={degree}
+                      onClick={() => setExpandedMode(prev => (prev === i ? null : i))}
+                      style={{
+                        padding: '8px 12px', borderRadius: '8px',
+                        backgroundColor: isExpanded ? '#fff8e1' : '#f5f5f5',
+                        border: `1px solid ${isExpanded ? '#f0c040' : '#e0e0e0'}`,
+                        textAlign: 'center', minWidth: '84px', cursor: 'pointer',
+                      }}>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#222' }}>{note} {modeSeq[i]}</div>
+                      <div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>degree {degree}</div>
+                      {isExpanded && (
+                        <div style={{ fontSize: '11px', color: '#7a5000', fontWeight: '600', marginTop: '6px', whiteSpace: 'nowrap' }}>
+                          {modeNotes.join(' – ')}
+                        </div>
+                      )}
+                    </div>
+                  );
+                });
               })()}
             </div>
           </div>
         </>
       )}
+      {detailView && <DiagramDetailView {...detailView} onClose={() => setDetailView(null)} />}
     </div>
   );
 }
