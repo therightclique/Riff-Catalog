@@ -19,6 +19,68 @@ const REF_ROOTS = {
   'Blues':'A','Natural Minor':'A','Major':'C',
 };
 
+// Root/3rd/5th coloring for box licks came pre-computed into the data at
+// generation time. Free licks and double stops don't carry that, so it's
+// computed here instead, using the exact same interval-to-degree mapping
+// the box lick generator used (mirrored for Minor/Major Pentatonic and
+// Blues) plus the two additional 7-note scale groups only free licks and
+// double stops actually offer.
+const GROUP_DEGREE_INTERVALS = {
+  'Minor Pentatonic': {0:'1', 3:'b3', 5:'4', 7:'5', 10:'b7'},
+  'Major Pentatonic': {0:'1', 2:'2', 4:'3', 7:'5', 9:'6'},
+  'Blues':            {0:'1', 3:'b3', 5:'4', 6:'b5', 7:'5', 10:'b7'},
+  'Natural Minor':    {0:'1', 2:'2', 3:'b3', 5:'4', 7:'5', 8:'b6', 10:'b7'},
+  'Major':            {0:'1', 2:'2', 4:'3', 5:'4', 7:'5', 9:'6', 11:'7'},
+};
+
+function pitchClass(s, f) {
+  return (CHROMATIC.indexOf(OPEN_STRINGS[s]) + f) % 12;
+}
+
+function degreeFor(s, f, rootNote, group) {
+  const rootIdx = CHROMATIC.indexOf(rootNote);
+  const map = GROUP_DEGREE_INTERVALS[group];
+  if (rootIdx === -1 || !map) return null;
+  const interval = (pitchClass(s, f) - rootIdx + 12) % 12;
+  return map[interval] || null;
+}
+
+// Chord riffs are a different case from scale-based licks — each
+// position in a riff is its OWN chord with its OWN root (e.g. the "F#m"
+// in "A-F#m-D"), not one shared scale root for the whole card. The chord
+// name string is parsed to recover that per-position root and quality.
+function parseChordName(name) {
+  const m = name.match(/^([A-G][#b]?)(.*)$/);
+  if (!m) return null;
+  const suffix = m[2];
+  const isDim = suffix.toLowerCase().includes('dim');
+  const isMinor = !isDim && suffix.startsWith('m') && !suffix.toLowerCase().startsWith('maj');
+  return { root: m[1], quality: isDim ? 'dim' : isMinor ? 'minor' : 'major' };
+}
+
+const CHORD_QUALITY_INTERVALS = {
+  major: { 0: '1', 4: '3', 7: '5' },
+  minor: { 0: '1', 3: '3', 7: '5' },
+  dim:   { 0: '1', 3: '3', 6: '5' }, // flatted 5th filling the same functional "5th" role
+};
+
+// CHROMATIC only has sharp spellings, but a chord name could in principle
+// use a flat root (e.g. "Ebm") — not currently present in the real data,
+// but normalizing here means that stays true by construction rather than
+// by accident, instead of silently falling back to no coloring for a
+// chord that happens to use flat notation.
+const FLAT_TO_SHARP = { Db:'C#', Eb:'D#', Gb:'F#', Ab:'G#', Bb:'A#' };
+
+function chordDegreeFor(s, f, chordRootInfo) {
+  if (!chordRootInfo) return null;
+  const root = FLAT_TO_SHARP[chordRootInfo.root] || chordRootInfo.root;
+  const rootIdx = CHROMATIC.indexOf(root);
+  if (rootIdx === -1) return null;
+  const interval = (pitchClass(s, f) - rootIdx + 12) % 12;
+  const map = CHORD_QUALITY_INTERVALS[chordRootInfo.quality] || CHORD_QUALITY_INTERVALS.major;
+  return map[interval] || null;
+}
+
 // Transposes a moveable shape by ONE fret delta applied uniformly to
 // every note, which is the only way to guarantee relative fret spacing
 // is preserved exactly. The previous approach computed each note's new
@@ -59,77 +121,190 @@ function transposeDS(pairs, group, targetRoot) {
   return pairs.map(pair => transposeByDelta(pair, ref, targetRoot));
 }
 
-function renderSingleNote(notes, targetColumns = notes.length, blockRef = null) {
-  const COL = 4;
-  // Split filler evenly around the real notes (same technique as box
-  // mode) so shorter licks sit centered within the fixed-length measure
-  // instead of clustering flush against the left pipe.
-  const totalFiller = Math.max(0, targetColumns - notes.length);
-  const leftFiller = Math.floor(totalFiller / 2);
-  const rightFiller = totalFiller - leftFiller;
-  const rows = {};
-  for (let i = 0; i < 6; i++) rows[i] = '-'.repeat(COL * leftFiller);
-  notes.forEach(({ s, f }) => {
-    const cell = String(f);
-    for (let i = 0; i < 6; i++)
-      rows[i] += i === s ? cell.padEnd(COL,'-') : '-'.repeat(Math.max(COL, cell.length+1));
-  });
-  for (let i = 0; i < 6; i++) rows[i] += '-'.repeat(COL * rightFiller);
-  const text = STR_LABELS_TTB.map((label, li) => {
-    const si = 5 - li;
-    return `${label} |--${rows[si]}--|`;
-  }).join('\n');
-  // display:inline-block so this measures its own true content width via
-  // getBoundingClientRect(), independent of whatever width the ancestor
-  // pre currently happens to have — the same technique box mode already
-  // relies on, applied here too now that every card type uses it.
-  return <span ref={blockRef} style={{ display: 'inline-block' }}>{text}</span>;
+// Thin wrapper: computes each note's scale degree (using the same
+// interval math as box mode, since free licks don't have degree
+// pre-baked into their data) then hands off to renderSingleNoteWithRoot
+// so free licks get the identical badge/coloring treatment box licks
+// already have, instead of maintaining a second, plainer renderer.
+function renderSingleNote(notes, group, rootNote, targetColumns = notes.length, rowRefsContainer = null) {
+  const notesWithDegree = notes.map(n => ({ ...n, degree: degreeFor(n.s, n.f, rootNote, group) }));
+  return renderSingleNoteWithRoot(notesWithDegree, targetColumns, rowRefsContainer);
 }
 
-function renderDoubleStop(pairs, targetColumns = pairs.length, blockRef = null) {
-  // DS_COL_WIDTH is now a global constant (see its definition) rather
-  // than computed from this specific lick's own widest fret — otherwise
-  // two licks with the same pair count could still render at different
-  // widths whenever one happened to have a 2-digit fret and the other
-  // didn't.
+function renderDoubleStop(pairs, group, rootNote, targetColumns = pairs.length, rowRefsContainer = null) {
+  const DIM = '#aaaaaa';
+  const rows = {};
+  for (let i = 0; i < 6; i++) rows[i] = [];
+  // Same centered-filler split as every other mode.
   const totalFiller = Math.max(0, targetColumns - pairs.length);
   const leftFiller = Math.floor(totalFiller / 2);
   const rightFiller = totalFiller - leftFiller;
-  const rows = {};
-  for (let i = 0; i < 6; i++) rows[i] = '-'.repeat(DS_COL_WIDTH * leftFiller);
+
+  const pushFiller = (count) => {
+    if (count <= 0) return;
+    for (let i = 0; i < 6; i++) {
+      rows[i].push(
+        <span key={`filler-${rows[i].length}`} style={{ color: DIM }}>
+          {'-'.repeat(DS_COL_WIDTH * count)}
+        </span>
+      );
+    }
+  };
+  pushFiller(leftFiller);
+
   pairs.forEach(pair => {
     const occ = {};
-    pair.forEach(({s,f}) => { occ[s] = String(f); });
-    for (let i = 0; i < 6; i++)
-      rows[i] += (occ[i] || '-').padEnd(DS_COL_WIDTH,'-');
+    pair.forEach(({ s, f }) => { occ[s] = f; });
+    for (let i = 0; i < 6; i++) {
+      if (occ[i] !== undefined) {
+        const f = occ[i];
+        const cell = String(f);
+        const degree = degreeFor(i, f, rootNote, group);
+        const isRoot = degree === '1';
+        const isThirdOrFifth = degree === '3' || degree === 'b3' || degree === '5';
+        const color = DEGREE_COLORS[degree];
+        const padCount = DS_COL_WIDTH - cell.length;
+        const circleStyle = isRoot
+          ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: '1.6em', height: '1.6em', borderRadius: '50%',
+              backgroundColor: color, zIndex: 0 }
+          : isThirdOrFifth
+          ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: '1.6em', height: '1.6em', borderRadius: '50%',
+              border: `1.5px solid ${color}`, zIndex: 0 }
+          : null;
+        const textStyle = { position: 'relative', zIndex: 1, fontWeight: '700',
+          color: isRoot ? '#111' : isThirdOrFifth ? color : '#fff' };
+        rows[i].push(
+          <span key={rows[i].length}>
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              {circleStyle && <span style={circleStyle} />}
+              <span style={textStyle}>{cell}</span>
+            </span>
+            <span style={{ color: DIM }}>{'-'.repeat(padCount)}</span>
+          </span>
+        );
+      } else {
+        rows[i].push(
+          <span key={rows[i].length} style={{ color: DIM }}>
+            {'-'.repeat(DS_COL_WIDTH)}
+          </span>
+        );
+      }
+    }
   });
-  for (let i = 0; i < 6; i++) rows[i] += '-'.repeat(DS_COL_WIDTH * rightFiller);
-  const text = STR_LABELS_TTB.map((label, li) => {
-    const si = 5 - li;
-    return `${label} |--${rows[si]}--|`;
-  }).join('\n');
-  return <span ref={blockRef} style={{ display: 'inline-block' }}>{text}</span>;
+
+  pushFiller(rightFiller);
+
+  return (
+    <>
+      {STR_LABELS_TTB.map((label, li) => {
+        const si = 5 - li;
+        return (
+          <div key={li} style={{ whiteSpace: 'nowrap' }}>
+            <span ref={el => { if (rowRefsContainer) rowRefsContainer.current[li] = el; }} style={{ display: 'inline-block' }}>
+              <span style={{ color: DIM }}>{label} |--</span>
+              {rows[si]}
+              <span style={{ color: DIM }}>--|</span>
+            </span>
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
-function renderChords(chords, targetColumns = chords.length, blockRef = null) {
-  // CHORD_COL_WIDTH is likewise a global constant now, for the same
-  // reason as DS_COL_WIDTH above.
+// chordRoots is an array parallel to `chords`, one { root, quality } (or
+// null) per column — since each position in a chord riff is its own
+// chord with its own root, unlike the single shared root every other
+// mode uses. See parseChordName / chordDegreeFor above.
+function renderChords(chords, chordRoots, targetColumns = chords.length, rowRefsContainer = null) {
+  const DIM = '#aaaaaa';
+  const rows = {};
+  for (let i = 0; i < 6; i++) rows[i] = [];
   const totalFiller = Math.max(0, targetColumns - chords.length);
   const leftFiller = Math.floor(totalFiller / 2);
   const rightFiller = totalFiller - leftFiller;
-  const rows = {};
-  for (let i = 0; i < 6; i++) rows[i] = '-'.repeat(CHORD_COL_WIDTH * leftFiller);
-  chords.forEach(c => {
-    for (let i = 0; i < 6; i++)
-      rows[i] += (c[i] !== undefined ? String(c[i]) : '-').padEnd(CHORD_COL_WIDTH,'-');
+
+  const pushFiller = (count) => {
+    if (count <= 0) return;
+    for (let i = 0; i < 6; i++) {
+      rows[i].push(
+        <span key={`filler-${rows[i].length}`} style={{ color: DIM }}>
+          {'-'.repeat(CHORD_COL_WIDTH * count)}
+        </span>
+      );
+    }
+  };
+  pushFiller(leftFiller);
+
+  chords.forEach((c, colIdx) => {
+    const rootInfo = chordRoots ? chordRoots[colIdx] : null;
+    for (let i = 0; i < 6; i++) {
+      const raw = c[i];
+      const isFretted = raw !== undefined && raw !== 'x';
+      if (isFretted) {
+        const cell = String(raw);
+        const degree = chordDegreeFor(i, raw, rootInfo);
+        const isRoot = degree === '1';
+        const isThirdOrFifth = degree === '3' || degree === '5';
+        const color = DEGREE_COLORS[degree];
+        const padCount = CHORD_COL_WIDTH - cell.length;
+        const circleStyle = isRoot
+          ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: '1.6em', height: '1.6em', borderRadius: '50%',
+              backgroundColor: color, zIndex: 0 }
+          : isThirdOrFifth
+          ? { position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
+              width: '1.6em', height: '1.6em', borderRadius: '50%',
+              border: `1.5px solid ${color}`, zIndex: 0 }
+          : null;
+        const textStyle = { position: 'relative', zIndex: 1, fontWeight: '700',
+          color: isRoot ? '#111' : isThirdOrFifth ? color : '#fff' };
+        rows[i].push(
+          <span key={rows[i].length}>
+            <span style={{ position: 'relative', display: 'inline-block' }}>
+              {circleStyle && <span style={circleStyle} />}
+              <span style={textStyle}>{cell}</span>
+            </span>
+            <span style={{ color: DIM }}>{'-'.repeat(padCount)}</span>
+          </span>
+        );
+      } else {
+        // 'x' (explicitly muted string) still shows the character;
+        // a genuinely absent string (not part of the voicing) is just
+        // dashes — same distinction the plain-text version had.
+        const cell = raw === 'x' ? 'x' : '';
+        const padCount = CHORD_COL_WIDTH - cell.length;
+        rows[i].push(
+          <span key={rows[i].length} style={{ color: DIM }}>
+            {cell}{'-'.repeat(padCount)}
+          </span>
+        );
+      }
+    }
   });
-  for (let i = 0; i < 6; i++) rows[i] += '-'.repeat(CHORD_COL_WIDTH * rightFiller);
-  const text = STR_LABELS_TTB.map((label, li) => {
-    const si = 5 - li;
-    return `${label} |--${rows[si]}--|`;
-  }).join('\n');
-  return <span ref={blockRef} style={{ display: 'inline-block' }}>{text}</span>;
+
+  pushFiller(rightFiller);
+
+  return (
+    <>
+      {STR_LABELS_TTB.map((label, li) => {
+        const si = 5 - li;
+        return (
+          <div key={li} style={{ whiteSpace: 'nowrap' }}>
+            <span ref={el => { if (rowRefsContainer) rowRefsContainer.current[li] = el; }} style={{ display: 'inline-block' }}>
+              <span style={{ color: DIM }}>{label} |--</span>
+              {rows[si]}
+              <span style={{ color: DIM }}>--|</span>
+            </span>
+          </div>
+        );
+      })}
+    </>
+  );
 }
+
 
 // Box licks are generated per-lick against whichever root that specific
 // lick was built on (A/E/D for minor pentatonic, G/C for major pentatonic,
@@ -2392,14 +2567,6 @@ export default function Practice() {
 
   const items = getItems();
 
-  // For the three plain-text render types, a single measured element is
-  // enough (no per-row badge-width inconsistency to guard against like
-  // box mode has) — but this replaces the WHOLE rowRefsContainer array
-  // rather than just writing to index 0, so switching from box mode
-  // (which populates up to 6 entries) can't leave stale leftover refs
-  // behind that would corrupt the next measurement.
-  const singleBlockRef = (isFirst) => (isFirst ? (el) => { rowRefsContainer.current = [el]; } : null);
-
   const renderItem = (item, idx) => {
     if (mode === 'licks') {
       if (isBoxMode) {
@@ -2421,11 +2588,15 @@ export default function Practice() {
       }
       const notes = root ? transposeLick(item.notes, effectiveGroup, root) : item.notes;
       const isFirst = idx === 0;
+      // Root for degree coloring: the key the user actually selected
+      // (notes were transposed into it) if one is set, otherwise the
+      // lick's own natural root parsed from "A Minor Pentatonic" etc.
+      const noteRoot = root || (item.scale ? item.scale.split(' ')[0] : null);
       return <TabCard
         key={item.id||idx}
         title={item.scale}
         subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'}
-        tab={renderSingleNote(notes, MAX_FREE_LICK_NOTES, singleBlockRef(isFirst))}
+        tab={renderSingleNote(notes, effectiveGroup, noteRoot, MAX_FREE_LICK_NOTES, isFirst ? rowRefsContainer : null)}
         difficulty={item.difficulty}
         wrapperRef={isFirst ? wrapperMeasureRef : null}
         computedWidth={computedBoxWidth}
@@ -2437,11 +2608,12 @@ export default function Practice() {
     if (mode === 'doublestops') {
       const pairs = root ? transposeDS(item.pairs, effectiveGroup, root) : item.pairs;
       const isFirst = idx === 0;
+      const dsRoot = root || (item.scale ? item.scale.split(' ')[0] : null);
       return <TabCard
         key={item.id||idx}
         title={item.scale}
         subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'}
-        tab={renderDoubleStop(pairs, MAX_DS_PAIRS, singleBlockRef(isFirst))}
+        tab={renderDoubleStop(pairs, effectiveGroup, dsRoot, MAX_DS_PAIRS, isFirst ? rowRefsContainer : null)}
         difficulty={item.difficulty}
         wrapperRef={isFirst ? wrapperMeasureRef : null}
         computedWidth={computedBoxWidth}
@@ -2456,12 +2628,16 @@ export default function Practice() {
         Object.entries(c).forEach(([k,v]) => { out[parseInt(k)] = v === 'x' ? 'x' : parseInt(v); });
         return out;
       });
+      // Each position in a riff is its own chord (e.g. the "F#m" in
+      // "A-F#m-D") — parse the name string to recover each one's own
+      // root/quality for per-chord degree coloring.
+      const chordRoots = item.name.split('-').map(parseChordName);
       const isFirst = idx === 0;
       return <TabCard
         key={item.name+item.key+idx}
         title={item.name}
         subtitle={`Key of ${item.key}`}
-        tab={renderChords(chords, MAX_CHORD_COUNT, singleBlockRef(isFirst))}
+        tab={renderChords(chords, chordRoots, MAX_CHORD_COUNT, isFirst ? rowRefsContainer : null)}
         wrapperRef={isFirst ? wrapperMeasureRef : null}
         computedWidth={computedBoxWidth}
         computedMarginLeft={computedMarginLeft}
