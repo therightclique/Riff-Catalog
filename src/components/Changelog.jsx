@@ -2,6 +2,72 @@ import { useState } from 'react';
 
 const CHANGELOG = [
   {
+    date: '2026-08-22',
+    displayDate: 'August 22, 2026',
+    version: '1.9',
+    entries: [
+      {
+        title: 'Pinch-to-zoom for every diagram',
+        items: [
+          'Tap any diagram — box licks, free licks, double stops, chord riffs, the fretboard, or Key Finder\u2019s chord shapes — to open it full-screen',
+          'Pinch to zoom, drag to pan once zoomed in, double-tap to reset',
+          'Zooms to fill the screen automatically on open, and re-fits itself if you rotate to landscape',
+          'A toggle next to the back button switches between a lick or chord diagram and the fretboard for its key, when one is known',
+          'Zooming in scales the whole page together (title, toggle, diagram, and the pinch-to-zoom hint) rather than leaving a fixed header and footer eating into the screen — only the back button stays put, so there\u2019s always a way out',
+        ],
+      },
+      {
+        title: 'Pentatonic box licks rebuilt for playability',
+        items: [
+          'Every note is now guaranteed within 5 frets of the one before it — licks that used to leap from, say, fret 6 to fret 21 no longer happen',
+          'Removed jarring repeated-pitch transitions: the same note played on a different string, or the same note in a different octave, back to back',
+          'Fixed a transposition bug that could stretch a tight box shape out to an 11-fret spread in certain keys',
+          'All 750 box licks regenerated under these corrected rules',
+        ],
+      },
+      {
+        title: 'Scale-degree coloring, root/3rd/5th',
+        items: [
+          'Root, 3rd, and 5th are individually color-coded (red / orange / yellow) across box licks and the fretboard overview',
+          'Root shown as a filled circle, 3rd and 5th as hollow circles in their own color; every other note renders in white for contrast against the grid',
+          'Fretboard\u2019s open-string tuning labels now match the coloring of whatever scale degree that string plays',
+        ],
+      },
+      {
+        title: 'Box lick diagram alignment and sizing',
+        items: [
+          'Fixed misaligned pipes and dashes that made some strings\u2019 measures wider than others',
+          'Every box-mode card is now a consistent size, with content centered and sized to fit the screen without needing to scroll',
+        ],
+      },
+      {
+        title: 'Library: bulk actions and Song Idea box',
+        items: [
+          'Download and Delete are now bulk actions — check the clips you want, then Download, Delete, or Clear the selection, icon-only',
+          'Bulk delete asks for one confirmation covering everything selected, rather than one per clip',
+          'Collapsed cards show key, tempo, and date each on their own centered line under the clip name',
+          'Bigger, clearer pencil icon on the rename button',
+          'New Song Idea box on expanded clips — pull a saved idea straight from the Randomizer via a dropdown, and it saves with the rest of the clip\u2019s metadata',
+        ],
+      },
+      {
+        title: 'App-wide back button',
+        items: [
+          'A back button at the top of the app now returns to whatever tab and state you were last on — filters, expanded cards, scroll position, and all — instead of losing it when you switch tabs',
+        ],
+      },
+      {
+        title: 'Randomizer wheel momentum',
+        items: [
+          'Flicking the wheel now spins it with real momentum, decelerating gradually to a stop, instead of only supporting a direct 1:1 drag',
+          'Grabbing the wheel mid-spin stops it immediately, the way a real wheel would',
+          'Saved song idea filenames no longer include seconds (e.g. "Idea (2026-08-21--23-36)")',
+          'Previous/next buttons on either side of the category dropdown, with a position counter',
+        ],
+      },
+    ],
+  },
+  {
     date: '2026-08-21',
     displayDate: 'August 21, 2026',
     version: '1.8',

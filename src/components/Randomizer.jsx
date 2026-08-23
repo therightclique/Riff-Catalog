@@ -61,8 +61,17 @@ const SNAP_DURATION_MS = 300;
 // ── Momentum tuning ──────────────────────────────────────────────────────
 // Velocity is tracked in degrees/millisecond throughout.
 const FLICK_VELOCITY_THRESHOLD = 0.15; // release speed above this counts as a flick, not just a slow drag-release
-const MOMENTUM_MIN_VELOCITY = 0.02;    // below this, momentum has decayed enough to stop and snap
-const MOMENTUM_DECAY_PER_MS = 0.997;   // exponential decay factor — tuned so a hard flick coasts for roughly 1-2 seconds
+// Was 0.02 — at that speed the wheel was still visibly rotating (~20°/s)
+// when momentum handed off to the snap animation, which is exactly what
+// read as a sudden stop followed by a jerk to the resting position.
+// Coasting down to a much smaller speed first makes that handoff nearly
+// invisible, since there's barely any motion left to interrupt.
+const MOMENTUM_MIN_VELOCITY = 0.008;
+// Was 0.997, which decayed roughly twice as fast as it should have —
+// halving the log-rate (0.9985 takes about 2x as long to decay by the
+// same proportion) makes the deceleration read as gradual rather than
+// abrupt.
+const MOMENTUM_DECAY_PER_MS = 0.9985;
 const VELOCITY_SAMPLE_WINDOW_MS = 100; // how far back to look when estimating release velocity, so a single noisy last-frame sample doesn't dominate
 
 // ── Geometry helpers ────────────────────────────────────────────────────
@@ -101,7 +110,7 @@ function nearestSliceIndex(rotation, n) {
 
 // ── Wheel ────────────────────────────────────────────────────────────────
 
-function Wheel({ options, rotation, animating, transitionMs, onPointerDownWheel }) {
+function Wheel({ options, rotation, animating, transitionMs, easing = 'cubic-bezier(0.12, 0.67, 0.1, 1)', onPointerDownWheel }) {
   const size = 300;
   const cx = size / 2, cy = size / 2, r = size / 2 - 6;
   const n = options.length;
@@ -125,7 +134,7 @@ function Wheel({ options, rotation, animating, transitionMs, onPointerDownWheel 
           width: '100%', height: 'auto', display: 'block', borderRadius: '50%',
           transform: `rotate(${rotation}deg)`,
           transformOrigin: '50% 50%',
-          transition: animating ? `transform ${transitionMs}ms cubic-bezier(0.12, 0.67, 0.1, 1)` : 'none',
+          transition: animating ? `transform ${transitionMs}ms ${easing}` : 'none',
           boxShadow: '0 0 0 6px #1e1e1e, 0 4px 16px rgba(0,0,0,0.5)',
           userSelect: 'none',
         }}>
@@ -514,6 +523,13 @@ export default function Randomizer({ accessToken }) {
         rotation={rotation}
         animating={spinning || snapping}
         transitionMs={spinning ? SPIN_DURATION_MS : SNAP_DURATION_MS}
+        // The big multi-rotation button spin wants that dramatic fast-start
+        // curve (the Wheel default), but reusing it for the much shorter
+        // snap-to-slice — especially right after momentum coasting hands
+        // off at low speed — made the snap look like it lurched rather
+        // than settled. A plain ease-out (moderate start, gentle finish)
+        // suits a "come to rest" motion much better.
+        easing={spinning ? undefined : 'ease-out'}
         onPointerDownWheel={handlePointerDownWheel}
       />
 

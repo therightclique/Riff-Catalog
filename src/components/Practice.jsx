@@ -122,7 +122,7 @@ function transposeBoxLick(notes, lickRoot, targetRoot) {
 // against the target tones.
 const DEGREE_COLORS = {
   '1': '#ff4444',              // root — red, filled circle
-  '3': '#ff9d2e', 'b3': '#ff9d2e', // 3rd (major or minor) — orange, hollow circle
+  '3': '#bf5916', 'b3': '#bf5916', // 3rd (major or minor) — orange, hollow circle (matches the fretboard's 3rd color)
   '5': '#ffe14d',              // 5th — yellow, hollow circle
 };
 
@@ -2236,7 +2236,7 @@ function BoxLegend() {
   return (
     <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', marginBottom: '8px' }}>
       <span style={{ ...dotBase, backgroundColor: '#ff4444', color: '#111' }}>R</span>{' Root · '}
-      <span style={{ ...dotBase, border: '1.5px solid #ff9d2e', color: '#ff9d2e' }}>3</span>{' 3rd · '}
+      <span style={{ ...dotBase, border: '1.5px solid #bf5916', color: '#bf5916' }}>3</span>{' 3rd · '}
       <span style={{ ...dotBase, border: '1.5px solid #ffe14d', color: '#ffe14d' }}>5</span>{' 5th'}
       <span style={{ color: '#fff' }}>{' — the rest are passing tones'}</span>
     </p>

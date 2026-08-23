@@ -394,7 +394,7 @@ function App() {
 
   return (
     <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '16px' }}>
         {viewHistory.length > 0 && (
           <button onClick={goBack} aria-label="Back" style={{
             position: 'absolute', left: 0, background: 'none', border: '1px solid #ccc', borderRadius: '50%',
