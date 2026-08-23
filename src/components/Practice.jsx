@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { FretboardDiagram } from './FretboardDiagram';
-import { DiagramDetailView, ZoomableFretboard, BigTabDisplay } from './DiagramDetailView';
+import { DiagramDetailView, ZoomableFretboard, BigTabDisplay, ZoomHint } from './DiagramDetailView';
 
 const ALL_KEYS = [
   'A Major','A# Major','B Major','C Major','C# Major','D Major',
@@ -2140,6 +2140,13 @@ function deriveFretboardKey({ mode, effectiveGroup, item, selectedKey }) {
 
 function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitContent = false, wrapperRef = null, computedWidth = null, computedMarginLeft = null, onOpenDetail = null, fretboardKey = null }) {
   const diff = difficulty ? DIFF_COLORS[difficulty] : null;
+  const openDetail = onOpenDetail
+    ? () => onOpenDetail({
+        title, subtitle, difficulty,
+        content: <BigTabDisplay>{tab}</BigTabDisplay>,
+        secondaryContent: fretboardKey ? <FretboardDiagram selectedKey={fretboardKey} /> : null,
+      })
+    : undefined;
   return (
     <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
       <div style={{padding:'10px 16px',backgroundColor:'#f0f0f0',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'6px'}}>
@@ -2147,33 +2154,17 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
           <span style={{fontWeight:'600',fontSize:'14px'}}>{title}</span>
           {subtitle && <span style={{marginLeft:'10px',fontSize:'12px',color:'#666'}}>{subtitle}</span>}
         </div>
-        <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
-          {diff && (
-            <span style={{padding:'2px 8px',borderRadius:'20px',fontSize:'12px',fontWeight:'600',backgroundColor:diff.bg,color:diff.color,border:`1px solid ${diff.border}`}}>
-              {difficulty}
-            </span>
-          )}
-          {onOpenDetail && (
-            <button
-              onClick={() => onOpenDetail({
-                title, subtitle, difficulty,
-                content: <BigTabDisplay>{tab}</BigTabDisplay>,
-                secondaryContent: fretboardKey ? <FretboardDiagram selectedKey={fretboardKey} /> : null,
-              })}
-              aria-label="View full screen"
-              style={{
-                background:'none', border:'1px solid #ccc', borderRadius:'6px',
-                width:'28px', height:'28px', display:'flex', alignItems:'center',
-                justifyContent:'center', cursor:'pointer', fontSize:'14px', flexShrink:0,
-                color:'#555', padding:0,
-              }}>
-              🔍
-            </button>
-          )}
-        </div>
+        {diff && (
+          <span style={{padding:'2px 8px',borderRadius:'20px',fontSize:'12px',fontWeight:'600',backgroundColor:diff.bg,color:diff.color,border:`1px solid ${diff.border}`}}>
+            {difficulty}
+          </span>
+        )}
       </div>
-      <div ref={wrapperRef} style={{
-        padding:'12px 16px', display:'flex',
+      {/* The diagram itself is the click target (no icon button) — the
+          page-level ZoomHint above the list is what tells the user this
+          is tappable, once, rather than a badge on every single card. */}
+      <div ref={wrapperRef} onClick={openDetail} style={{
+        padding:'12px 16px', display:'flex', cursor: openDetail ? 'pointer' : 'default',
         // Centering is handled by an explicit computed marginLeft on the
         // pre itself (see computedMarginLeft in Practice()), not by
         // justify-content — CSS auto-centering didn't reliably center
@@ -2482,6 +2473,8 @@ export default function Practice() {
           {showAll?'Hide all':`Browse all (${items.length})`}
         </button>
       </div>
+
+      {((current && !showAll) || showAll) && items.length > 0 && <ZoomHint />}
 
       {current && !showAll && (
         <>

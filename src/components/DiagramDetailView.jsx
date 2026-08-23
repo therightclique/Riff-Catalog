@@ -1,37 +1,29 @@
 import { useState, useRef, useEffect } from 'react';
 import { FretboardDiagram } from './FretboardDiagram';
 
-// Small icon-only zoom trigger, reused everywhere a diagram needs one
-// (box lick / free lick / double stop / chord-tab cards, the standalone
-// fretboard, and the per-degree chord shape diagrams in Key Finder) so
-// the affordance looks and behaves identically across the app.
-export function ZoomButton({ onClick, style }) {
+// Single, page-level hint that diagrams are tappable to zoom — meant to
+// appear ONCE per page, not once per diagram.
+export function ZoomHint() {
   return (
-    <button
-      onClick={onClick}
-      aria-label="View full screen"
-      style={{
-        background: 'none', border: '1px solid #ccc', borderRadius: '6px',
-        width: '28px', height: '28px', display: 'flex', alignItems: 'center',
-        justifyContent: 'center', cursor: 'pointer', fontSize: '14px',
-        color: '#555', padding: 0, flexShrink: 0, ...style,
-      }}>
-      🔍
-    </button>
+    <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', margin: '4px 0 14px' }}>
+      🔍 Click to zoom
+    </p>
   );
 }
 
-// Wraps the standalone fretboard render with the same zoom affordance,
-// opening it directly into DiagramDetailView with no toggle needed.
+// Wraps the standalone fretboard render — the diagram itself is the
+// click target (no icon button), matching the original "make the
+// diagrams clickable" instruction. Discoverability comes from the
+// page-level ZoomHint, not a per-diagram badge.
 export function ZoomableFretboard({ selectedKey, onOpenDetail }) {
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', maxWidth: '520px', margin: '0 auto 4px' }}>
-        <ZoomButton onClick={() => onOpenDetail({
-          title: `Fretboard — ${selectedKey}`, subtitle: '', difficulty: null,
-          content: <FretboardDiagram selectedKey={selectedKey} />,
-        })} />
-      </div>
+    <div
+      onClick={() => onOpenDetail({
+        title: `Fretboard — ${selectedKey}`, subtitle: '', difficulty: null,
+        content: <FretboardDiagram selectedKey={selectedKey} />,
+      })}
+      style={{ cursor: 'pointer' }}
+    >
       <FretboardDiagram selectedKey={selectedKey} />
     </div>
   );

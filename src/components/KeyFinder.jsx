@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
-import { DiagramDetailView, ZoomableFretboard, ZoomButton } from './DiagramDetailView';
+import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -380,6 +380,8 @@ function KeyFinder({ onFilterByKey }) {
             </div>
           </div>
 
+          <ZoomHint />
+
           {/* Fretboard */}
           <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />
 
@@ -403,17 +405,9 @@ function KeyFinder({ onFilterByKey }) {
                         secondaryContent: <FretboardDiagram selectedKey={selectedKey} />,
                         secondaryLabel: 'Show fretboard', primaryLabel: 'Show chord',
                       })}
-                      style={{ cursor: 'pointer', position: 'relative' }}
+                      style={{ cursor: 'pointer' }}
                     >
                       <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
-                      <ZoomButton
-                        onClick={() => {}}
-                        style={{
-                          position: 'absolute', top: '-4px', right: '-4px',
-                          width: '18px', height: '18px', fontSize: '9px',
-                          backgroundColor: 'white', pointerEvents: 'none',
-                        }}
-                      />
                     </div>
                   </div>
                 );
