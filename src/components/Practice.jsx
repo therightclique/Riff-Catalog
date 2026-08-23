@@ -2121,7 +2121,7 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', fitConten
           {subtitle && <span style={{marginLeft:'10px',fontSize:'12px',color:'#666'}}>{subtitle}</span>}
         </div>
         {diff && (
-          <span style={{padding:'3px 10px',borderRadius:'20px',fontSize:'12px',fontWeight:'600',backgroundColor:diff.bg,color:diff.color,border:`1px solid ${diff.border}`}}>
+          <span style={{padding:'2px 8px',borderRadius:'20px',fontSize:'12px',fontWeight:'600',backgroundColor:diff.bg,color:diff.color,border:`1px solid ${diff.border}`}}>
             {difficulty}
           </span>
         )}
@@ -2319,8 +2319,8 @@ export default function Practice() {
         const isFirst = idx === 0;
         return <TabCard
           key={item.id||idx}
-          title={`${effectiveGroup} — Box ${selectedBox}`}
-          subtitle={selectedKey?`in ${selectedKey}`:`ref. root ${item.root}`}
+          title={`${effectiveGroup} - Box ${selectedBox}`}
+          subtitle={selectedKey?`in ${selectedKey}`:`Root ${item.root}`}
           tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? rowRefsContainer : null)}
           difficulty={item.difficulty}
           align="left"
