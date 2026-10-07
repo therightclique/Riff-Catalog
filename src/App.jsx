@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import Recorder from './components/Recorder';
-import { uploadToDrive } from './components/DriveUploader';
+import { uploadToDrive, verifyDriveFile } from './components/DriveUploader';
+import { savePending, updatePending, deletePending, listPendingSummaries, markInFlight, clearInFlight } from './components/OfflineStore';
+import { syncPendingClips } from './components/SyncService';
 import Library from './components/Library';
 import { analyzeAudio } from './components/AudioAnalyzer';
 import KeyFinder from './components/KeyFinder';
@@ -117,6 +119,34 @@ function App() {
   const [libraryHasUnsaved, setLibraryHasUnsaved] = useState(false);
   // True while the Recorder is actively capturing a take.
   const [isRecording, setIsRecording] = useState(false);
+
+  // ── Recordings saved on the device, waiting to reach Drive ──────────
+  // pendingClips holds summaries (no audio bytes) of everything in the
+  // on-device store, for the banner and the Library's orange cards.
+  const [pendingClips, setPendingClips] = useState([]);
+  const [isOnline, setIsOnline] = useState(() => navigator.onLine);
+  const [syncState, setSyncState] = useState(null);     // { running, done, total, currentId, currentName }
+  const [syncMessage, setSyncMessage] = useState(null); // { kind: 'ok' | 'warn', text }
+
+  const refreshPending = async () => {
+    try {
+      setPendingClips(await listPendingSummaries());
+    } catch (err) {
+      console.warn('[offline] could not read on-device recordings:', err);
+    }
+  };
+
+  useEffect(() => {
+    refreshPending();
+    const goOnline = () => { setIsOnline(true); refreshPending(); };
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
 
   // Navigation history for the app-wide back button. viewHistory is a
   // stack of previously-visited views (not including the current one);
@@ -266,6 +296,12 @@ function App() {
     setDuplicateWarning(null);
 
     const t0 = performance.now();
+    // The duplicate-name check needs Drive. With no connection or sign-in,
+    // skip it rather than stall on a request that can't succeed.
+    if (!accessToken || !navigator.onLine) {
+      await doUpload(clipName.trim());
+      return;
+    }
     try {
       const isDupe = await checkDuplicate(accessToken, clipName.trim());
       console.log(`[timing] duplicate check: ${Math.round(performance.now() - t0)}ms`);
@@ -282,33 +318,104 @@ function App() {
     await doUpload(clipName.trim());
   };
 
+  // Local-first save. Order matters — a recording is never at risk:
+  //   1. write it to the device (OfflineStore / IndexedDB)
+  //   2. if Drive is reachable, upload it
+  //   3. verify on Drive that the file exists at exactly the right size
+  //   4. only then delete the device copy
+  // Anything short of a verified upload (offline, signed out, expired
+  // token, Drive error, size mismatch) leaves it safely on the device to
+  // sync later. If the audio verifies but its metadata file failed, the
+  // device copy is kept with driveAudioId set, so the next sync only has
+  // to send the metadata instead of uploading a duplicate clip.
   const doUpload = async (name) => {
     setUploading(true);
     setDuplicateWarning(null);
     const t0 = performance.now();
-    try {
-      const initialMetadata = {
-        dateRecorded: new Date().toISOString(),
-        key: selectedKey || '',
-        bpm: analysis?.bpm?.toString() || '',
-        candidates: analysis?.candidates || [],
-      };
-      const result = await uploadToDrive(
-        accessToken, pendingRecording.blob, name,
-        pendingRecording.mimeType, initialMetadata
-      );
-      console.log(`[timing] uploadToDrive total: ${Math.round(performance.now() - t0)}ms`);
-      setLastUpload(result);
+    const { blob, mimeType } = pendingRecording;
+    const initialMetadata = {
+      dateRecorded: new Date().toISOString(),
+      key: selectedKey || '',
+      bpm: analysis?.bpm?.toString() || '',
+      candidates: analysis?.candidates || [],
+      analyzerVersion: analysis?.analyzerVersion || null,
+    };
+
+    const finishReview = (saved) => {
+      setLastUpload(saved);
       setLibraryRefreshToken(t => t + 1);
       setPendingRecording(null);
       setClipName('');
       setAnalysis(null);
       setSelectedKey(null);
       setShowOtherKey(false);
+    };
+
+    // 1. Device first.
+    let local = null;
+    try {
+      local = await savePending({ name, mimeType, blob, metadata: initialMetadata });
     } catch (err) {
-      alert('Upload failed. Please try again.');
-      console.error(err);
+      console.error('[offline] could not save on device:', err);
     }
+
+    // While this save is uploading, keep the sync service's hands off it —
+    // otherwise a "Sync now" tapped at the same moment would upload the
+    // same recording a second time.
+    if (local) markInFlight(local.id);
+    const settle = async () => {
+      if (local) clearInFlight(local.id);
+      await refreshPending();
+    };
+
+    // 2–4. Drive, if there's any chance of reaching it.
+    if (accessToken && navigator.onLine) {
+      try {
+        const result = await uploadToDrive(
+          accessToken, blob, name, mimeType, initialMetadata, local?.createdTime, local?.id
+        );
+        console.log(`[timing] uploadToDrive total: ${Math.round(performance.now() - t0)}ms`);
+        const verified = await verifyDriveFile(accessToken, result.id, blob.size);
+
+        if (verified && result.sidecarSaved) {
+          if (local) await deletePending(local.id);
+          finishReview({ name: result.name, offline: false });
+          await settle();
+          setUploading(false);
+          return;
+        }
+
+        // Audio may well be on Drive — remember where, so sync can
+        // re-verify it instead of uploading a second copy.
+        if (local) {
+          await updatePending(local.id, {
+            driveAudioId: result.id,
+            driveAudioName: result.name,
+            sidecarSaved: result.sidecarSaved,
+          });
+        }
+        if (verified) {
+          console.warn('[upload] audio confirmed on Drive, but its details file failed — kept for next sync');
+          finishReview({ name: result.name, offline: false, detailsPending: !!local });
+          await settle();
+          setUploading(false);
+          return;
+        }
+        console.warn('[upload] could not verify upload on Drive — keeping device copy');
+      } catch (err) {
+        console.error('[upload] Drive upload failed — keeping device copy:', err);
+      }
+    }
+
+    // Not confirmed on Drive.
+    if (local) {
+      finishReview({ name: local.name, offline: true });
+    } else {
+      // Couldn't save locally AND couldn't upload: keep the review screen
+      // up with the recording intact, exactly as before this change.
+      alert("Couldn't upload, and couldn't save on this device either. Your recording is still here — please try again.");
+    }
+    await settle();
     setUploading(false);
   };
 
@@ -415,8 +522,14 @@ function App() {
     // In standalone (home-screen) mode there's no address bar or browser
     // reload button, so this is the escape hatch when the app misbehaves
     // in other ways. Clear caches first so a stale bundle can't survive it.
+    //
+    // Only when online, though: these caches are also what lets the app
+    // launch offline (see public/sw.js). Clearing them with no connection
+    // would delete the only copy of the app, leaving it unable to load
+    // until internet returned. Offline, the reload still happens — it just
+    // reloads from the cached copy.
     try {
-      if (window.caches?.keys) {
+      if (navigator.onLine && window.caches?.keys) {
         const keys = await window.caches.keys();
         await Promise.all(keys.map(k => window.caches.delete(k)));
       }
@@ -426,6 +539,64 @@ function App() {
     window.location.replace(
       window.location.pathname + '?r=' + Date.now() + '&view=' + encodeURIComponent(view)
     );
+  };
+
+  // Uploads on-device recordings to Drive. Tapped by the user (banner or a
+  // card's Sync button) — never automatic. With no valid sign-in token the
+  // tap itself is used to reconnect first, which is also what lets the
+  // browser allow Google's sign-in popup.
+  const handleSync = async (onlyIds = null) => {
+    if (syncState?.running) return;
+    setSyncMessage(null);
+
+    let token = accessToken;
+    if (!token) {
+      const ok = await reconnectDrive();
+      if (!ok) {
+        setSyncMessage({ kind: 'warn', text: "Couldn't connect to Google Drive. Your recordings are safe on this device — tap Sync to try again." });
+        return;
+      }
+      try {
+        token = JSON.parse(localStorage.getItem('rc_drive_token') || 'null')?.token || null;
+      } catch { token = null; }
+      if (!token) return;
+    }
+
+    setSyncState({ running: true, done: 0, total: 0, currentId: null, currentName: null });
+    const result = await syncPendingClips(token, {
+      onlyIds,
+      onProgress: (p) => setSyncState({ running: true, ...p }),
+    });
+    setSyncState(null);
+    await refreshPending();
+    if (result.alreadyRunning) return;
+    if (result.synced > 0) setLibraryRefreshToken(t => t + 1);
+
+    if (result.authExpired) {
+      // The stored token is dead — clear it so the next tap reconnects.
+      setAccessToken(null);
+      try { localStorage.removeItem('rc_drive_token'); } catch { /* ignore */ }
+      setSyncMessage({ kind: 'warn', text: 'Your Google sign-in expired. Your recordings are safe on this device — tap Sync again to reconnect and finish.' });
+    } else if (result.failed.length > 0) {
+      const n = result.failed.length;
+      setSyncMessage({ kind: 'warn', text: `${n} recording${n === 1 ? '' : 's'} couldn't be synced yet. ${n === 1 ? 'It is' : 'They are'} still safe on this device — tap Sync to retry.` });
+    } else if (result.synced > 0) {
+      setSyncMessage({ kind: 'ok', text: result.synced === 1 ? '✅ Synced to Google Drive!' : `✅ All ${result.synced} recordings synced to Google Drive!` });
+      setTimeout(() => setSyncMessage(null), 5000);
+    }
+  };
+
+  // Removing a recording from the device without uploading it. Confirmed
+  // first, because for an un-uploaded recording this is permanent.
+  const handleDiscardPending = async (id) => {
+    const rec = pendingClips.find(r => r.id === id);
+    if (!rec) return;
+    const msg = rec.driveAudioId
+      ? `Remove the device copy of "${rec.name}"? The audio is already on Google Drive.`
+      : `Delete "${rec.name}" from this device?\n\nIt has NOT been uploaded to Google Drive, so this can't be undone.`;
+    if (!window.confirm(msg)) return;
+    await deletePending(id);
+    await refreshPending();
   };
 
   return (
@@ -479,7 +650,7 @@ function App() {
             <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '14px' }}>Sign out</button>
           </p>
 
-          {!accessToken && (
+          {!accessToken && isOnline && (
             <button
               onClick={async () => { setReconnecting(true); await reconnectDrive(); setReconnecting(false); }}
               disabled={reconnecting}
@@ -491,6 +662,42 @@ function App() {
               }}>
               {reconnecting ? '⏳ Reconnecting to Drive…' : '⏳ Drive disconnected — tap to reconnect'}
             </button>
+          )}
+
+          {/* Recordings waiting on the device. Shown on every tab, so it's
+              visible the moment the connection returns. */}
+          {pendingClips.length > 0 && (
+            <div style={{
+              margin: '0 0 16px', padding: '10px 14px', backgroundColor: '#fff1e0',
+              border: '1px solid #f0a050', borderRadius: '8px', color: '#7a4200',
+              fontSize: '13px', textAlign: 'center',
+            }}>
+              {syncState?.running ? (
+                <>🔄 Syncing {Math.min(syncState.done + 1, Math.max(syncState.total, 1))} of {syncState.total || pendingClips.length}…
+                  {syncState.currentName && <span style={{ display: 'block', fontSize: '12px', opacity: 0.8 }}>{syncState.currentName}</span>}
+                </>
+              ) : isOnline ? (
+                <>
+                  📱 {pendingClips.length} recording{pendingClips.length === 1 ? '' : 's'} saved on this device, not on Drive yet
+                  <button onClick={() => handleSync()} style={{
+                    display: 'block', margin: '8px auto 0', padding: '6px 18px', backgroundColor: '#e07a10',
+                    color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                  }}>Sync now</button>
+                </>
+              ) : (
+                <>📴 Offline — {pendingClips.length} recording{pendingClips.length === 1 ? '' : 's'} saved safely on this device. You can sync {pendingClips.length === 1 ? 'it' : 'them'} when you're back online.</>
+              )}
+            </div>
+          )}
+          {syncMessage && (
+            <div style={{
+              margin: '0 0 16px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', textAlign: 'center',
+              backgroundColor: syncMessage.kind === 'ok' ? '#e6f6ea' : '#fff4e0',
+              border: `1px solid ${syncMessage.kind === 'ok' ? '#9fd4ab' : '#f0c060'}`,
+              color: syncMessage.kind === 'ok' ? '#1f6b34' : '#7a5000',
+            }}>
+              {syncMessage.text}
+            </div>
           )}
 
           <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -506,11 +713,23 @@ function App() {
               {!pendingRecording ? (
                 <>
                   <Recorder onRecordingComplete={handleRecordingComplete} onRecordingStateChange={setIsRecording} />
-                  {lastUpload && (
-                    <p style={{ color: 'green', marginTop: '16px' }}>
-                      ✅ Saved: <strong>{lastUpload.name}</strong>
+                  {lastUpload && (lastUpload.offline ? (
+                    <p style={{ color: '#d97706', marginTop: '16px', textAlign: 'center', maxWidth: '400px' }}>
+                      📱 Saved on this device: <strong>{lastUpload.name}</strong>
+                      <br />
+                      <span style={{ fontSize: '13px' }}>When you're back online, tap "Sync now" at the top to upload it to Google Drive.</span>
                     </p>
-                  )}
+                  ) : (
+                    <p style={{ color: 'green', marginTop: '16px', textAlign: 'center', maxWidth: '400px' }}>
+                      ✅ Saved: <strong>{lastUpload.name}</strong>
+                      {lastUpload.detailsPending && (
+                        <>
+                          <br />
+                          <span style={{ fontSize: '13px', color: '#d97706' }}>Its key/tempo details will be attached on the next sync.</span>
+                        </>
+                      )}
+                    </p>
+                  ))}
                   <p style={{ marginTop: '24px', fontSize: '13px', color: '#888', textAlign: 'center', maxWidth: '400px' }}>
                     🗂 Your recordings are saved to your Google Drive in a folder called <strong>RiffCatalog</strong>. Only you can access them — this app cannot see anything else in your Drive.
                   </p>
@@ -660,6 +879,11 @@ function App() {
                 onFilterConsumed={() => setKeyFinderFilter(null)}
                 refreshToken={libraryRefreshToken}
                 onUnsavedChange={setLibraryHasUnsaved}
+                pendingClips={pendingClips}
+                isOnline={isOnline}
+                syncState={syncState}
+                onSyncPending={handleSync}
+                onDiscardPending={handleDiscardPending}
               />
             </div>
           )}

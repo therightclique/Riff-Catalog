@@ -11,22 +11,57 @@ async function getParentFolderId(accessToken, fileId) {
   return data.parents ? data.parents[0] : null;
 }
 
-// Fetch ALL sidecar JSON files in one Drive API call, then match them to
-// audio clips locally by filename. This replaces making one search request
-// per clip, which is what was causing the library to slow down as the
-// number of recordings grew.
-export async function loadAllMetadata(accessToken, clips) {
+// ── Sidecar content cache ───────────────────────────────────────────────
+// Downloading every sidecar's content (one request per clip) was the
+// dominant cost of opening the Library. Drive reports each file's
+// modifiedTime in the listing we already make, so content is cached on the
+// device keyed by sidecar id and only re-downloaded when that file has
+// actually changed (a save, an edit made on another device, …). Pruned to
+// the current sidecars on every load so it can't grow without bound.
+// Purely an optimization: any storage failure just means a full download.
+const SIDECAR_CACHE_KEY = 'riffcatalog:sidecarCache:v1';
+
+function readSidecarCache() {
+  try {
+    return JSON.parse(localStorage.getItem(SIDECAR_CACHE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function writeSidecarCache(cache) {
+  try {
+    localStorage.setItem(SIDECAR_CACHE_KEY, JSON.stringify(cache));
+  } catch (err) {
+    console.warn('Sidecar cache write failed (will re-download next time):', err);
+  }
+}
+
+// Lists every metadata sidecar (one paged Drive query). Exported separately
+// so the Library can run it at the same time as the audio-file listing —
+// the two don't depend on each other.
+export async function listSidecars(accessToken) {
   const query = `mimeType='application/json' and trashed=false`;
   let sidecarFiles = [];
   let pageToken = null;
 
   do {
-    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,createdTime),nextPageToken&orderBy=createdTime&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,createdTime,modifiedTime),nextPageToken&orderBy=createdTime&pageSize=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
     const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     const data = await res.json();
     sidecarFiles = sidecarFiles.concat(data.files || []);
     pageToken = data.nextPageToken || null;
   } while (pageToken);
+
+  return sidecarFiles;
+}
+
+// Matches sidecars to audio clips locally by filename, then fills in
+// content — from the device cache when unchanged, from Drive otherwise.
+// Pass the result of listSidecars() to skip the listing step; omitted, it
+// lists them itself (same behaviour as before for any other caller).
+export async function loadAllMetadata(accessToken, clips, sidecarFilesIn = null) {
+  const sidecarFiles = sidecarFilesIn || await listSidecars(accessToken);
 
   // Group sidecars by name so we can detect and clean up duplicates,
   // same as the old per-clip logic did.
@@ -55,28 +90,56 @@ export async function loadAllMetadata(accessToken, clips) {
   // sidecar, but no search step first — this is the expensive part we
   // couldn't eliminate, since Drive doesn't support fetching many files'
   // content in a single request).
-  const sidecarIdByClipName = {};
+  const sidecarByClipId = {};
   for (const clip of clips) {
     const jsonName = sidecarName(clip.name);
     if (byName[jsonName]) {
-      sidecarIdByClipName[clip.id] = byName[jsonName][0].id;
+      sidecarByClipId[clip.id] = byName[jsonName][0];
     }
   }
 
+  const cache = readSidecarCache();
+  const nextCache = {};
+  let fromCache = 0;
+  let downloaded = 0;
+  const t0 = performance.now();
+
   const contentEntries = await Promise.all(
-    Object.entries(sidecarIdByClipName).map(async ([clipId, sidecarId]) => {
+    Object.entries(sidecarByClipId).map(async ([clipId, sidecar]) => {
+      const cached = cache[sidecar.id];
+      if (cached && sidecar.modifiedTime && cached.modifiedTime === sidecar.modifiedTime) {
+        fromCache++;
+        nextCache[sidecar.id] = cached;
+        return [clipId, { ...cached.data, _sidecarId: sidecar.id }];
+      }
       try {
         const contentRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files/${sidecarId}?alt=media`,
+          `https://www.googleapis.com/drive/v3/files/${sidecar.id}?alt=media`,
           { headers: { Authorization: `Bearer ${accessToken}` } }
         );
+        if (!contentRes.ok) throw new Error(`HTTP ${contentRes.status}`);
         const metadata = await contentRes.json();
-        return [clipId, { ...metadata, _sidecarId: sidecarId }];
-      } catch {
-        return [clipId, { _sidecarId: sidecarId }];
+        downloaded++;
+        if (sidecar.modifiedTime) {
+          nextCache[sidecar.id] = { modifiedTime: sidecar.modifiedTime, data: metadata };
+        }
+        return [clipId, { ...metadata, _sidecarId: sidecar.id }];
+      } catch (err) {
+        // A failed download used to yield empty metadata — and saving the
+        // clip afterwards would then overwrite the real file with blanks.
+        // An older cached copy is a far safer fallback when one exists.
+        console.warn(`Sidecar download failed for ${sidecar.name}:`, err);
+        if (cached) {
+          nextCache[sidecar.id] = cached;
+          return [clipId, { ...cached.data, _sidecarId: sidecar.id }];
+        }
+        return [clipId, { _sidecarId: sidecar.id }];
       }
     })
   );
+
+  writeSidecarCache(nextCache);
+  console.log(`[timing] sidecar content: ${fromCache} from device cache, ${downloaded} downloaded, ${Math.round(performance.now() - t0)}ms`);
 
   const metadataMap = Object.fromEntries(contentEntries);
   // Clips with no sidecar at all

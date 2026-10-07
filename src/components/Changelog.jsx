@@ -2,6 +2,86 @@ import { useState } from 'react';
 
 const CHANGELOG = [
   {
+    date: '2026-10-06',
+    displayDate: 'October 6, 2026',
+    version: '2.0',
+    entries: [
+      {
+        title: 'Offline recording and sync',
+        items: [
+          'Recordings can now be made and saved with no internet connection \u2014 they\u2019re kept safely on the device until you\u2019re ready to sync them to Google Drive',
+          'Once it has been opened online, the installed app can launch with no connection at all',
+          'A banner at the top of every tab shows how many recordings are waiting, with a Sync now button once you\u2019re back online',
+          'Recordings still on the device appear in the Library as orange cards \u2014 play them, Sync one, Sync all, or remove one',
+          'A recording is only removed from the device after Google Drive confirms it arrived intact (exact file size) \u2014 never before',
+          'Syncing never creates duplicates, even if the app is closed in the middle of an upload',
+          'Recordings made offline are filed under the month they were recorded, not the month they were synced',
+        ],
+      },
+      {
+        title: 'Safer saving',
+        items: [
+          'Fixed uploads that Google Drive rejected (for example after your sign-in expired) being reported as saved while the recording was thrown away \u2014 a failed upload now keeps the recording and tells you',
+          'If a recording\u2019s audio uploads but its key/tempo details file fails, the details are retried and attached on the next sync instead of being lost',
+          'Every new recording is written to the device first, then uploaded and verified',
+        ],
+      },
+      {
+        title: 'Key detection fixed',
+        items: [
+          'Fixed a bug that made suggested keys wrong far more often than right. In testing, the key played now comes up first in most recordings, and is among the suggestions in all of them',
+          'The first two seconds of a recording now count for less \u2014 a single opening chord fits several keys, and used to outvote the rest of the take',
+          'Clips analyzed before this fix are re-analyzed when you tap Analyze (then Save Metadata to keep the result)',
+          'After recording, the notes of the selected key are shown so you can check the suggestion. They update when you pick a different key',
+        ],
+      },
+      {
+        title: 'Faster Library',
+        items: [
+          'The clip list now appears first, with keys and tempos filling in a moment later',
+          'The clip list and clip details are fetched at the same time instead of one after the other',
+          'Clip details are remembered on the device and only re-downloaded when they change',
+          'The Library refreshes by itself after you save a new clip, keeping your place on screen and any unsaved edits',
+        ],
+      },
+      {
+        title: 'Library: deleting, layout, and playback',
+        items: [
+          'Deleting several clips is much faster and shows live progress \u2014 "3/18 deleted" \u2014 ending with "All files deleted!". If some fail, they stay selected so you can retry',
+          'Recently Added now starts collapsed',
+          'Key and tempo share one line again: "A Minor - 120 BPM"',
+          'A timeline with a draggable slider and elapsed/total time appears on the clip that\u2019s playing, with \u27F2 5s and 5s \u27F3 buttons to jump back and forward',
+          'The round button is now play/pause. A clip that finishes stays loaded so you can drag back into it',
+        ],
+      },
+      {
+        title: 'Refresh button keeps your place',
+        items: [
+          'Refreshing the app now returns you to the tab you were on, freshly loaded',
+          'It warns first if a recording is in progress, a recording hasn\u2019t been saved, or Library details haven\u2019t been saved',
+        ],
+      },
+      {
+        title: 'Practice and Key Finder fixes',
+        items: [
+          'Double stops are now playable in every key. When moving a riff to another key would force a stretch of more than 5 frets with no open string, that pair is re-voiced on different strings using the same two notes',
+          'Tapping a chord shows the notes in it (root, 3rd, 5th) under the diagram',
+          'Tapping a mode in Key Finder shows all of its notes',
+          'Fixed the F chord, which appeared upside down in Practice chord riffs and in Key Finder',
+          'Fixed all diminished chord diagrams, which included notes that don\u2019t belong in the chord',
+          'Fixed Cm and Gm diagrams being cut off at the top',
+          'Key Finder\u2019s fretboard and chord diagrams open full-screen again when tapped',
+        ],
+      },
+      {
+        title: 'iPad layout',
+        items: [
+          'On iPad and other tablets the app now scales up to fill the screen instead of sitting in a narrow column, and re-scales when you rotate',
+        ],
+      },
+    ],
+  },
+  {
     date: '2026-08-22',
     displayDate: 'August 22, 2026',
     version: '1.9',

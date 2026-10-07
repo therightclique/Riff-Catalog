@@ -88,6 +88,13 @@ function demuxMp4ToAdts(arrayBuffer) {
   return adts;
 }
 
+// Bumped whenever key detection changes in a way that makes previously
+// saved results unreliable. Stored alongside candidates in each clip's
+// sidecar; the Library only reuses saved candidates whose version matches.
+// v2: fixed Meyda sample-rate/frame-size configuration (v1 results are
+// effectively random).
+export const ANALYZER_VERSION = 2;
+
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
 const MAJOR_PROFILE = [6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88];
@@ -135,10 +142,23 @@ function getChromaFromBuffer(channelData, sampleRate, bufferSize = 4096) {
   const accumChroma = new Array(12).fill(0);
   let frameCount = 0;
 
+  // Meyda.extract(features, signal, previousSignal) reads sample rate and
+  // frame size from Meyda's own global settings (defaults: 44100 Hz, 512)
+  // — it has no options argument. This previously passed
+  // { sampleRate, bufferSize } as the third argument, which Meyda treats
+  // as the *previous frame*, so the real settings were never applied:
+  // every frequency was mapped to the wrong pitch class, and in testing
+  // the true key ranked 18th–24th of 24. Meyda also builds its chroma
+  // filter bank once and caches it, so it has to be cleared whenever the
+  // sample rate or frame size could differ (e.g. 44.1k vs 48k sources).
+  Meyda.sampleRate = sampleRate;
+  Meyda.bufferSize = bufferSize;
+  Meyda.chromaFilterBank = undefined;
+
   for (let offset = 0; offset + bufferSize <= channelData.length; offset += bufferSize) {
     const frame = Array.from(channelData.slice(offset, offset + bufferSize));
     try {
-      const features = Meyda.extract(['chroma'], frame, { sampleRate, bufferSize });
+      const features = Meyda.extract(['chroma'], frame);
       if (features?.chroma) {
         for (let i = 0; i < 12; i++) accumChroma[i] += features.chroma[i];
         frameCount++;
@@ -265,10 +285,16 @@ export async function analyzeAudio(blob, capturedPcm = null) {
     const fullChroma = getChromaFromBuffer(channelData, sampleRate);
     const fullScores = scoreAllKeys(fullChroma);
 
-    // Blend: 60% opening bias, 40% full recording
+    // Blend: 25% opening bias, 75% full recording. The first 2 seconds is
+    // usually a single chord, which on its own fits several keys (a C chord
+    // is diatonic to C major, G major, E minor, …). At the previous 60%
+    // weight that ambiguity often outvoted the whole recording; in testing
+    // on 10 known progressions, 25% put the true key first in 6/10 vs 4/10
+    // (average rank 1.8 vs 2.4), while still nudging toward the opening.
+    const OPENING_WEIGHT = 0.25;
     const blendedScores = fullScores.map(fullEntry => {
       const openingEntry = openingScores.find(o => o.key === fullEntry.key);
-      const blendedScore = (openingEntry?.score || 0) * 0.6 + fullEntry.score * 0.4;
+      const blendedScore = (openingEntry?.score || 0) * OPENING_WEIGHT + fullEntry.score * (1 - OPENING_WEIGHT);
       return { key: fullEntry.key, score: blendedScore };
     });
 
@@ -289,6 +315,7 @@ export async function analyzeAudio(blob, capturedPcm = null) {
       candidates,
       bpm,
       keyConfidence: candidates[0].confidence,
+      analyzerVersion: ANALYZER_VERSION,
     };
   } catch (err) {
     console.error('Audio analysis failed:', err);

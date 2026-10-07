@@ -1,9 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
 import { fetchClips, getAudioUrl, trashFile, renameFile } from './DriveLibrary';
-import { loadMetadata, loadAllMetadata, saveMetadata } from './MetadataService';
+import { loadMetadata, loadAllMetadata, listSidecars, saveMetadata } from './MetadataService';
 import { listTextFiles, readTextFile } from './DriveUploader';
+import { getPending, pendingToBlob } from './OfflineStore';
 import MetadataEditor from './MetadataEditor';
-import { analyzeAudio } from './AudioAnalyzer';
+import { analyzeAudio, ANALYZER_VERSION } from './AudioAnalyzer';
 import FilterBar from './FilterBar';
 import { keyMatches } from './KeyUtils';
 
@@ -221,7 +222,10 @@ function RecentlyAdded({ clips, metadataMap, playingId, isPaused, audio, onPlay,
   );
 }
 
-function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken = 0, onUnsavedChange }) {
+function Library({
+  accessToken, initialKeyFilter, onFilterConsumed, refreshToken = 0, onUnsavedChange,
+  pendingClips = [], isOnline = true, syncState = null, onSyncPending, onDiscardPending,
+}) {
   const [clips, setClips] = useState([]);
   const [loading, setLoading] = useState(true);
   // playingId = the clip currently loaded in the player (playing OR
@@ -278,6 +282,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
   // app reload — which made freshly saved clips look missing.
   useEffect(() => {
     if (accessToken) loadClips();
+    else setLoading(false); // nothing to load yet — don't sit on "Loading…" (e.g. relaunched offline)
   }, [accessToken, refreshToken]);
 
   useEffect(() => {
@@ -287,12 +292,25 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
     }
   }, [initialKeyFilter]);
 
+  // Load order, tuned for speed (see [timing] lines in the Debug tab):
+  //   1. list audio files AND list metadata files at the same time
+  //      (previously one after the other — independent requests)
+  //   2. show the clip list immediately
+  //   3. fill in metadata — mostly from the device cache, downloading only
+  //      sidecars that are new or changed since last time
   const loadClips = async () => {
     setLoading(true);
+    const t0 = performance.now();
     try {
-      const results = await fetchClips(accessToken);
+      const [results, sidecars] = await Promise.all([
+        fetchClips(accessToken),
+        listSidecars(accessToken),
+      ]);
+      console.log(`[timing] library listing (${results.length} clips, ${sidecars.length} metadata files): ${Math.round(performance.now() - t0)}ms`);
       setClips(results);
-      const freshMap = await loadAllMetadata(accessToken, results);
+      setLoading(false); // list is usable now; details fill in below
+      const freshMap = await loadAllMetadata(accessToken, results, sidecars);
+      console.log(`[timing] library fully loaded: ${Math.round(performance.now() - t0)}ms`);
       // An automatic reload (e.g. after a new clip saves) must not clobber
       // edits the user hasn't saved yet — keep the in-memory version for
       // any clip still marked dirty.
@@ -327,7 +345,14 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
     }
     let url = audioUrls[clip.id];
     if (!url) {
-      url = await getAudioUrl(accessToken, clip.id);
+      if (clip.local) {
+        // Recording still on the device: play it from local storage.
+        const rec = await getPending(clip.id);
+        if (!rec) return;
+        url = URL.createObjectURL(pendingToBlob(rec));
+      } else {
+        url = await getAudioUrl(accessToken, clip.id);
+      }
       setAudioUrls(prev => ({ ...prev, [clip.id]: url }));
     }
     if (audioRef.current) audioRef.current.pause();
@@ -350,6 +375,15 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
     setPlayingId(null);
     setIsPaused(false);
   };
+
+  // A device recording that's playing disappears from the list when it
+  // finishes syncing or is discarded — unload it instead of leaving the
+  // player pointing at a card that's gone.
+  useEffect(() => {
+    if (playingId && String(playingId).startsWith('local-') && !pendingClips.some(r => r.id === playingId)) {
+      stopPlayback();
+    }
+  }, [pendingClips]);
 
   const handleSpeedChange = (speed) => {
     setPlaybackSpeed(speed);
@@ -401,8 +435,12 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
     // Clips analyzed at record time already have candidates stored in their
     // sidecar — reuse those instantly instead of re-decoding the file
     // (which iOS Safari cannot do for its own MediaRecorder output).
+    // Only reuse them if they came from the current analyzer — results
+    // saved before the v2 key-detection fix are effectively random, so
+    // those clips get re-analyzed instead.
     const storedCandidates = metadataMap[clip.id]?.candidates;
-    if (storedCandidates?.length > 0) {
+    const storedVersion = metadataMap[clip.id]?.analyzerVersion;
+    if (storedCandidates?.length > 0 && storedVersion === ANALYZER_VERSION) {
       setAnalysisCandidates(prev => ({ ...prev, [clip.id]: storedCandidates }));
       setAnalyzingId(null);
       return;
@@ -421,7 +459,15 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
         setAnalysisCandidates(prev => ({ ...prev, [clip.id]: result.candidates }));
         setMetadataMap(prev => ({
           ...prev,
-          [clip.id]: { ...prev[clip.id], key: result.key, bpm: result.bpm?.toString() || prev[clip.id]?.bpm || '' }
+          [clip.id]: {
+            ...prev[clip.id],
+            key: result.key,
+            bpm: result.bpm?.toString() || prev[clip.id]?.bpm || '',
+            // Saved with the clip on "Save Metadata", so the fresh results
+            // replace the stale ones and are reused next time.
+            candidates: result.candidates,
+            analyzerVersion: result.analyzerVersion,
+          }
         }));
         markDirty(clip.id);
       } else {
@@ -753,7 +799,86 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
     color: active ? 'white' : '#555',
   });
 
-  if (loading) return <p>Loading library...</p>;
+  // Full-page placeholder only on the very first load. Later reloads (e.g.
+  // the automatic one after saving a clip) keep the current list on screen,
+  // so the view — and your scroll position — doesn't get wiped each time.
+  // Recordings still on the device, drawn in orange so they can't be
+  // mistaken for clips already on Drive. Shown even while the Drive
+  // library is loading (or can't load, offline) — they're the one thing
+  // that's always available.
+  const syncBusy = !!syncState?.running;
+  const orangeBtn = (disabled) => ({
+    padding: '6px 14px', backgroundColor: disabled ? '#e8c9a0' : '#e07a10', color: 'white',
+    border: 'none', borderRadius: '6px', fontSize: '12px', fontWeight: '600',
+    cursor: disabled ? 'default' : 'pointer', flexShrink: 0,
+  });
+
+  const pendingSection = pendingClips.length > 0 && (
+    <div style={{ marginBottom: '16px', border: '1px solid #f0a050', borderRadius: '8px', overflow: 'hidden' }}>
+      <div style={{
+        padding: '8px 14px', backgroundColor: '#ffe3c2', color: '#8a4b00', fontSize: '13px', fontWeight: '600',
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
+      }}>
+        <span>📱 On this device — not on Drive yet ({pendingClips.length})</span>
+        {isOnline && !syncBusy && pendingClips.length > 1 && (
+          <button onClick={() => onSyncPending?.()} style={orangeBtn(false)}>Sync all</button>
+        )}
+      </div>
+      {pendingClips.map(rec => {
+        const syncingThis = syncBusy && syncState.currentId === rec.id;
+        const disabled = !isOnline || syncBusy;
+        const detail = [
+          formatDate(rec.createdTime),
+          rec.metadata?.key,
+          rec.metadata?.bpm ? `${rec.metadata.bpm} BPM` : null,
+          formatSize(rec.size),
+        ].filter(Boolean).join(' · ');
+        return (
+          <div key={rec.id} style={{ backgroundColor: '#fff3e0', borderTop: '1px solid #f5cf9f' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px' }}>
+              <button onClick={() => handlePlay({ id: rec.id, name: rec.name, local: true })} style={{
+                width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, border: 'none', cursor: 'pointer',
+                backgroundColor: playingId === rec.id && !isPaused ? '#cc0000' : '#e07a10', color: 'white', fontSize: '14px',
+              }}>
+                {playingId === rec.id && !isPaused ? '❚❚' : '▶'}
+              </button>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: '500', wordBreak: 'break-word' }}>{rec.name}</div>
+                <div style={{ fontSize: '12px', color: '#8a6a3a' }}>{detail}</div>
+                {rec.driveAudioId && (
+                  <div style={{ fontSize: '11px', color: '#8a6a3a' }}>Audio is already on Drive — finishing up</div>
+                )}
+              </div>
+              <button
+                onClick={() => onSyncPending?.([rec.id])}
+                disabled={disabled}
+                title={!isOnline ? 'Waiting for a connection' : 'Upload to Google Drive'}
+                style={orangeBtn(disabled)}>
+                {syncingThis ? 'Syncing…' : syncBusy ? 'Waiting…' : 'Sync'}
+              </button>
+              <button
+                onClick={() => onDiscardPending?.(rec.id)}
+                disabled={syncBusy}
+                title="Remove from this device"
+                style={{ background: 'none', border: 'none', fontSize: '16px', cursor: syncBusy ? 'default' : 'pointer', opacity: syncBusy ? 0.3 : 0.7, flexShrink: 0 }}>
+                🗑
+              </button>
+            </div>
+            {playingId === rec.id && <PlaybackBar audio={audioRef.current} isPaused={isPaused} />}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  if (loading && clips.length === 0) {
+    return (
+      <div style={{ marginTop: '20px' }}>
+        {pendingSection}
+        <p>Loading library...</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ marginTop: '20px' }}>
@@ -769,6 +894,14 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
           <button onClick={loadClips} style={{ padding: '6px 12px', cursor: 'pointer' }}>Refresh</button>
         </div>
       </div>
+
+      {!isOnline && (
+        <p style={{ fontSize: '12px', color: '#888', margin: '0 0 12px' }}>
+          📴 You're offline — your Drive library will load when you're back online.
+        </p>
+      )}
+
+      {pendingSection}
 
       {recentClips.length > 0 && (
         <RecentlyAdded

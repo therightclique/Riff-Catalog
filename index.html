@@ -47,6 +47,26 @@
     </style>
   </head>
   <body>
+    <script>
+      // Offline support: register the service worker (public/sw.js) so the
+      // installed app can launch with no internet. Skipped on dev servers —
+      // localhost and LAN IPs like 192.168.x.x from `npm run dev -- --host`
+      // — so it can never cache development files or interfere with
+      // hot reload.
+      (function () {
+        try {
+          var h = location.hostname;
+          var isDev = h === 'localhost' || h === '127.0.0.1' || /^\d+\.\d+\.\d+\.\d+$/.test(h);
+          if (!isDev && 'serviceWorker' in navigator) {
+            window.addEventListener('load', function () {
+              navigator.serviceWorker.register('/sw.js').catch(function (e) {
+                console.warn('Service worker registration failed:', e);
+              });
+            });
+          }
+        } catch (e) { /* offline support is optional; never block startup */ }
+      })();
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
