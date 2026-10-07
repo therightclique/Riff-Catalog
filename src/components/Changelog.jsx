@@ -15,6 +15,8 @@ const CHANGELOG = [
           'Recordings still on the device appear in the Library as orange cards \u2014 play them, Sync one, Sync all, or remove one',
           'A recording is only removed from the device after Google Drive confirms it arrived intact (exact file size) \u2014 never before',
           'Syncing never creates duplicates, even if the app is closed in the middle of an upload',
+          'If your Google sign-in expires during a sync, nothing is lost \u2014 the recordings stay on the device and the next Sync tap reconnects',
+          'Reopening the app offline no longer leaves the Library stuck on \u201CLoading\u2026\u201D, and the Drive reconnect prompt stays hidden while there\u2019s no connection to use it',
           'Recordings made offline are filed under the month they were recorded, not the month they were synced',
         ],
       },
@@ -67,7 +69,8 @@ const CHANGELOG = [
         items: [
           'Double stops are now playable in every key. When moving a riff to another key would force a stretch of more than 5 frets with no open string, that pair is re-voiced on different strings using the same two notes',
           'Tapping a chord shows the notes in it under the diagram',
-          'Chord diagrams now color the root, 3rd, and 5th in red, orange, and yellow \u2014 on the diagram itself and on the note names beneath it \u2014 matching the colors used on the Practice tab',
+          'Chord diagrams now color the root, 3rd, and 5th in red, orange, and yellow \u2014 matching the Practice tab \u2014 and write each note\u2019s name inside its dot, so you can read a chord at a glance. The same colors carry through to the note names beneath',
+          'Chord diagrams are 30% larger so the names are easy to read',
           'Tapping a mode in Key Finder shows all of its notes',
           'Fixed the F chord, which appeared upside down in Practice chord riffs and in Key Finder',
           'Fixed all diminished chord diagrams, which included notes that don\u2019t belong in the chord',
@@ -80,6 +83,7 @@ const CHANGELOG = [
         items: [
           'The major, minor, and diminished cards are now solid, saturated green, blue, and red, with larger bold note names \u2014 easy to read from a distance while you play',
           'The relative major or minor of the selected key is ringed and marked \u2194 on its card, with a line below naming it (for example, \u201CRelative minor: A Minor\u201D for C Major)',
+          'On the fretboard, the note letters on the red root circles are now dark, which reads better than white on red',
         ],
       },
       {
