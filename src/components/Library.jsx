@@ -90,7 +90,7 @@ function BulkEditor({ count, onApply, onCancel }) {
 }
 
 function RecentlyAdded({ clips, metadataMap, playingId, onPlay, formatDate }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   return (
     <div style={{ marginBottom: '16px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
       <div onClick={() => setOpen(!open)} style={{
@@ -136,7 +136,7 @@ function RecentlyAdded({ clips, metadataMap, playingId, onPlay, formatDate }) {
   );
 }
 
-function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
+function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken = 0, onUnsavedChange }) {
   const [clips, setClips] = useState([]);
   const [loading, setLoading] = useState(true);
   const [playingId, setPlayingId] = useState(null);
@@ -161,15 +161,35 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState(null); // { done, total, finished } while a bulk delete runs
   const [undoSnapshot, setUndoSnapshot] = useState(null);
   const [randomizerFiles, setRandomizerFiles] = useState(null); // null = not fetched yet
   const [loadingRandomizerFiles, setLoadingRandomizerFiles] = useState(false);
   const [songIdeaPickerFor, setSongIdeaPickerFor] = useState(null); // clip id whose picker is open
   const audioRef = useRef(null);
 
+  // Clip ids with metadata edits (editor fields, Song Idea, analysis
+  // results) not yet written to Drive via "Save Metadata". A ref so
+  // loadClips can read it synchronously mid-reload; changes are reported
+  // up to App so the global refresh button can warn before discarding.
+  const dirtyIdsRef = useRef(new Set());
+  const markDirty = (clipId) => {
+    const wasEmpty = dirtyIdsRef.current.size === 0;
+    dirtyIdsRef.current.add(clipId);
+    if (wasEmpty) onUnsavedChange?.(true);
+  };
+  const markClean = (clipId) => {
+    if (!dirtyIdsRef.current.delete(clipId)) return;
+    if (dirtyIdsRef.current.size === 0) onUnsavedChange?.(false);
+  };
+
+  // refreshToken is bumped by App after each successful save. Since tabs
+  // stay mounted (display toggle) rather than remounting on switch, the
+  // library would otherwise keep showing its first-load list until a full
+  // app reload — which made freshly saved clips look missing.
   useEffect(() => {
     if (accessToken) loadClips();
-  }, [accessToken]);
+  }, [accessToken, refreshToken]);
 
   useEffect(() => {
     if (initialKeyFilter) {
@@ -183,8 +203,18 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
     try {
       const results = await fetchClips(accessToken);
       setClips(results);
-      const metadataMap = await loadAllMetadata(accessToken, results);
-      setMetadataMap(metadataMap);
+      const freshMap = await loadAllMetadata(accessToken, results);
+      // An automatic reload (e.g. after a new clip saves) must not clobber
+      // edits the user hasn't saved yet — keep the in-memory version for
+      // any clip still marked dirty.
+      setMetadataMap(prev => {
+        const merged = { ...freshMap };
+        const stillExists = new Set(results.map(c => c.id));
+        dirtyIdsRef.current.forEach(id => {
+          if (prev[id] && stillExists.has(id)) merged[id] = prev[id];
+        });
+        return merged;
+      });
     } catch (err) {
       console.error('Failed to load clips:', err);
     }
@@ -242,12 +272,14 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
 
   const handleMetadataChange = (clipId, newMetadata) => {
     setMetadataMap(prev => ({ ...prev, [clipId]: newMetadata }));
+    markDirty(clipId);
   };
 
   const handleSaveMetadata = async (clip) => {
     setSavingId(clip.id);
     try {
       await saveMetadata(accessToken, clip.id, clip.name, metadataMap[clip.id]);
+      markClean(clip.id);
     } catch (err) {
       alert('Failed to save metadata.');
     }
@@ -284,6 +316,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
           ...prev,
           [clip.id]: { ...prev[clip.id], key: result.key, bpm: result.bpm?.toString() || prev[clip.id]?.bpm || '' }
         }));
+        markDirty(clip.id);
       } else {
         setAnalyzeFailed(prev => ({ ...prev, [clip.id]: 'Decoder returned no result.' }));
       }
@@ -337,26 +370,73 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
     }
   };
 
+  // Previously fully sequential — two Drive requests per clip, each awaited
+  // before the next began, so N clips meant 2N back-to-back round trips.
+  // Now each clip's audio + sidecar are trashed concurrently, with up to
+  // BULK_DELETE_CONCURRENCY clips in flight at once (kept modest so Drive
+  // doesn't start rate-limiting). bulkProgress drives the live "3/18
+  // deleted" counter. A failure on one clip no longer aborts the rest —
+  // whatever succeeded is still removed from the list, and the failures
+  // are reported at the end with those clips left selected for a retry.
+  const BULK_DELETE_CONCURRENCY = 4;
   const handleBulkDelete = async () => {
-    setBulkBusy(true);
     const idsToDelete = [...selectedIds];
-    try {
-      for (const clipId of idsToDelete) {
-        await trashFile(accessToken, clipId);
-        const sidecarId = metadataMap[clipId]?._sidecarId;
-        if (sidecarId) {
-          await trashFile(accessToken, sidecarId).catch(e => console.warn('Sidecar delete failed:', e));
+    const total = idsToDelete.length;
+    setBulkBusy(true);
+    setBulkProgress({ done: 0, total, finished: false });
+
+    const succeeded = new Set();
+    const failed = [];
+    let next = 0;
+    let done = 0;
+
+    const deleteOne = async (clipId) => {
+      const sidecarId = metadataMap[clipId]?._sidecarId;
+      await Promise.all([
+        trashFile(accessToken, clipId),
+        sidecarId
+          ? trashFile(accessToken, sidecarId).catch(e => console.warn('Sidecar delete failed:', e))
+          : Promise.resolve(),
+      ]);
+    };
+
+    const worker = async () => {
+      while (next < idsToDelete.length) {
+        const clipId = idsToDelete[next++];
+        try {
+          await deleteOne(clipId);
+          succeeded.add(clipId);
+        } catch (err) {
+          console.error('Delete failed for', clipId, err);
+          failed.push(clipId);
         }
+        done++;
+        setBulkProgress({ done, total, finished: false });
       }
-      setClips(prev => prev.filter(c => !selectedIds.has(c.id)));
-      if (selectedIds.has(expandedId)) setExpandedId(null);
-      setSelectedIds(new Set());
-      setConfirmBulkDelete(false);
-    } catch (err) {
-      console.error('Bulk delete failed:', err);
-      alert('Bulk delete failed: ' + err.message);
-    }
+    };
+
+    await Promise.all(
+      Array.from({ length: Math.min(BULK_DELETE_CONCURRENCY, total) }, worker)
+    );
+
+    setClips(prev => prev.filter(c => !succeeded.has(c.id)));
+    succeeded.forEach(id => markClean(id));
+    if (succeeded.has(expandedId)) setExpandedId(null);
+    setSelectedIds(new Set(failed));
     setBulkBusy(false);
+
+    if (failed.length > 0) {
+      setBulkProgress(null);
+      setConfirmBulkDelete(false);
+      alert(`${succeeded.size} of ${total} deleted. ${failed.length} failed and are still selected — try again.`);
+      return;
+    }
+
+    setBulkProgress({ done: total, total, finished: true });
+    setTimeout(() => {
+      setBulkProgress(null);
+      setConfirmBulkDelete(false);
+    }, 2000);
   };
 
   // Fetches the saved Randomizer song-idea text files once and caches the
@@ -463,6 +543,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
       const updated = { ...metadataMap[clipId], ...fields };
       setMetadataMap(prev => ({ ...prev, [clipId]: updated }));
       await saveMetadata(accessToken, clipId, clip.name, updated);
+      markClean(clipId);
     }
     setSelectedIds(new Set());
     setBulkOpen(false);
@@ -668,19 +749,32 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
           borderRadius: '8px', marginBottom: '10px', display: 'flex', alignItems: 'center',
           gap: '10px', flexWrap: 'wrap',
         }}>
-          <span style={{ fontSize: '13px', color: '#ffb4b4', flex: 1, minWidth: '160px' }}>
-            Move {selectedIds.size} clip{selectedIds.size !== 1 ? 's' : ''} to Drive trash?
-          </span>
-          <button onClick={handleBulkDelete} disabled={bulkBusy}
-            style={{ padding: '6px 14px', backgroundColor: '#cc0000', color: 'white',
-              border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
-            {bulkBusy ? 'Deleting…' : 'Delete'}
-          </button>
-          <button onClick={() => setConfirmBulkDelete(false)} disabled={bulkBusy}
-            style={{ padding: '6px 14px', backgroundColor: 'transparent', color: '#ccc',
-              border: '1px solid #666', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
-            Cancel
-          </button>
+          {bulkProgress ? (
+            <span style={{
+              fontSize: '13px', flex: 1, minWidth: '160px', fontWeight: '600',
+              color: bulkProgress.finished ? '#26af55' : '#ffb4b4',
+            }}>
+              {bulkProgress.finished
+                ? 'All files deleted!'
+                : `${bulkProgress.done}/${bulkProgress.total} deleted`}
+            </span>
+          ) : (
+            <>
+              <span style={{ fontSize: '13px', color: '#ffb4b4', flex: 1, minWidth: '160px' }}>
+                Move {selectedIds.size} clip{selectedIds.size !== 1 ? 's' : ''} to Drive trash?
+              </span>
+              <button onClick={handleBulkDelete} disabled={bulkBusy}
+                style={{ padding: '6px 14px', backgroundColor: '#cc0000', color: 'white',
+                  border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                Delete
+              </button>
+              <button onClick={() => setConfirmBulkDelete(false)} disabled={bulkBusy}
+                style={{ padding: '6px 14px', backgroundColor: 'transparent', color: '#ccc',
+                  border: '1px solid #666', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -746,21 +840,22 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed }) {
                     {baseName(clip.name)}
                   </div>
 
-                  {/* Line 2 — key, its own line, centered with the name */}
-                  {metadataMap[clip.id]?.key && (
-                    <div style={{ fontSize: '12px', color: '#666', fontWeight: '600', marginTop: '3px' }}>
-                      {metadataMap[clip.id].key}
-                    </div>
-                  )}
-
-                  {/* Line 3 — tempo, its own line, centered with the name */}
-                  {metadataMap[clip.id]?.bpm && (
+                  {/* Line 2 — key and tempo together, hyphen-separated.
+                      whiteSpace:nowrap on each half keeps "A Minor" or
+                      "120 BPM" from splitting mid-value if the line wraps. */}
+                  {(metadataMap[clip.id]?.key || metadataMap[clip.id]?.bpm) && (
                     <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
-                      {metadataMap[clip.id].bpm} BPM
+                      {metadataMap[clip.id]?.key && (
+                        <span style={{ fontWeight: '600', whiteSpace: 'nowrap' }}>{metadataMap[clip.id].key}</span>
+                      )}
+                      {metadataMap[clip.id]?.key && metadataMap[clip.id]?.bpm && ' - '}
+                      {metadataMap[clip.id]?.bpm && (
+                        <span style={{ whiteSpace: 'nowrap' }}>{metadataMap[clip.id].bpm} BPM</span>
+                      )}
                     </div>
                   )}
 
-                  {/* Line 4 — date, its own line, centered with the name */}
+                  {/* Line 3 — date, its own line, centered with the name */}
                   <div style={{ fontSize: '12px', color: '#999', marginTop: '3px' }}>
                     {formatDate(clip.createdTime)}
                   </div>

@@ -89,8 +89,33 @@ function App() {
   const [clipName, setClipName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [lastUpload, setLastUpload] = useState(null);
-  const [view, setView] = useState('record');
+  // The refresh button reloads with ?view=<tab> so you land back where you
+  // were (fresh state, not the old state). Read once at startup, validated
+  // against the real tab list so a stale or hand-edited URL can't leave
+  // the app on a blank view, then stripped from the address so a later
+  // manual reload starts normally.
+  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog'];
+  const [view, setView] = useState(() => {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const v = params.get('view');
+      if (v || params.has('r')) {
+        window.history.replaceState(null, '', window.location.pathname);
+      }
+      return VALID_VIEWS.includes(v) ? v : 'record';
+    } catch {
+      return 'record';
+    }
+  });
   const [keyFinderFilter, setKeyFinderFilter] = useState(null);
+
+  // Bumped after each successful save so the (always-mounted) Library
+  // re-fetches and the new clip appears immediately.
+  const [libraryRefreshToken, setLibraryRefreshToken] = useState(0);
+  // True while Library holds metadata edits not yet saved to Drive.
+  const [libraryHasUnsaved, setLibraryHasUnsaved] = useState(false);
+  // True while the Recorder is actively capturing a take.
+  const [isRecording, setIsRecording] = useState(false);
 
   // Navigation history for the app-wide back button. viewHistory is a
   // stack of previously-visited views (not including the current one);
@@ -103,7 +128,7 @@ function App() {
   // filters, in-progress edits — anything living in that tab's own
   // React state) instead of destroying it every time you switch tabs.
   const [viewHistory, setViewHistory] = useState([]);
-  const [visitedViews, setVisitedViews] = useState(() => new Set(['record']));
+  const [visitedViews, setVisitedViews] = useState(() => new Set(['record', view]));
 
   const goToView = (newView) => {
     if (newView === view) return;
@@ -273,6 +298,7 @@ function App() {
       );
       console.log(`[timing] uploadToDrive total: ${Math.round(performance.now() - t0)}ms`);
       setLastUpload(result);
+      setLibraryRefreshToken(t => t + 1);
       setPendingRecording(null);
       setClipName('');
       setAnalysis(null);
@@ -370,8 +396,12 @@ function App() {
     // any tab via the header button, the protection has to live in the
     // action itself so it still applies no matter where it's triggered
     // from.
-    if (pendingRecording) {
-      const proceed = window.confirm('Refreshing will discard your unsaved recording. Continue?');
+    const unsaved = [];
+    if (isRecording) unsaved.push('the recording in progress');
+    if (pendingRecording) unsaved.push('your unsaved recording');
+    if (libraryHasUnsaved) unsaved.push('unsaved clip details in the Library');
+    if (unsaved.length > 0) {
+      const proceed = window.confirm(`Refreshing will discard ${unsaved.join(' and ')}. Continue?`);
       if (!proceed) return;
     }
 
@@ -392,7 +422,9 @@ function App() {
     } catch (err) {
       console.warn('Cache clear failed:', err);
     }
-    window.location.replace(window.location.pathname + '?r=' + Date.now());
+    window.location.replace(
+      window.location.pathname + '?r=' + Date.now() + '&view=' + encodeURIComponent(view)
+    );
   };
 
   return (
@@ -472,7 +504,7 @@ function App() {
           <div style={{ display: view === 'record' ? 'flex' : 'none', flexDirection: 'column', alignItems: 'center' }}>
               {!pendingRecording ? (
                 <>
-                  <Recorder onRecordingComplete={handleRecordingComplete} />
+                  <Recorder onRecordingComplete={handleRecordingComplete} onRecordingStateChange={setIsRecording} />
                   {lastUpload && (
                     <p style={{ color: 'green', marginTop: '16px' }}>
                       ✅ Saved: <strong>{lastUpload.name}</strong>
@@ -600,7 +632,13 @@ function App() {
               etc.) the first time you actually go there. */}
           {visitedViews.has('library') && (
             <div style={{ display: view === 'library' ? 'block' : 'none' }}>
-              <Library accessToken={accessToken} initialKeyFilter={keyFinderFilter} onFilterConsumed={() => setKeyFinderFilter(null)} />
+              <Library
+                accessToken={accessToken}
+                initialKeyFilter={keyFinderFilter}
+                onFilterConsumed={() => setKeyFinderFilter(null)}
+                refreshToken={libraryRefreshToken}
+                onUnsavedChange={setLibraryHasUnsaved}
+              />
             </div>
           )}
           {visitedViews.has('keyfinder') && (

@@ -1,8 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 
-function Recorder({ onRecordingComplete }) {
+function Recorder({ onRecordingComplete, onRecordingStateChange }) {
   const [recording, setRecording] = useState(false);
   const [duration, setDuration] = useState(0);
+
+  // Lets App know a take is in progress, so the global refresh button can
+  // warn before throwing it away. Driven off the single `recording` flag
+  // rather than called from start/stop separately, so it can't drift out
+  // of sync with what's actually on screen.
+  useEffect(() => {
+    onRecordingStateChange?.(recording);
+  }, [recording]);
   const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const timerRef = useRef(null);
@@ -16,6 +24,7 @@ function Recorder({ onRecordingComplete }) {
       cancelAnimationFrame(animFrameRef.current);
       clearInterval(timerRef.current);
       audioCtxRef.current?.close();
+      onRecordingStateChange?.(false);
     };
   }, []);
 
