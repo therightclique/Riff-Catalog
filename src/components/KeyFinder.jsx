@@ -88,21 +88,39 @@ function getChordTones(root, quality) {
   return intervals.map(([semi, label]) => ({ note: CHROMATIC[(rootIdx + semi) % 12], label }));
 }
 
+// One color per chord role, used for BOTH the dots on the diagram and the
+// note names under it, so a note's color tells you which dot it is. These
+// are the same red / orange / yellow the root / 3rd / 5th use everywhere
+// else in the app (Practice tab, fretboard). A chord only ever has these
+// three notes, so three colors cover every dot.
+const CHORD_ROLE_COLORS = { R: '#ff4444', '3': '#bf5916', '5': '#ffe14d' };
+// Text that stays readable on top of each role color.
+const CHORD_ROLE_TEXT = { R: '#111111', '3': '#ffffff', '5': '#111111' };
+const roleOfLabel = (label) => (label === 'R' ? 'R' : label.endsWith('3') ? '3' : '5');
+
+// note name -> 'R' | '3' | '5' for one chord
+function chordRoleByNote(root, quality) {
+  const map = {};
+  getChordTones(root, quality).forEach(({ note, label }) => { map[note] = roleOfLabel(label); });
+  return map;
+}
+
 function ChordTones({ root, quality }) {
   const tones = getChordTones(root, quality);
   return (
-    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '8px' }}>
-      {tones.map(({ note, label }) => (
-        <div key={label} style={{ textAlign: 'center' }}>
-          <div style={{
-            fontSize: '14px', fontWeight: '700', padding: '2px 8px', borderRadius: '6px',
-            backgroundColor: label === 'R' ? '#cc0000' : 'transparent',
-            color: label === 'R' ? '#fff' : '#ddd',
-            border: label === 'R' ? '1px solid #cc0000' : '1px solid #555',
-          }}>{note}</div>
-          <div style={{ fontSize: '9px', color: '#888', marginTop: '2px' }}>{label}</div>
-        </div>
-      ))}
+    <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '10px' }}>
+      {tones.map(({ note, label }) => {
+        const role = roleOfLabel(label);
+        return (
+          <div key={label} style={{ textAlign: 'center' }}>
+            <div style={{
+              fontSize: '18px', fontWeight: '700', minWidth: '46px', padding: '4px 10px', borderRadius: '8px',
+              backgroundColor: CHORD_ROLE_COLORS[role], color: CHORD_ROLE_TEXT[role],
+            }}>{note}</div>
+            <div style={{ fontSize: '10px', fontWeight: '600', color: CHORD_ROLE_COLORS[role], marginTop: '3px' }}>{label}</div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -118,8 +136,11 @@ const OPEN_STRING_NOTES = ['E', 'A', 'D', 'G', 'B', 'E'];
 
 // Mini chord diagram SVG
 // frets array: index 0 = low E (left), index 5 = high E (right)
-function ChordDiagram({ shape, chordName, rootNote }) {
+function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
   if (!shape) return null;
+
+  // Which role (root / 3rd / 5th) each note of this chord plays, for coloring.
+  const roleByNote = chordRoleByNote(rootNote, quality);
 
   const { frets, barre } = shape;
   const numFrets = 4;
@@ -148,12 +169,13 @@ function ChordDiagram({ shape, chordName, rootNote }) {
     // Determine actual note played at this position
     const openIdx = CHROMATIC.indexOf(OPEN_STRING_NOTES[strIdx]);
     const actualNote = CHROMATIC[(openIdx + fret) % 12];
-    const isRoot = rootNote && actualNote === rootNote;
-    dots.push({ col, row, isRoot });
+    dots.push({ col, row, role: roleByNote[actualNote] || null });
   });
 
-  // Sort so root dots render last (on top)
-  dots.sort((a, b) => a.isRoot - b.isRoot);
+  // Draw 5ths first, then 3rds, root last, so the root is never hidden
+  // if two dots ever overlap.
+  const ROLE_ORDER = { '5': 0, '3': 1, R: 2 };
+  dots.sort((a, b) => (ROLE_ORDER[a.role] ?? -1) - (ROLE_ORDER[b.role] ?? -1));
 
   return (
     <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '80px', height: '90px' }}>
@@ -187,9 +209,9 @@ function ChordDiagram({ shape, chordName, rootNote }) {
         if (fret === 0) {
           const openIdx = CHROMATIC.indexOf(OPEN_STRING_NOTES[strIdx]);
           const actualNote = CHROMATIC[openIdx % 12];
-          const isRoot = rootNote && actualNote === rootNote;
-          return isRoot
-            ? <circle key={strIdx} cx={x} cy={padTop - 6} r="4" fill="#cc0000" />
+          const role = roleByNote[actualNote];
+          return role
+            ? <circle key={strIdx} cx={x} cy={padTop - 6} r="4" fill={CHORD_ROLE_COLORS[role]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
             : <circle key={strIdx} cx={x} cy={padTop - 6} r="3" fill="none" stroke="#aaa" strokeWidth="0.8" />;
         }
         return null;
@@ -200,12 +222,13 @@ function ChordDiagram({ shape, chordName, rootNote }) {
         const relFret = barre - displayFret + 1;
         if (relFret < 1 || relFret > numFrets) return null;
         const y = padTop + (relFret - 0.5) * rowH;
-        return <rect key="barre" x={padLeft} y={y - 5} width={(strings - 1) * colW} height={10} rx="5" fill="#1a73e8" opacity="0.9" />;
+        return <rect key="barre" x={padLeft} y={y - 5} width={(strings - 1) * colW} height={10} rx="5" fill="#8a8f98" opacity="0.45" />;
       })()}
 
       {/* Dots — non-root first, root on top */}
       {dots.map((d, i) => (
-        <circle key={i} cx={d.col} cy={d.row} r="6" fill={d.isRoot ? '#cc0000' : '#1a73e8'} />
+        <circle key={i} cx={d.col} cy={d.row} r="6"
+          fill={CHORD_ROLE_COLORS[d.role] || '#8a8f98'} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
       ))}
 
       {/* Chord name */}
@@ -445,8 +468,9 @@ function KeyFinder({ onFilterByKey }) {
           {/* Chord diagrams below fretboard */}
           <div style={{ marginTop: '28px', marginBottom: '8px' }}>
             <div style={{ fontSize: '13px', color: '#888', textAlign: 'center', marginBottom: '12px' }}>
-              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#cc0000', verticalAlign: 'middle', marginRight: '4px' }}></span>Root &nbsp;
-              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: '#1a73e8', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>Fingered
+              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: CHORD_ROLE_COLORS.R, verticalAlign: 'middle', marginRight: '4px' }}></span>Root &nbsp;
+              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: CHORD_ROLE_COLORS['3'], verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>3rd &nbsp;
+              <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: CHORD_ROLE_COLORS['5'], verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>5th
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px' }}>
               {scaleNotes.map(({ degree, quality, note }) => {
@@ -458,7 +482,7 @@ function KeyFinder({ onFilterByKey }) {
                       title: chordLabel, subtitle: `Degree ${degree}${quality}`, difficulty: null,
                       content: (
                         <div>
-                          <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
+                          <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} quality={quality} />
                           <ChordTones root={note} quality={quality} />
                         </div>
                       ),
@@ -467,7 +491,7 @@ function KeyFinder({ onFilterByKey }) {
                     })}
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
                     <span style={{ fontSize: '11px', color: '#888' }}>{degree}{quality}</span>
-                    <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
+                    <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} quality={quality} />
                   </div>
                 );
               })}

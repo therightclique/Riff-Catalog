@@ -32,7 +32,8 @@ const CHANGELOG = [
           'Fixed a bug that made suggested keys wrong far more often than right. In testing, the key played now comes up first in most recordings, and is among the suggestions in all of them',
           'The first two seconds of a recording now count for less \u2014 a single opening chord fits several keys, and used to outvote the rest of the take',
           'Clips analyzed before this fix are re-analyzed when you tap Analyze (then Save Metadata to keep the result)',
-          'After recording, the notes of the selected key are shown so you can check the suggestion. They update when you pick a different key',
+          'After recording, the notes of the selected key are shown so you can check the suggestion, with the root, 3rd, and 5th softly highlighted. They update when you pick a different key',
+          'The same notes appear under the Musical Key dropdown when you open a clip\u2019s details, so you can check a key against the clip any time',
         ],
       },
       {
@@ -65,7 +66,8 @@ const CHANGELOG = [
         title: 'Practice and Key Finder fixes',
         items: [
           'Double stops are now playable in every key. When moving a riff to another key would force a stretch of more than 5 frets with no open string, that pair is re-voiced on different strings using the same two notes',
-          'Tapping a chord shows the notes in it (root, 3rd, 5th) under the diagram',
+          'Tapping a chord shows the notes in it under the diagram',
+          'Chord diagrams now color the root, 3rd, and 5th in red, orange, and yellow \u2014 on the diagram itself and on the note names beneath it \u2014 matching the colors used on the Practice tab',
           'Tapping a mode in Key Finder shows all of its notes',
           'Fixed the F chord, which appeared upside down in Practice chord riffs and in Key Finder',
           'Fixed all diminished chord diagrams, which included notes that don\u2019t belong in the chord',

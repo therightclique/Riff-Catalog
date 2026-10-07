@@ -7,7 +7,7 @@ import { syncPendingClips } from './components/SyncService';
 import Library from './components/Library';
 import { analyzeAudio } from './components/AudioAnalyzer';
 import KeyFinder from './components/KeyFinder';
-import { getScaleNotes } from './components/FretboardDiagram';
+import KeyNotes from './components/KeyNotes';
 import Practice from './components/Practice';
 import Changelog, { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog';
 import Debug from './components/Debug';
@@ -793,24 +793,10 @@ function App() {
                             Selected: <strong>{selectedKey}</strong>
                           </p>
                           {/* Notes of the selected key, so the suggestion can be
-                              checked against what was actually played. Uses the
-                              same getScaleNotes Key Finder uses, so the two can
-                              never disagree. Derived from selectedKey on every
-                              render, so picking another candidate (or a key from
-                              Other…) updates it automatically. */}
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', justifyContent: 'center', marginTop: '8px' }}>
-                            {getScaleNotes(selectedKey).map(({ note }, i) => (
-                              <span key={note} style={{
-                                minWidth: '30px', padding: '4px 8px', borderRadius: '6px', textAlign: 'center',
-                                fontSize: '13px', fontWeight: i === 0 ? '700' : '500',
-                                backgroundColor: i === 0 ? '#cc0000' : '#fff',
-                                color: i === 0 ? '#fff' : '#222',
-                                border: `1px solid ${i === 0 ? '#cc0000' : '#b5d4f0'}`,
-                              }}>
-                                {note}
-                              </span>
-                            ))}
-                          </div>
+                              checked against what was actually played. Derived
+                              from selectedKey on every render, so picking another
+                              candidate (or a key from Other…) updates it. */}
+                          <KeyNotes keyName={selectedKey} />
                         </>
                       )}
                     </div>

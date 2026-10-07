@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import KeyNotes from './KeyNotes';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -98,6 +99,9 @@ function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidate
             </button>
           )}
         </div>
+        {/* The notes of whichever key is selected, so it's easy to check
+            it against the clip. Left-aligned to match the form's labels. */}
+        <KeyNotes keyName={metadata.key} align="left" />
         {analyzeError && (
           <p style={{
             fontSize: '12px', color: '#a00', margin: '8px 0 0',
