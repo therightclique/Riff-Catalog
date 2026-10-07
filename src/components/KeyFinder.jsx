@@ -135,6 +135,12 @@ function getChordShape(note, quality) {
 // Open string notes for each string index (0=low E, 5=high E)
 const OPEN_STRING_NOTES = ['E', 'A', 'D', 'G', 'B', 'E'];
 
+// How much larger than its 80×90 drawing grid the chord diagram is shown, so
+// the note names inside the dots are readable. 1.3 is the biggest size that
+// still fits three diagrams across on a small phone (iPhone SE); 1.4+ drops
+// to two. Raise or lower this one number to resize every chord diagram.
+const DIAGRAM_SCALE = 1.3;
+
 // Mini chord diagram SVG
 // frets array: index 0 = low E (left), index 5 = high E (right)
 function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
@@ -170,7 +176,7 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
     // Determine actual note played at this position
     const openIdx = CHROMATIC.indexOf(OPEN_STRING_NOTES[strIdx]);
     const actualNote = CHROMATIC[(openIdx + fret) % 12];
-    dots.push({ col, row, role: roleByNote[actualNote] || null });
+    dots.push({ col, row, role: roleByNote[actualNote] || null, note: actualNote });
   });
 
   // Draw 5ths first, then 3rds, root last, so the root is never hidden
@@ -179,7 +185,7 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
   dots.sort((a, b) => (ROLE_ORDER[a.role] ?? -1) - (ROLE_ORDER[b.role] ?? -1));
 
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: '80px', height: '90px' }}>
+    <svg viewBox={`0 0 ${w} ${h}`} style={{ width: `${w * DIAGRAM_SCALE}px`, height: `${h * DIAGRAM_SCALE}px` }}>
       {/* Nut or fret number */}
       {displayFret === 1 ? (
         <rect x={padLeft} y={padTop - 3} width={(strings - 1) * colW} height={3} fill="#ccc" />
@@ -211,8 +217,16 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
           const openIdx = CHROMATIC.indexOf(OPEN_STRING_NOTES[strIdx]);
           const actualNote = CHROMATIC[openIdx % 12];
           const role = roleByNote[actualNote];
+          // Open strings are always natural notes (E A D G B), so a single
+          // letter always fits inside the marker.
           return role
-            ? <circle key={strIdx} cx={x} cy={padTop - 6} r="4" fill={CHORD_ROLE_COLORS[role]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
+            ? (
+              <g key={strIdx}>
+                <circle cx={x} cy={padTop - 6} r="5" fill={CHORD_ROLE_COLORS[role]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
+                <text x={x} y={padTop - 6} dy="0.35em" textAnchor="middle" fontSize="6.5" fontWeight="800"
+                  fill={CHORD_ROLE_TEXT[role]} style={{ pointerEvents: 'none', userSelect: 'none' }}>{actualNote}</text>
+              </g>
+            )
             : <circle key={strIdx} cx={x} cy={padTop - 6} r="3" fill="none" stroke="#aaa" strokeWidth="0.8" />;
         }
         return null;
@@ -228,8 +242,16 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
 
       {/* Dots — non-root first, root on top */}
       {dots.map((d, i) => (
-        <circle key={i} cx={d.col} cy={d.row} r="6"
-          fill={CHORD_ROLE_COLORS[d.role] || '#8a8f98'} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
+        <g key={i}>
+          <circle cx={d.col} cy={d.row} r="6"
+            fill={CHORD_ROLE_COLORS[d.role] || '#8a8f98'} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
+          {/* The note's name, centered in the dot so it's readable at a
+              glance. Sharps ("F#") are the widest case; 7.5 units fits them
+              inside a 12-unit dot. Text color flips dark/light per the
+              theme so it's readable on whatever role color is set. */}
+          <text x={d.col} y={d.row} dy="0.35em" textAnchor="middle" fontSize="7.5" fontWeight="800"
+            fill={CHORD_ROLE_TEXT[d.role] || '#111111'} style={{ pointerEvents: 'none', userSelect: 'none' }}>{d.note}</text>
+        </g>
       ))}
 
       {/* Chord name */}
