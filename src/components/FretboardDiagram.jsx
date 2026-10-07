@@ -1,3 +1,5 @@
+import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
+
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
 const MINOR_INTERVALS = [0, 2, 3, 5, 7, 8, 10];
@@ -43,18 +45,21 @@ export function FretboardDiagram({ selectedKey }) {
   const parts = selectedKey.split(' ');
   const rootNote = parts.slice(0, -1).join(' ');
 
+  // Root / 3rd / 5th colors come from theme.js — change them there. Every
+  // other scale note stays the plain blue.
+  const ROLE_BY_DEGREE = { '1': 'root', '3': 'third', '5': 'fifth' };
   const colorForNote = (note) => {
-    const degree = degreeByNote[note];
-    if (degree === '1') return '#ff4444';
-    if (degree === '3') return '#bf5916';
-    if (degree === '5') return '#ffe14d';
-    return '#1a73e8';
+    const role = ROLE_BY_DEGREE[degreeByNote[note]];
+    return role ? NOTE_ROLE_COLORS[role] : '#1a73e8';
   };
 
-  // White text is hard to read against the yellow 5th-degree background
-  // specifically — every other background (red, orange, blue) is dark
-  // enough for white to stay legible.
-  const textColorForNote = (note) => (degreeByNote[note] === '5' ? '#111' : 'white');
+  // Text on a root/3rd/5th circle flips dark/light automatically to stay
+  // readable on whatever color theme.js defines (the old rule only special-
+  // cased the yellow 5th). Plain blue notes keep white text.
+  const textColorForNote = (note) => {
+    const role = ROLE_BY_DEGREE[degreeByNote[note]];
+    return role ? NOTE_ROLE_TEXT[role] : 'white';
+  };
 
   const numFrets = 12, stringCount = 6, fretW = 44, stringH = 28;
   const leftPad = 28, topPad = 20;
@@ -64,11 +69,11 @@ export function FretboardDiagram({ selectedKey }) {
   return (
     <div style={{ marginTop: '16px' }}>
       <div style={{ fontSize: '12px', color: '#888', textAlign: 'center', marginBottom: '6px' }}>
-        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ff4444', verticalAlign: 'middle', marginRight: '4px' }}></span>
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: NOTE_ROLE_COLORS.root, verticalAlign: 'middle', marginRight: '4px' }}></span>
         Root &nbsp;
-        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#bf5916', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: NOTE_ROLE_COLORS.third, verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         3rd &nbsp;
-        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#ffe14d', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: NOTE_ROLE_COLORS.fifth, verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         5th &nbsp;
         <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#1a73e8', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         Other — {selectedKey}

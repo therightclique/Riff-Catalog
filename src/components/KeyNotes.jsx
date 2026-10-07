@@ -1,18 +1,19 @@
 import { getScaleNotes } from './FretboardDiagram';
+import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 
-// The seven notes of a key, with the root, 3rd, and 5th softly highlighted.
-// One component used everywhere a key's notes are shown (after recording,
-// and under the Key dropdown in a clip's details), so they always look the
-// same and always come from the same getScaleNotes Key Finder uses.
-//
-// Colors are deliberately subdued — these sit in the middle of a form, not
-// on a diagram. The root is the app's red at 20% of its saturation
-// (#cc0000 -> #7a5252); the 3rd and 5th are light, similarly muted tints of
-// the orange and yellow used for those roles elsewhere in the app.
+// The seven notes of a key, with the root, 3rd, and 5th highlighted in the
+// app's root / 3rd / 5th colors. One component used everywhere a key's
+// notes are shown (after recording, and under the Key dropdown in a clip's
+// details), so they always look the same and always come from the same
+// getScaleNotes Key Finder uses. The colors come from theme.js — change
+// them there, not here.
+const chipFor = (role) => ({
+  bg: NOTE_ROLE_COLORS[role], border: NOTE_ROLE_COLORS[role], text: NOTE_ROLE_TEXT[role],
+});
 const CHIP_STYLES = {
-  root:  { bg: '#7a5252', border: '#7a5252', text: '#ffffff' },
-  third: { bg: '#e3c7b5', border: '#cca78e', text: '#472915' },
-  fifth: { bg: '#e6dba8', border: '#c8bc7e', text: '#43390a' },
+  root:  chipFor('root'),
+  third: chipFor('third'),
+  fifth: chipFor('fifth'),
   plain: { bg: '#ffffff', border: '#b5d4f0', text: '#222222' },
 };
 

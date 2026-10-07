@@ -32,7 +32,7 @@ const CHANGELOG = [
           'Fixed a bug that made suggested keys wrong far more often than right. In testing, the key played now comes up first in most recordings, and is among the suggestions in all of them',
           'The first two seconds of a recording now count for less \u2014 a single opening chord fits several keys, and used to outvote the rest of the take',
           'Clips analyzed before this fix are re-analyzed when you tap Analyze (then Save Metadata to keep the result)',
-          'After recording, the notes of the selected key are shown so you can check the suggestion, with the root, 3rd, and 5th softly highlighted. They update when you pick a different key',
+          'After recording, the notes of the selected key are shown so you can check the suggestion, with the root, 3rd, and 5th highlighted in red, orange, and yellow. They update when you pick a different key',
           'The same notes appear under the Musical Key dropdown when you open a clip\u2019s details, so you can check a key against the clip any time',
         ],
       },
@@ -73,6 +73,13 @@ const CHANGELOG = [
           'Fixed all diminished chord diagrams, which included notes that don\u2019t belong in the chord',
           'Fixed Cm and Gm diagrams being cut off at the top',
           'Key Finder\u2019s fretboard and chord diagrams open full-screen again when tapped',
+        ],
+      },
+      {
+        title: 'Key Finder: readable from across the room',
+        items: [
+          'The major, minor, and diminished cards are now solid, saturated green, blue, and red, with larger bold note names \u2014 easy to read from a distance while you play',
+          'The relative major or minor of the selected key is ringed and marked \u2194 on its card, with a line below naming it (for example, \u201CRelative minor: A Minor\u201D for C Major)',
         ],
       },
       {

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
+import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, CHORD_QUALITY_COLORS, RELATIVE_KEY_COLOR, readableTextOn } from './theme';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -89,13 +90,13 @@ function getChordTones(root, quality) {
 }
 
 // One color per chord role, used for BOTH the dots on the diagram and the
-// note names under it, so a note's color tells you which dot it is. These
-// are the same red / orange / yellow the root / 3rd / 5th use everywhere
-// else in the app (Practice tab, fretboard). A chord only ever has these
-// three notes, so three colors cover every dot.
-const CHORD_ROLE_COLORS = { R: '#ff4444', '3': '#bf5916', '5': '#ffe14d' };
+// note names under it, so a note's color tells you which dot it is. They
+// come from theme.js — the same root / 3rd / 5th colors used everywhere
+// else — so change them there. A chord only ever has these three notes, so
+// three colors cover every dot.
+const CHORD_ROLE_COLORS = { R: NOTE_ROLE_COLORS.root, '3': NOTE_ROLE_COLORS.third, '5': NOTE_ROLE_COLORS.fifth };
 // Text that stays readable on top of each role color.
-const CHORD_ROLE_TEXT = { R: '#111111', '3': '#ffffff', '5': '#111111' };
+const CHORD_ROLE_TEXT = { R: NOTE_ROLE_TEXT.root, '3': NOTE_ROLE_TEXT.third, '5': NOTE_ROLE_TEXT.fifth };
 const roleOfLabel = (label) => (label === 'R' ? 'R' : label.endsWith('3') ? '3' : '5');
 
 // note name -> 'R' | '3' | '5' for one chord
@@ -240,6 +241,13 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
 function KeyFinder({ onFilterByKey }) {
   const [selectedKey, setSelectedKey] = useState('');
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
+
+  // The relative key shares all seven notes with the selected one: for a
+  // major key it's the minor starting on the 6th degree; for a minor key,
+  // the major starting on the 3rd. That degree's card gets highlighted.
+  const isMinorKey = selectedKey.endsWith('Minor');
+  const relIndex = isMinorKey ? 2 : 5;
+  const relativeKey = scaleNotes.length ? `${scaleNotes[relIndex].note} ${isMinorKey ? 'Major' : 'Minor'}` : null;
 
   // Zoom-to-full-screen for the fretboard and chord diagrams — mirrors
   // the same DiagramDetailView pattern Practice tab uses.
@@ -418,22 +426,29 @@ function KeyFinder({ onFilterByKey }) {
           {/* Scale degree cards — no chord diagrams here */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', width: '100%' }}>
-              {scaleNotes.map(({ degree, quality, note }) => {
+              {scaleNotes.map(({ degree, quality, note }, idx) => {
                 const chordLabel = quality === 'M' ? note : quality === 'dim' ? `${note}°` : `${note}m`;
+                // Solid, saturated fill so the quality reads from across the
+                // room; the text color flips dark/light automatically.
+                const fill = CHORD_QUALITY_COLORS[quality];
+                const ink = readableTextOn(fill);
+                const isRelative = idx === relIndex;
                 return (
-                  <div key={degree} style={{
+                  <div key={degree}
+                    title={isRelative ? `Relative ${isMinorKey ? 'major' : 'minor'}: ${relativeKey}` : undefined}
+                    style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center',
                     padding: '10px 2px', borderRadius: '8px',
-                    backgroundColor: quality === 'M' ? '#e8f5e2' : quality === 'dim' ? '#fde8e8' : '#e8eeff',
-                    border: `1px solid ${quality === 'M' ? '#b5d9a5' : quality === 'dim' ? '#f0b8b8' : '#b5c8f0'}`,
+                    backgroundColor: fill, border: `1px solid ${fill}`,
+                    // The relative key's card gets a ring in its own color.
+                    // outline (not border) so highlighting it can't shift the layout.
+                    ...(isRelative ? { outline: `3px solid ${RELATIVE_KEY_COLOR}`, outlineOffset: '2px' } : {}),
                   }}>
-                    <span style={{
-                      fontSize: '14px', fontWeight: '700',
-                      color: quality === 'M' ? '#2a6b17' : quality === 'dim' ? '#8b1a1a' : '#1a3d8b',
-                    }}>
-                      {degree}<span style={{ fontSize: '10px', fontWeight: '400' }}>{quality}</span>
+                    <span style={{ fontSize: '14px', fontWeight: '700', color: ink }}>
+                      {degree}<span style={{ fontSize: '10px', fontWeight: '600' }}>{quality}</span>
                     </span>
-                    <span style={{ fontSize: '12px', fontWeight: '600', marginTop: '5px', color: '#333' }}>{note}</span>
+                    <span style={{ fontSize: '20px', fontWeight: '800', marginTop: '4px', color: ink, lineHeight: 1.1 }}>{note}</span>
+                    {isRelative && <span style={{ fontSize: '14px', fontWeight: '800', color: ink, lineHeight: 1 }}>↔</span>}
                     {onFilterByKey && (
                       <button
                         onClick={() => onFilterByKey(`${note} ${quality === 'M' ? 'Major' : quality === 'dim' ? 'Major' : 'Minor'}`)}
@@ -455,9 +470,21 @@ function KeyFinder({ onFilterByKey }) {
           {/* Legend */}
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
             <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center', fontSize: '12px', color: '#888' }}>
-              <span><span style={{ backgroundColor: '#e8f5e2', padding: '2px 8px', borderRadius: '4px', color: '#2a6b17', fontWeight: '600' }}>M</span> Major</span>
-              <span><span style={{ backgroundColor: '#e8eeff', padding: '2px 8px', borderRadius: '4px', color: '#1a3d8b', fontWeight: '600' }}>m</span> minor</span>
-              <span><span style={{ backgroundColor: '#fde8e8', padding: '2px 8px', borderRadius: '4px', color: '#8b1a1a', fontWeight: '600' }}>dim</span> diminished</span>
+              {[['M', 'Major'], ['m', 'minor'], ['dim', 'diminished']].map(([q, label]) => (
+                <span key={q}>
+                  <span style={{
+                    backgroundColor: CHORD_QUALITY_COLORS[q], color: readableTextOn(CHORD_QUALITY_COLORS[q]),
+                    padding: '2px 8px', borderRadius: '4px', fontWeight: '700',
+                  }}>{q}</span> {label}
+                </span>
+              ))}
+              <span>
+                <span style={{
+                  display: 'inline-block', padding: '0 6px', borderRadius: '4px', fontWeight: '800',
+                  outline: `3px solid ${RELATIVE_KEY_COLOR}`, outlineOffset: '1px', marginRight: '6px',
+                }}>↔</span>
+                Relative {isMinorKey ? 'major' : 'minor'}: <strong>{relativeKey}</strong>
+              </span>
             </div>
           </div>
 
