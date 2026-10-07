@@ -79,10 +79,68 @@ function transposeLick(notes, group, targetRoot) {
   return transposeByDelta(notes, ref, targetRoot);
 }
 
+// ── Double-stop playability ─────────────────────────────────────────────
+// Rule: the two notes of a double stop may be at most 5 frets apart,
+// unless one of them is an open string. Every pair in DS_DATA satisfies
+// this in its home key, but 180 of them only do so BECAUSE of an open
+// string — and a uniform-delta transposition moves that open note up the
+// neck, keeping the full stretch (up to 11 frets) while losing the
+// exemption. That broke 117 of 250 riffs in every non-home key.
+//
+// Fix: after transposing, any pair that's no longer playable is
+// re-voiced — same two pitches, different strings — choosing in order:
+//   1. adjacent strings (how every stored pair is played)
+//   2. skipping one string, then two (e.g. the standard octave shape)
+//   3. last resort: the whole pair an octave down/up (same interval)
+// Within a tier, the voicing closest to where the naive transposition put
+// the pair on the neck wins, so the riff doesn't jump around. Pairs that
+// are already playable are never touched.
+const OPEN_STRING_MIDI = [40, 45, 50, 55, 59, 64]; // E2 A2 D3 G3 B3 E4, index = string (0 = low E)
+const DS_MAX_STRETCH = 5;
+const DS_MAX_FRET = 20;
+
+function isPlayablePair(pair) {
+  const [a, b] = pair;
+  return Math.abs(a.f - b.f) <= DS_MAX_STRETCH || a.f === 0 || b.f === 0;
+}
+
+function revoicePair(pair) {
+  const pitches = pair.map(n => OPEN_STRING_MIDI[n.s] + n.f).sort((x, y) => x - y);
+  const targetFret = (pair[0].f + pair[1].f) / 2;
+  const targetString = (pair[0].s + pair[1].s) / 2;
+
+  for (const octave of [0, -12, 12]) {
+    const [lo, hi] = pitches.map(p => p + octave);
+    for (const gap of [1, 2, 3]) {
+      let best = null;
+      let bestScore = Infinity;
+      for (let s1 = 0; s1 + gap < 6; s1++) {
+        const s2 = s1 + gap;
+        // Normal order (low note on the lower string) and crossed order —
+        // crossed only ever passes the rule via an open string.
+        for (const [pLow, pHigh] of [[lo, hi], [hi, lo]]) {
+          const f1 = pLow - OPEN_STRING_MIDI[s1];
+          const f2 = pHigh - OPEN_STRING_MIDI[s2];
+          if (f1 < 0 || f2 < 0 || f1 > DS_MAX_FRET || f2 > DS_MAX_FRET) continue;
+          const cand = [{ s: s1, f: f1 }, { s: s2, f: f2 }];
+          if (!isPlayablePair(cand)) continue;
+          const score = Math.abs((f1 + f2) / 2 - targetFret) + 0.5 * Math.abs((s1 + s2) / 2 - targetString);
+          if (score < bestScore) { bestScore = score; best = cand; }
+        }
+      }
+      if (best) return best;
+    }
+  }
+  return pair; // unreachable for current data (verified), kept as a safe fallback
+}
+
 function transposeDS(pairs, group, targetRoot) {
   const ref = REF_ROOTS[group];
   if (!ref || !targetRoot) return pairs;
-  return pairs.map(pair => transposeByDelta(pair, ref, targetRoot));
+  return pairs.map(pair => {
+    const moved = transposeByDelta(pair, ref, targetRoot);
+    return isPlayablePair(moved) ? moved : revoicePair(moved);
+  });
 }
 
 // Thin wrapper: computes each note's scale degree (using the same

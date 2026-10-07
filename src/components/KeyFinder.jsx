@@ -29,7 +29,7 @@ const CHORD_SHAPES = {
   'C': { frets: [-1, 3, 2, 0, 1, 0], fingers: [0,3,2,0,1,0], barre: null },
   'D': { frets: [-1, -1, 0, 2, 3, 2], fingers: [0,0,0,1,3,2], barre: null },
   'E': { frets: [0, 2, 2, 1, 0, 0], fingers: [0,2,3,1,0,0], barre: null },
-  'F': { frets: [1, 1, 2, 3, 3, 1], fingers: [1,1,2,3,4,1], barre: 1 },
+  'F': { frets: [1, 3, 3, 2, 1, 1], fingers: [1,3,4,2,1,1], barre: 1 },
   'G': { frets: [3, 2, 0, 0, 0, 3], fingers: [2,1,0,0,0,3], barre: null },
   'A': { frets: [-1, 0, 2, 2, 2, 0], fingers: [0,0,1,2,3,0], barre: null },
   'A#': { frets: [-1, 1, 3, 3, 3, 1], fingers: [0,1,2,3,4,1], barre: 1 },
@@ -54,19 +54,58 @@ const CHORD_SHAPES = {
   'G#m': { frets: [4, 6, 6, 4, 4, 4], fingers: [1,3,4,1,1,1], barre: 4 },
 
   // DIMINISHED (simplified — using common voicings)
-  'Cdim': { frets: [-1, 3, 4, 5, 4, 3], fingers: [0,1,2,4,3,1], barre: null },
-  'Ddim': { frets: [-1, -1, 0, 1, 0, 1], fingers: [0,0,0,1,0,2], barre: null },
-  'Edim': { frets: [0, 1, 2, 3, 2, 0], fingers: [0,1,2,4,3,0], barre: null },
-  'Fdim': { frets: [1, 2, 3, 4, 3, 1], fingers: [1,2,3,4,3,1], barre: null },
-  'Gdim': { frets: [3, 4, 5, 6, 5, 3], fingers: [1,2,3,4,3,1], barre: null },
-  'Adim': { frets: [-1, 0, 1, 2, 1, 0], fingers: [0,0,1,3,2,0], barre: null },
-  'A#dim': { frets: [-1, 1, 2, 3, 2, 0], fingers: [0,1,2,3,2,0], barre: null },
-  'Bdim': { frets: [-1, 2, 3, 4, 3, 2], fingers: [0,1,2,4,3,1], barre: null },
-  'C#dim': { frets: [-1, 4, 5, 6, 5, 4], fingers: [0,1,2,4,3,1], barre: null },
-  'D#dim': { frets: [-1, -1, 1, 2, 1, 2], fingers: [0,0,1,3,2,4], barre: null },
-  'F#dim': { frets: [2, 3, 4, 5, 4, 2], fingers: [1,2,3,4,3,1], barre: null },
-  'G#dim': { frets: [4, 5, 6, 7, 6, 4], fingers: [1,2,3,4,3,1], barre: null },
+  // Diminished triads as R–b5–R–b3 movable shapes, root on the low E, A,
+  // or D string — whichever sits lowest on the neck. The previous shapes
+  // each rang at least one note outside the chord (often an unmuted high
+  // e), and several were missing the b3 entirely; verified programmatically
+  // that every shape below plays exactly root, b3, b5 and nothing else.
+  'Cdim': { frets: [-1, 3, 4, 5, 4, -1], fingers: [0,1,2,4,3,0], barre: null },
+  'Ddim': { frets: [-1, -1, 0, 1, 3, 1], fingers: [0,0,0,1,3,2], barre: null },
+  'Edim': { frets: [0, 1, 2, 0, -1, -1], fingers: [0,2,3,0,0,0], barre: null },
+  'Fdim': { frets: [1, 2, 3, 1, -1, -1], fingers: [2,3,4,1,0,0], barre: null },
+  'Gdim': { frets: [3, 4, 5, 3, -1, -1], fingers: [2,3,4,1,0,0], barre: null },
+  'Adim': { frets: [-1, 0, 1, 2, 1, -1], fingers: [0,0,1,3,2,0], barre: null },
+  'A#dim': { frets: [-1, 1, 2, 3, 2, -1], fingers: [0,1,2,4,3,0], barre: null },
+  'Bdim': { frets: [-1, 2, 3, 4, 3, -1], fingers: [0,1,2,4,3,0], barre: null },
+  'C#dim': { frets: [-1, 4, 5, 6, 5, -1], fingers: [0,1,2,4,3,0], barre: null },
+  'D#dim': { frets: [-1, -1, 1, 2, 4, 2], fingers: [0,0,1,2,4,3], barre: null },
+  'F#dim': { frets: [2, 3, 4, 2, -1, -1], fingers: [2,3,4,1,0,0], barre: null },
+  'G#dim': { frets: [4, 5, 6, 4, -1, -1], fingers: [2,3,4,1,0,0], barre: null },
 };
+
+// The triad's own notes (root, 3rd, 5th), labeled by role. Computed from
+// the chord's root and quality rather than read off the diagram, and every
+// diagram in CHORD_SHAPES is verified to play exactly these notes.
+const CHORD_TONE_INTERVALS = {
+  M:   [[0, 'R'], [4, '3'],  [7, '5']],
+  m:   [[0, 'R'], [3, 'b3'], [7, '5']],
+  dim: [[0, 'R'], [3, 'b3'], [6, 'b5']],
+};
+function getChordTones(root, quality) {
+  const rootIdx = CHROMATIC.indexOf(root);
+  const intervals = CHORD_TONE_INTERVALS[quality];
+  if (rootIdx === -1 || !intervals) return [];
+  return intervals.map(([semi, label]) => ({ note: CHROMATIC[(rootIdx + semi) % 12], label }));
+}
+
+function ChordTones({ root, quality }) {
+  const tones = getChordTones(root, quality);
+  return (
+    <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', marginTop: '8px' }}>
+      {tones.map(({ note, label }) => (
+        <div key={label} style={{ textAlign: 'center' }}>
+          <div style={{
+            fontSize: '14px', fontWeight: '700', padding: '2px 8px', borderRadius: '6px',
+            backgroundColor: label === 'R' ? '#cc0000' : 'transparent',
+            color: label === 'R' ? '#fff' : '#ddd',
+            border: label === 'R' ? '1px solid #cc0000' : '1px solid #555',
+          }}>{note}</div>
+          <div style={{ fontSize: '9px', color: '#888', marginTop: '2px' }}>{label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function getChordShape(note, quality) {
   if (quality === 'dim') return CHORD_SHAPES[`${note}dim`] || null;
@@ -83,9 +122,14 @@ function ChordDiagram({ shape, chordName, rootNote }) {
   if (!shape) return null;
 
   const { frets, barre } = shape;
-  const minFret = barre || Math.min(...frets.filter(f => f > 0));
-  const displayFret = minFret > 3 ? minFret : 1;
   const numFrets = 4;
+  const fretted = frets.filter(f => f > 0);
+  const minFret = barre || Math.min(...fretted);
+  const maxFret = Math.max(...fretted);
+  // Anchor at the nut only if the whole shape fits in frets 1–4. The old
+  // rule (nut whenever minFret <= 3) clipped shapes like Cm/Gm that start
+  // at fret 3 but reach fret 5–6 — their top dots were silently dropped.
+  const displayFret = maxFret <= numFrets ? 1 : minFret;
   const strings = 6;
 
   const w = 80, h = 90;
@@ -412,7 +456,12 @@ function KeyFinder({ onFilterByKey }) {
                   <div key={degree}
                     onClick={() => setDetailView({
                       title: chordLabel, subtitle: `Degree ${degree}${quality}`, difficulty: null,
-                      content: <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />,
+                      content: (
+                        <div>
+                          <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} />
+                          <ChordTones root={note} quality={quality} />
+                        </div>
+                      ),
                       secondaryContent: <FretboardDiagram selectedKey={selectedKey} />,
                       secondaryLabel: 'Show fretboard', primaryLabel: 'Show chord',
                     })}

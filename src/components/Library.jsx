@@ -89,7 +89,89 @@ function BulkEditor({ count, onApply, onCancel }) {
   );
 }
 
-function RecentlyAdded({ clips, metadataMap, playingId, onPlay, formatDate }) {
+const SKIP_SECONDS = 5;
+
+function formatClock(secs) {
+  if (!Number.isFinite(secs) || secs < 0) secs = 0;
+  const m = Math.floor(secs / 60);
+  const s = Math.floor(secs % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+// Timeline for the clip currently loaded in the player. Reads position
+// straight off the <audio> element: requestAnimationFrame while playing
+// (smooth — 'timeupdate' only fires ~4×/sec), plus event listeners for
+// seeks and duration changes while paused. Some browser-recorded files
+// (notably WebM) report an Infinity duration until fully played; the
+// scrubber stays disabled in that case, but the ±5s buttons still work.
+function PlaybackBar({ audio, isPaused }) {
+  const [time, setTime] = useState(audio?.currentTime || 0);
+  const [duration, setDuration] = useState(
+    Number.isFinite(audio?.duration) ? audio.duration : null
+  );
+
+  useEffect(() => {
+    if (!audio) return;
+    const sync = () => {
+      setTime(audio.currentTime);
+      setDuration(Number.isFinite(audio.duration) ? audio.duration : null);
+    };
+    sync();
+    const events = ['timeupdate', 'seeked', 'durationchange', 'loadedmetadata', 'ended'];
+    events.forEach(e => audio.addEventListener(e, sync));
+    let raf = null;
+    if (!isPaused) {
+      const tick = () => { setTime(audio.currentTime); raf = requestAnimationFrame(tick); };
+      raf = requestAnimationFrame(tick);
+    }
+    return () => {
+      events.forEach(e => audio.removeEventListener(e, sync));
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [audio, isPaused]);
+
+  if (!audio) return null;
+
+  const seekTo = (t) => {
+    const max = Number.isFinite(audio.duration) ? audio.duration : Infinity;
+    audio.currentTime = Math.min(Math.max(0, t), max);
+    setTime(audio.currentTime);
+  };
+
+  const skipBtn = {
+    padding: '4px 8px', borderRadius: '6px', border: '1px solid #b5d4f0',
+    backgroundColor: 'white', color: '#1a73e8', fontSize: '12px', fontWeight: '600',
+    cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
+  };
+
+  return (
+    <div style={{ padding: '0 12px 10px' }} onClick={e => e.stopPropagation()}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <button onClick={() => seekTo(audio.currentTime - SKIP_SECONDS)} style={skipBtn} title="Back 5 seconds">
+          ⟲ 5s
+        </button>
+        <input
+          type="range"
+          min={0}
+          max={duration || 0}
+          step={0.01}
+          value={duration ? Math.min(time, duration) : 0}
+          disabled={!duration}
+          onChange={e => seekTo(parseFloat(e.target.value))}
+          style={{ flex: 1, minWidth: 0, cursor: duration ? 'pointer' : 'default' }}
+        />
+        <button onClick={() => seekTo(audio.currentTime + SKIP_SECONDS)} style={skipBtn} title="Forward 5 seconds">
+          5s ⟳
+        </button>
+      </div>
+      <div style={{ textAlign: 'center', fontSize: '11px', color: '#666', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
+        {formatClock(time)}{duration ? ` / ${formatClock(duration)}` : ''}
+      </div>
+    </div>
+  );
+}
+
+function RecentlyAdded({ clips, metadataMap, playingId, isPaused, audio, onPlay, formatDate }) {
   const [open, setOpen] = useState(false);
   return (
     <div style={{ marginBottom: '16px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
@@ -106,16 +188,17 @@ function RecentlyAdded({ clips, metadataMap, playingId, onPlay, formatDate }) {
           {clips.map(clip => {
             const meta = metadataMap[clip.id];
             return (
-              <div key={clip.id} style={{
+              <div key={clip.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+              <div style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
-                padding: '8px 14px', borderBottom: '1px solid #f0f0f0',
+                padding: '8px 14px',
               }}>
                 <button onClick={() => onPlay(clip)} style={{
                   width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                  backgroundColor: playingId === clip.id ? '#cc0000' : '#1a73e8',
+                  backgroundColor: playingId === clip.id && !isPaused ? '#cc0000' : '#1a73e8',
                   color: 'white', border: 'none', cursor: 'pointer', fontSize: '11px',
                 }}>
-                  {playingId === clip.id ? '■' : '▶'}
+                  {playingId === clip.id && !isPaused ? '❚❚' : '▶'}
                 </button>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: '500', fontSize: '13px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -128,6 +211,8 @@ function RecentlyAdded({ clips, metadataMap, playingId, onPlay, formatDate }) {
                   </div>
                 </div>
               </div>
+              {playingId === clip.id && <PlaybackBar audio={audio} isPaused={isPaused} />}
+              </div>
             );
           })}
         </div>
@@ -139,7 +224,11 @@ function RecentlyAdded({ clips, metadataMap, playingId, onPlay, formatDate }) {
 function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken = 0, onUnsavedChange }) {
   const [clips, setClips] = useState([]);
   const [loading, setLoading] = useState(true);
+  // playingId = the clip currently loaded in the player (playing OR
+  // paused); isPaused says which. A finished clip stays loaded (paused at
+  // its end) so the timeline is still there to scrub back into.
   const [playingId, setPlayingId] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const [audioUrls, setAudioUrls] = useState({});
   const [expandedId, setExpandedId] = useState(null);
@@ -222,9 +311,18 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
   };
 
   const handlePlay = async (clip) => {
-    if (playingId === clip.id) {
-      audioRef.current?.pause();
-      setPlayingId(null);
+    // Same clip: toggle pause/resume. If it had played to the end,
+    // resuming starts it over rather than doing nothing.
+    if (playingId === clip.id && audioRef.current) {
+      const audio = audioRef.current;
+      if (isPaused) {
+        if (audio.ended) audio.currentTime = 0;
+        audio.play();
+        setIsPaused(false);
+      } else {
+        audio.pause();
+        setIsPaused(true);
+      }
       return;
     }
     let url = audioUrls[clip.id];
@@ -241,7 +339,16 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
     });
     audio.play();
     setPlayingId(clip.id);
-    audio.onended = () => setPlayingId(null);
+    setIsPaused(false);
+    audio.onended = () => setIsPaused(true);
+  };
+
+  // Unloads the player entirely (used when the loaded clip is deleted).
+  const stopPlayback = () => {
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setPlayingId(null);
+    setIsPaused(false);
   };
 
   const handleSpeedChange = (speed) => {
@@ -422,6 +529,7 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
     setClips(prev => prev.filter(c => !succeeded.has(c.id)));
     succeeded.forEach(id => markClean(id));
     if (succeeded.has(expandedId)) setExpandedId(null);
+    if (succeeded.has(playingId)) stopPlayback();
     setSelectedIds(new Set(failed));
     setBulkBusy(false);
 
@@ -667,6 +775,8 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
           clips={recentClips}
           metadataMap={metadataMap}
           playingId={playingId}
+          isPaused={isPaused}
+          audio={audioRef.current}
           onPlay={handlePlay}
           formatDate={formatDate}
         />
@@ -800,10 +910,10 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
             />
             <button onClick={() => handlePlay(clip)} style={{
               width: '36px', height: '36px', borderRadius: '50%',
-              backgroundColor: playingId === clip.id ? '#cc0000' : '#1a73e8',
+              backgroundColor: playingId === clip.id && !isPaused ? '#cc0000' : '#1a73e8',
               color: 'white', border: 'none', cursor: 'pointer', fontSize: '14px', flexShrink: 0
             }}>
-              {playingId === clip.id ? '■' : '▶'}
+              {playingId === clip.id && !isPaused ? '❚❚' : '▶'}
             </button>
             <button
               onClick={(e) => { e.stopPropagation(); toggleFavorite(clip); }}
@@ -878,6 +988,10 @@ function Library({ accessToken, initialKeyFilter, onFilterConsumed, refreshToken
               {expandedId === clip.id ? '▲' : '▼'}
             </button>
           </div>
+
+          {playingId === clip.id && (
+            <PlaybackBar audio={audioRef.current} isPaused={isPaused} />
+          )}
 
           {expandedId === clip.id && metadataMap[clip.id] && (
             <div style={{ padding: '0 12px 12px' }}>

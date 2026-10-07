@@ -3,6 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <script>
+      // Tablet scaling. The app is laid out as a ~632px column (600px max
+      // content + padding), which looks small in the middle of an iPad.
+      // On tablets we declare a 640px layout width instead, so the browser
+      // natively scales the entire page to fill the screen — and re-scales
+      // on rotation. Native viewport scaling keeps every coordinate
+      // consistent (unlike CSS zoom/transform), so pinch-to-zoom in the
+      // detail view and Practice's live width measurement are unaffected.
+      // "Tablet" = touch is the primary input AND the short screen edge is
+      // >= 700px: excludes phones (short edge < 500px) and touchscreen
+      // laptops (primary pointer is a mouse/trackpad, so not "coarse").
+      // maximum-scale is dropped for tablets so the page can also be
+      // pinch-zoomed further.
+      (function () {
+        try {
+          var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+          var shortEdge = Math.min(screen.width, screen.height);
+          if (coarse && shortEdge >= 700) {
+            document.querySelector('meta[name="viewport"]')
+              .setAttribute('content', 'width=640');
+          }
+        } catch (e) { /* leave the default viewport in place */ }
+      })();
+    </script>
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black" />
