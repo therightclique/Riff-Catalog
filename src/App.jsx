@@ -612,7 +612,7 @@ function App() {
   };
 
   return (
-    <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
+    <div style={{ padding: '44px 16px 20px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', marginBottom: '16px' }}>
         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
           {user && (
