@@ -45,20 +45,19 @@ export function FretboardDiagram({ selectedKey }) {
   const parts = selectedKey.split(' ');
   const rootNote = parts.slice(0, -1).join(' ');
 
-  // Root / 3rd / 5th colors come from theme.js — change them there. Every
-  // other scale note stays the plain blue.
+  // Root / 3rd / 5th / other colors come from theme.js (chosen in Settings).
   const ROLE_BY_DEGREE = { '1': 'root', '3': 'third', '5': 'fifth' };
   const colorForNote = (note) => {
     const role = ROLE_BY_DEGREE[degreeByNote[note]];
-    return role ? NOTE_ROLE_COLORS[role] : '#1a73e8';
+    return NOTE_ROLE_COLORS[role || 'other'];
   };
 
   // Text on a root/3rd/5th circle flips dark/light automatically to stay
   // readable on whatever color theme.js defines (the old rule only special-
-  // cased the yellow 5th). Plain blue notes keep white text.
+  // cased the yellow 5th). The same goes for the "other" notes.
   const textColorForNote = (note) => {
     const role = ROLE_BY_DEGREE[degreeByNote[note]];
-    return role ? NOTE_ROLE_TEXT[role] : 'white';
+    return NOTE_ROLE_TEXT[role || 'other'];
   };
 
   const numFrets = 12, stringCount = 6, fretW = 44, stringH = 28;
@@ -75,7 +74,7 @@ export function FretboardDiagram({ selectedKey }) {
         3rd &nbsp;
         <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: NOTE_ROLE_COLORS.fifth, verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         5th &nbsp;
-        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: '#1a73e8', verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
+        <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: NOTE_ROLE_COLORS.other, verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         Other — {selectedKey}
       </div>
       <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`}

@@ -13,6 +13,7 @@ import Changelog, { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog
 import Debug from './components/Debug';
 import Randomizer from './components/Randomizer';
 import Settings from './components/Settings';
+import Jam from './components/Jam';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
 import { initDebugLog } from './components/DebugLog';
@@ -100,7 +101,7 @@ function App() {
   // against the real tab list so a stale or hand-edited URL can't leave
   // the app on a blank view, then stripped from the address so a later
   // manual reload starts normally.
-  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings'];
+  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings', 'jam'];
   const [view, setView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -171,6 +172,7 @@ function App() {
     { id: 'library', label: 'Library', icon: '📚' },
     { id: 'keyfinder', label: 'Key Finder', icon: '🎹' },
     { id: 'practice', label: 'Practice', icon: '🎯' },
+    { id: 'jam', label: 'Jam', icon: '🥁' },
     { id: 'randomizer', label: 'Randomizer', icon: '🎲' },
     { id: 'changelog', label: 'Changelog', icon: '📝' },
     { id: 'debug', label: 'Debug', icon: '🛠' },
@@ -983,6 +985,12 @@ function App() {
           {visitedViews.has('changelog') && (
             <div style={{ display: view === 'changelog' ? 'block' : 'none' }}>
               <Changelog />
+            </div>
+          )}
+          {/* Jam stays mounted (like every tab), so a running beat keeps playing while you switch sections. */}
+          {visitedViews.has('jam') && (
+            <div style={{ display: view === 'jam' ? 'block' : 'none' }}>
+              <Jam />
             </div>
           )}
           {visitedViews.has('settings') && (

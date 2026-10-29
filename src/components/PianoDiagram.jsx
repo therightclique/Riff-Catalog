@@ -7,12 +7,11 @@ import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 //                        counterpart of the fretboard)
 //   • PianoChordDiagram — one octave, with a chord's three notes highlighted
 // Root / 3rd / 5th use the same colors (from theme.js, chosen in Settings) as
-// every other diagram; the remaining notes of the key are blue, as on the
-// fretboard.
+// every other diagram; the remaining notes of the key use the "other" color
+// (blue by default), as on the fretboard.
 
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const BLACK_PITCH_CLASS = new Set([1, 3, 6, 8, 10]);
-const OTHER_COLOR = '#1a73e8';
 const WHITE_KEY = '#f5f5f5';
 const BLACK_KEY = '#1c1c1c';
 
@@ -36,7 +35,6 @@ function layoutKeys(first, last, whiteW, blackW) {
 // role: 'root' | 'third' | 'fifth' | 'other' | null
 function keyColors(role) {
   if (!role) return null;
-  if (role === 'other') return { fill: OTHER_COLOR, ink: '#ffffff' };
   return { fill: NOTE_ROLE_COLORS[role], ink: NOTE_ROLE_TEXT[role] };
 }
 
@@ -99,7 +97,7 @@ export function PianoKeyboard({ selectedKey }) {
         {dot(NOTE_ROLE_COLORS.root)}Root &nbsp;
         {dot(NOTE_ROLE_COLORS.third, { marginLeft: '8px' })}3rd &nbsp;
         {dot(NOTE_ROLE_COLORS.fifth, { marginLeft: '8px' })}5th &nbsp;
-        {dot(OTHER_COLOR, { marginLeft: '8px' })}Other — {selectedKey}
+        {dot(NOTE_ROLE_COLORS.other, { marginLeft: '8px' })}Other — {selectedKey}
       </div>
       <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         style={{ width: '100%', maxWidth: `${svgWidth}px`, display: 'block', margin: '0 auto' }}>

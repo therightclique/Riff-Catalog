@@ -9,7 +9,7 @@
 
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const GUITAR_OPEN_MIDI = [40, 45, 50, 55, 59, 64]; // low E, A, D, G, B, high E
-const STRUM_SECONDS = { guitar: 0.04, piano: 0.028 };
+const STRUM_SECONDS = { guitar: 0.09, piano: 0.065 }; // gap between successive notes of a chord
 
 export const midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -242,11 +242,17 @@ export function installAudioUnlock() {
   events.forEach(e => document.addEventListener(e, unlock, true));
 }
 
+// The app's one shared AudioContext (browsers limit how many can exist, and
+// iOS unlocks them per page), for other features such as the Jam drums.
+export function getAudioContext() {
+  return getEngine() ? sharedCtx : null;
+}
+
 export const playChord = (instrument, midis) => whenRunning(e => e.chord(instrument, midis));
 export const playNote = (instrument, midi) => whenRunning(e => e.note(instrument, midi));
 
 // Plays a list of notes one after another (e.g. the scale going up).
-export const playSequence = (instrument, midis, gapSeconds = 0.22) =>
+export const playSequence = (instrument, midis, gapSeconds = 0.44) =>
   whenRunning(e => {
     const t0 = e.ctx.currentTime + 0.005;
     midis.forEach((m, i) => e.note(instrument, m, t0 + i * gapSeconds));

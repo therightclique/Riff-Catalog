@@ -6,6 +6,7 @@ const ROLES = [
   { id: 'root', label: 'Root', badge: 'R' },
   { id: 'third', label: '3rd', badge: '3' },
   { id: 'fifth', label: '5th', badge: '5' },
+  { id: 'other', label: 'Other notes', badge: '•' },
 ];
 
 const COMMIT_DELAY_MS = 150; // while dragging the picker, redraw the app at most this often
@@ -84,7 +85,7 @@ export default function Settings() {
       <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', color: '#222' }}>
         <div style={{ fontSize: '17px', fontWeight: '700', marginBottom: '4px' }}>Interval colors</div>
         <div style={{ fontSize: '13px', color: '#555', lineHeight: 1.4, marginBottom: '8px' }}>
-          Colors for the root, 3rd and 5th, used on every fretboard, chord diagram, tab card and note list in the app.
+          Colors for the root, 3rd, 5th and the key's other notes, used on every fretboard, keyboard, chord diagram, tab card and note row in the app.
           Changes apply immediately and follow you to your other devices.
         </div>
         {ROLES.map(r => <ColorRow key={r.id} role={r} />)}

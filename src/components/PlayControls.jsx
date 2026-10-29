@@ -3,10 +3,8 @@ import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 import { getScaleNotes } from './FretboardDiagram';
 import { playNote, playSequence, scaleMidi } from './AudioEngine';
 
-const OTHER_COLOR = '#1a73e8';
-
 // Row of tappable notes for a key: root up through the octave. Colored like
-// the diagrams (root / 3rd / 5th from Settings, the rest blue). Notes start on
+// the diagrams (root / 3rd / 5th / other, all from Settings). Notes start on
 // touch-down, not on release, so quick melodies feel immediate.
 export function NoteStrip({ selectedKey, instrument }) {
   const [pressed, setPressed] = useState(null);
@@ -36,8 +34,8 @@ export function NoteStrip({ selectedKey, instrument }) {
       <div style={{ display: 'flex', gap: '5px', maxWidth: '420px', margin: '0 auto' }}>
         {entries.map((n, i) => {
           const role = roleOf(n.degree);
-          const bg = role === 'other' ? OTHER_COLOR : NOTE_ROLE_COLORS[role];
-          const ink = role === 'other' ? '#ffffff' : NOTE_ROLE_TEXT[role];
+          const bg = NOTE_ROLE_COLORS[role];
+          const ink = NOTE_ROLE_TEXT[role];
           return (
             <button
               key={`${n.note}-${n.degree}`}

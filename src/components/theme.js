@@ -2,7 +2,7 @@
 //  THE APP'S MUSIC COLORS — CHANGE THEM HERE AND EVERY SCREEN FOLLOWS
 // ═══════════════════════════════════════════════════════════════════════
 //
-// The root / 3rd / 5th colors are now chosen in the app's Settings (menu →
+// The root / 3rd / 5th / other-note colors are now chosen in the app's Settings (menu →
 // Settings) and saved to the user's Google Drive, so the values below are
 // only the DEFAULTS (used until a color is picked, and by "Reset to
 // defaults"). The other colors here are still edited in this file — plain
@@ -12,7 +12,8 @@
 // step with the first.
 //
 // Where each is used:
-//   NOTE_ROLE_COLORS     root / 3rd / 5th of a key or chord —
+//   NOTE_ROLE_COLORS     root / 3rd / 5th of a key or chord, plus "other" (the key's
+//                        remaining notes, shown on the fretboard, keyboard and note row) —
 //                        • Practice tab: licks, double stops, and the legend
 //                        • Key Finder: the fretboard, chord diagram dots,
 //                          and chord note names
@@ -26,6 +27,7 @@ export const DEFAULT_NOTE_ROLE_COLORS = Object.freeze({
   root:  '#ff4444', // red
   third: '#bf5916', // orange
   fifth: '#ffe14d', // yellow
+  other: '#1a73e8', // blue — every other note of the key
 });
 
 // LIVE objects: applyNoteRoleColors() changes them in place, so every screen
@@ -74,6 +76,7 @@ export const NOTE_ROLE_TEXT = {
   root:  readableTextOn(NOTE_ROLE_COLORS.root),
   third: readableTextOn(NOTE_ROLE_COLORS.third),
   fifth: readableTextOn(NOTE_ROLE_COLORS.fifth),
+  other: readableTextOn(NOTE_ROLE_COLORS.other),
 };
 
 // ── choosing the colors at runtime ──────────────────────────────────────
