@@ -442,6 +442,14 @@ function Library({
     const storedVersion = metadataMap[clip.id]?.analyzerVersion;
     if (storedCandidates?.length > 0 && storedVersion === ANALYZER_VERSION) {
       setAnalysisCandidates(prev => ({ ...prev, [clip.id]: storedCandidates }));
+      // Analyze must also (re)assign the detected key — otherwise, after
+      // someone manually changes the key, pressing Analyze appears to do
+      // nothing. The top candidate is the detected key.
+      const detectedKey = storedCandidates[0]?.key;
+      if (detectedKey && metadataMap[clip.id]?.key !== detectedKey) {
+        setMetadataMap(prev => ({ ...prev, [clip.id]: { ...prev[clip.id], key: detectedKey } }));
+        markDirty(clip.id);
+      }
       setAnalyzingId(null);
       return;
     }

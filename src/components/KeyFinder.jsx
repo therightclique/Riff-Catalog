@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PianoKeyboard, PianoChordDiagram } from './PianoDiagram';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, CHORD_QUALITY_COLORS, RELATIVE_KEY_COLOR, readableTextOn } from './theme';
@@ -263,6 +264,16 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
 
 function KeyFinder({ onFilterByKey }) {
   const [selectedKey, setSelectedKey] = useState('');
+  // Guitar (fretboard + chord shapes) or piano (88-key keyboard + one-octave
+  // chord keyboards). Remembered on this device.
+  const [instrument, setInstrumentState] = useState(() => {
+    try { return localStorage.getItem('rc_keyfinder_instrument') === 'piano' ? 'piano' : 'guitar'; } catch { return 'guitar'; }
+  });
+  const setInstrument = (v) => {
+    setInstrumentState(v);
+    try { localStorage.setItem('rc_keyfinder_instrument', v); } catch { /* remembering is optional */ }
+  };
+  const isPiano = instrument === 'piano';
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
 
   // The relative key shares all seven notes with the selected one: for a
@@ -329,6 +340,23 @@ function KeyFinder({ onFilterByKey }) {
   return (
     <div style={{ marginTop: '20px' }}>
       <h2 style={{ marginBottom: '16px', textAlign: 'center' }}>Key Finder</h2>
+
+      {/* Instrument selector */}
+      <div role="tablist" aria-label="Instrument" style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
+        {[['guitar', '🎸 Guitar'], ['piano', '🎹 Piano']].map(([id, label], i) => {
+          const active = instrument === id;
+          return (
+            <button key={id} role="tab" aria-selected={active} onClick={() => setInstrument(id)}
+              style={{
+                padding: '8px 22px', fontSize: '14px', cursor: 'pointer', fontWeight: active ? '700' : '500',
+                border: '1px solid #1a73e8', backgroundColor: active ? '#1a73e8' : 'white', color: active ? 'white' : '#1a73e8',
+                borderRadius: i === 0 ? '8px 0 0 8px' : '0 8px 8px 0', marginLeft: i === 0 ? 0 : '-1px',
+              }}>
+              {label}
+            </button>
+          );
+        })}
+      </div>
 
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
         <select value={selectedKey} onChange={e => handleKeyDropdownChange(e.target.value)}
@@ -511,11 +539,23 @@ function KeyFinder({ onFilterByKey }) {
             </div>
           </div>
 
-          {/* Fretboard */}
+          {/* Fretboard (guitar) or full keyboard (piano) */}
           <ZoomHint />
-          <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />
+          {isPiano ? (
+            <div
+              onClick={() => setDetailView({
+                title: `Keyboard — ${selectedKey}`, subtitle: '', difficulty: null,
+                content: <PianoKeyboard selectedKey={selectedKey} />,
+              })}
+              style={{ cursor: 'pointer' }}
+            >
+              <PianoKeyboard selectedKey={selectedKey} />
+            </div>
+          ) : (
+            <ZoomableFretboard selectedKey={selectedKey} onOpenDetail={setDetailView} />
+          )}
 
-          {/* Chord diagrams below fretboard */}
+          {/* Chord diagrams below the fretboard / keyboard */}
           <div style={{ marginTop: '28px', marginBottom: '8px' }}>
             <div style={{ fontSize: '13px', color: '#888', textAlign: 'center', marginBottom: '12px' }}>
               <span style={{ display: 'inline-block', width: '10px', height: '10px', borderRadius: '50%', backgroundColor: CHORD_ROLE_COLORS.R, verticalAlign: 'middle', marginRight: '4px' }}></span>Root &nbsp;
@@ -526,22 +566,25 @@ function KeyFinder({ onFilterByKey }) {
               {scaleNotes.map(({ degree, quality, note }) => {
                 const shape = getChordShape(note, quality);
                 const chordLabel = quality === 'M' ? note : quality === 'dim' ? `${note}°` : `${note}m`;
+                const chordDiagram = isPiano
+                  ? <PianoChordDiagram chordName={chordLabel} roleByNote={chordRoleByNote(note, quality)} />
+                  : <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} quality={quality} />;
                 return (
                   <div key={degree}
                     onClick={() => setDetailView({
                       title: chordLabel, subtitle: `Degree ${degree}${quality}`, difficulty: null,
                       content: (
                         <div>
-                          <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} quality={quality} />
+                          {chordDiagram}
                           <ChordTones root={note} quality={quality} />
                         </div>
                       ),
-                      secondaryContent: <FretboardDiagram selectedKey={selectedKey} />,
-                      secondaryLabel: 'Show fretboard', primaryLabel: 'Show chord',
+                      secondaryContent: isPiano ? <PianoKeyboard selectedKey={selectedKey} /> : <FretboardDiagram selectedKey={selectedKey} />,
+                      secondaryLabel: isPiano ? 'Show keyboard' : 'Show fretboard', primaryLabel: 'Show chord',
                     })}
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
                     <span style={{ fontSize: '11px', color: '#888' }}>{degree}{quality}</span>
-                    <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} quality={quality} />
+                    {chordDiagram}
                   </div>
                 );
               })}
