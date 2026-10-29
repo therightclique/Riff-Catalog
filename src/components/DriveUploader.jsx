@@ -1,10 +1,10 @@
-const FOLDER_NAME = 'RiffCatalog';
+export const FOLDER_NAME = 'RiffCatalog';
 
 // Folder IDs don't change during a session. Caching them removes 3+
 // sequential Drive round trips from every upload after the first.
 const folderIdCache = new Map();
 
-async function getOrCreateFolder(accessToken, folderName, parentId = null) {
+export async function getOrCreateFolder(accessToken, folderName, parentId = null) {
   const cacheKey = `${parentId || 'root'}/${folderName}`;
   if (folderIdCache.has(cacheKey)) return folderIdCache.get(cacheKey);
 

@@ -7,8 +7,11 @@ import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 // details), so they always look the same and always come from the same
 // getScaleNotes Key Finder uses. The colors come from theme.js — change
 // them there, not here.
+// Getters, so the chips follow the colors chosen in Settings.
 const chipFor = (role) => ({
-  bg: NOTE_ROLE_COLORS[role], border: NOTE_ROLE_COLORS[role], text: NOTE_ROLE_TEXT[role],
+  get bg() { return NOTE_ROLE_COLORS[role]; },
+  get border() { return NOTE_ROLE_COLORS[role]; },
+  get text() { return NOTE_ROLE_TEXT[role]; },
 });
 const CHIP_STYLES = {
   root:  chipFor('root'),

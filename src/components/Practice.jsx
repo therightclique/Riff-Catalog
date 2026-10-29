@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { FretboardDiagram } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, BigTabDisplay, ZoomHint } from './DiagramDetailView';
-import { NOTE_ROLE_COLORS, readableTextOn } from './theme';
+import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 
 const ALL_KEYS = [
   'A Major','A# Major','B Major','C Major','C# Major','D Major',
@@ -197,7 +197,7 @@ function renderDoubleStop(pairs, group, rootNote, targetColumns = pairs.length, 
               border: `1.5px solid ${color}`, zIndex: 0 }
           : null;
         const textStyle = { position: 'relative', zIndex: 1, fontWeight: '700',
-          color: isRoot ? ROOT_BADGE_TEXT : isThirdOrFifth ? color : '#fff' };
+          color: isRoot ? NOTE_ROLE_TEXT.root : isThirdOrFifth ? color : '#fff' };
         rows[i].push(
           <span key={rows[i].length}>
             <span style={{ position: 'relative', display: 'inline-block' }}>
@@ -335,13 +335,14 @@ function transposeBoxLick(notes, lickRoot, targetRoot) {
 // against the target tones.
 // The actual colors live in theme.js — change them there. Root renders as a
 // filled circle; 3rd (major or minor) and 5th as hollow circles.
+// (Getters, so they follow the colors chosen in Settings.)
 const DEGREE_COLORS = {
-  '1': NOTE_ROLE_COLORS.root,
-  '3': NOTE_ROLE_COLORS.third, 'b3': NOTE_ROLE_COLORS.third,
-  '5': NOTE_ROLE_COLORS.fifth,
+  get '1'() { return NOTE_ROLE_COLORS.root; },
+  get '3'() { return NOTE_ROLE_COLORS.third; }, get 'b3'() { return NOTE_ROLE_COLORS.third; },
+  get '5'() { return NOTE_ROLE_COLORS.fifth; },
 };
 // Text inside the filled root circle — dark or light, whichever reads on the root color.
-const ROOT_BADGE_TEXT = readableTextOn(NOTE_ROLE_COLORS.root);
+// (Used as NOTE_ROLE_TEXT.root at each use, so it follows the colors chosen in Settings.)
 
 // Same layout as renderSingleNote, but returns JSX with root/3rd/5th
 // notes badge-marked instead of plain text — root gets a solid filled
@@ -402,7 +403,7 @@ function renderSingleNoteWithRoot(notes, targetColumns = notes.length, rowRefsCo
           border: `1.5px solid ${color}`, zIndex: 0 }
       : null;
     const textStyle = { position: 'relative', zIndex: 1, fontWeight: '700',
-      color: isRoot ? ROOT_BADGE_TEXT : isThirdOrFifth ? color : '#fff' };
+      color: isRoot ? NOTE_ROLE_TEXT.root : isThirdOrFifth ? color : '#fff' };
     for (let i = 0; i < 6; i++) {
       if (i === s) {
         rows[i].push(
@@ -2480,7 +2481,7 @@ function DegreeLegend() {
   const dotBase = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '1.1em', height: '1.1em', borderRadius: '50%', fontSize: '10px', fontWeight: '800', boxSizing: 'border-box' };
   return (
     <p style={{ textAlign: 'center', fontSize: '12px', color: '#888', margin: 0 }}>
-      <span style={{ ...dotBase, backgroundColor: NOTE_ROLE_COLORS.root, color: ROOT_BADGE_TEXT }}>R</span>{' Root · '}
+      <span style={{ ...dotBase, backgroundColor: NOTE_ROLE_COLORS.root, color: NOTE_ROLE_TEXT.root }}>R</span>{' Root · '}
       <span style={{ ...dotBase, border: `1.5px solid ${NOTE_ROLE_COLORS.third}`, color: NOTE_ROLE_COLORS.third }}>3</span>{' 3rd · '}
       <span style={{ ...dotBase, border: `1.5px solid ${NOTE_ROLE_COLORS.fifth}`, color: NOTE_ROLE_COLORS.fifth }}>5</span>{' 5th'}
       <span style={{ color: '#fff' }}>{' — the rest are passing tones'}</span>

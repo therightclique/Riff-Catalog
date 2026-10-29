@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useReducer } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import Recorder from './components/Recorder';
 import { uploadToDrive, verifyDriveFile } from './components/DriveUploader';
@@ -12,6 +12,9 @@ import Practice from './components/Practice';
 import Changelog, { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog';
 import Debug from './components/Debug';
 import Randomizer from './components/Randomizer';
+import Settings from './components/Settings';
+import { syncSettings } from './components/SettingsService';
+import { subscribeNoteRoleColors } from './components/theme';
 import { initDebugLog } from './components/DebugLog';
 
 initDebugLog();
@@ -97,7 +100,7 @@ function App() {
   // against the real tab list so a stale or hand-edited URL can't leave
   // the app on a blank view, then stripped from the address so a later
   // manual reload starts normally.
-  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog'];
+  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings'];
   const [view, setView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -171,8 +174,27 @@ function App() {
     { id: 'randomizer', label: 'Randomizer', icon: '🎲' },
     { id: 'changelog', label: 'Changelog', icon: '📝' },
     { id: 'debug', label: 'Debug', icon: '🛠' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },
   ];
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // Re-draw everything when the interval colors change (picked here, or
+  // adopted from another device), so no screen keeps showing the old ones.
+  const [, bumpColors] = useReducer(n => n + 1, 0);
+  useEffect(() => subscribeNoteRoleColors(bumpColors), []);
+  // Sync saved settings with Google Drive: on sign-in / new token, when the
+  // app returns to the foreground, and when the connection comes back.
+  useEffect(() => {
+    if (!accessToken) return;
+    syncSettings(accessToken);
+    const resync = () => { if (document.visibilityState !== 'hidden') syncSettings(accessToken); };
+    document.addEventListener('visibilitychange', resync);
+    window.addEventListener('online', resync);
+    return () => {
+      document.removeEventListener('visibilitychange', resync);
+      window.removeEventListener('online', resync);
+    };
+  }, [accessToken]);
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
@@ -961,6 +983,11 @@ function App() {
           {visitedViews.has('changelog') && (
             <div style={{ display: view === 'changelog' ? 'block' : 'none' }}>
               <Changelog />
+            </div>
+          )}
+          {visitedViews.has('settings') && (
+            <div style={{ display: view === 'settings' ? 'block' : 'none' }}>
+              <Settings />
             </div>
           )}
           {visitedViews.has('debug') && (

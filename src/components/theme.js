@@ -2,8 +2,11 @@
 //  THE APP'S MUSIC COLORS — CHANGE THEM HERE AND EVERY SCREEN FOLLOWS
 // ═══════════════════════════════════════════════════════════════════════
 //
-// Each of these is a plain hex color (#rrggbb). Edit the value, save,
-// deploy — that's all. Text that sits on top of a color (the letter inside
+// The root / 3rd / 5th colors are now chosen in the app's Settings (menu →
+// Settings) and saved to the user's Google Drive, so the values below are
+// only the DEFAULTS (used until a color is picked, and by "Reset to
+// defaults"). The other colors here are still edited in this file — plain
+// hex colors (#rrggbb): edit the value, save, deploy. Text that sits on top of a color (the letter inside
 // a note badge, the note names on a card) automatically switches between
 // dark and light to stay readable, so there's no second color to keep in
 // step with the first.
@@ -19,11 +22,16 @@
 //                        major / minor / diminished
 //   RELATIVE_KEY_COLOR   the ring that marks the relative major/minor card
 
-export const NOTE_ROLE_COLORS = {
+export const DEFAULT_NOTE_ROLE_COLORS = Object.freeze({
   root:  '#ff4444', // red
   third: '#bf5916', // orange
   fifth: '#ffe14d', // yellow
-};
+});
+
+// LIVE objects: applyNoteRoleColors() changes them in place, so every screen
+// that reads NOTE_ROLE_COLORS.root (etc.) during a render sees the current
+// choice. Nothing should copy these at load time — read them when drawing.
+export const NOTE_ROLE_COLORS = { ...DEFAULT_NOTE_ROLE_COLORS };
 
 export const CHORD_QUALITY_COLORS = {
   M:   '#00c853', // major      — green
@@ -60,9 +68,37 @@ export function readableTextOn(hex) {
   return contrast(hex, '#ffffff') >= contrast(hex, '#111111') ? '#ffffff' : '#111111';
 }
 
-// Convenience: the text color for each role, derived from the role colors.
+// Convenience: the text color for each role, derived from the role colors
+// (kept in step automatically whenever the colors change).
 export const NOTE_ROLE_TEXT = {
   root:  readableTextOn(NOTE_ROLE_COLORS.root),
   third: readableTextOn(NOTE_ROLE_COLORS.third),
   fifth: readableTextOn(NOTE_ROLE_COLORS.fifth),
 };
+
+// ── choosing the colors at runtime ──────────────────────────────────────
+const HEX6 = /^#[0-9a-f]{6}$/i;
+export const isValidHex = (v) => HEX6.test(String(v || ''));
+
+const listeners = new Set();
+// Call fn whenever the colors change; returns an unsubscribe function.
+export function subscribeNoteRoleColors(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+// Apply any of { root, third, fifth }. Invalid values are ignored. Returns
+// true if anything actually changed.
+export function applyNoteRoleColors(colors) {
+  let changed = false;
+  for (const role of Object.keys(DEFAULT_NOTE_ROLE_COLORS)) {
+    const v = colors && colors[role];
+    if (isValidHex(v) && v.toLowerCase() !== NOTE_ROLE_COLORS[role]) {
+      NOTE_ROLE_COLORS[role] = v.toLowerCase();
+      NOTE_ROLE_TEXT[role] = readableTextOn(NOTE_ROLE_COLORS[role]);
+      changed = true;
+    }
+  }
+  if (changed) listeners.forEach(fn => { try { fn(); } catch { /* a listener must never break a color change */ } });
+  return changed;
+}

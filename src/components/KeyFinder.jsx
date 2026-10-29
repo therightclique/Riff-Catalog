@@ -94,9 +94,10 @@ function getChordTones(root, quality) {
 // come from theme.js — the same root / 3rd / 5th colors used everywhere
 // else — so change them there. A chord only ever has these three notes, so
 // three colors cover every dot.
-const CHORD_ROLE_COLORS = { R: NOTE_ROLE_COLORS.root, '3': NOTE_ROLE_COLORS.third, '5': NOTE_ROLE_COLORS.fifth };
+// (Getters, so they follow the colors chosen in Settings.)
+const CHORD_ROLE_COLORS = { get R() { return NOTE_ROLE_COLORS.root; }, get '3'() { return NOTE_ROLE_COLORS.third; }, get '5'() { return NOTE_ROLE_COLORS.fifth; } };
 // Text that stays readable on top of each role color.
-const CHORD_ROLE_TEXT = { R: NOTE_ROLE_TEXT.root, '3': NOTE_ROLE_TEXT.third, '5': NOTE_ROLE_TEXT.fifth };
+const CHORD_ROLE_TEXT = { get R() { return NOTE_ROLE_TEXT.root; }, get '3'() { return NOTE_ROLE_TEXT.third; }, get '5'() { return NOTE_ROLE_TEXT.fifth; } };
 const roleOfLabel = (label) => (label === 'R' ? 'R' : label.endsWith('3') ? '3' : '5');
 
 // note name -> 'R' | '3' | '5' for one chord
