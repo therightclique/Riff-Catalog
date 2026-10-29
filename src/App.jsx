@@ -161,7 +161,27 @@ function App() {
   const [viewHistory, setViewHistory] = useState([]);
   const [visitedViews, setVisitedViews] = useState(() => new Set(['record', view]));
 
+  // Hamburger menu: top-level sections live here. Add a section by adding
+  // one line to MENU_ITEMS (plus its view below); the menu scrolls on its own.
+  const MENU_ITEMS = [
+    { id: 'record', label: 'Record', icon: '●' },
+    { id: 'library', label: 'Library', icon: '📚' },
+    { id: 'keyfinder', label: 'Key Finder', icon: '🎹' },
+    { id: 'practice', label: 'Practice', icon: '🎯' },
+    { id: 'randomizer', label: 'Randomizer', icon: '🎲' },
+    { id: 'changelog', label: 'Changelog', icon: '📝' },
+    { id: 'debug', label: 'Debug', icon: '🛠' },
+  ];
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [menuOpen]);
+
   const goToView = (newView) => {
+    setMenuOpen(false);
     if (newView === view) return;
     setViewHistory(prev => [...prev, view]);
     setVisitedViews(prev => (prev.has(newView) ? prev : new Set(prev).add(newView)));
@@ -169,6 +189,7 @@ function App() {
   };
 
   const goBack = () => {
+    setMenuOpen(false);
     setViewHistory(prev => {
       if (prev.length === 0) return prev;
       const next = [...prev];
@@ -428,15 +449,6 @@ function App() {
     setDuplicateWarning(null);
   };
 
-  const tabStyle = (active) => ({
-    padding: '8px 12px', cursor: 'pointer', border: 'none',
-    borderBottom: active ? '2px solid #1a73e8' : '2px solid transparent',
-    backgroundColor: 'transparent', fontSize: '14px',
-    fontWeight: active ? '600' : '400',
-    color: active ? '#1a73e8' : '#555',
-    whiteSpace: 'nowrap',
-  });
-
   const candidateBtnStyle = (isSelected, isFirst) => ({
     padding: '6px 12px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px',
     border: isSelected ? '2px solid #1a73e8' : isFirst ? '2px solid #2a6b17' : '1px solid #ccc',
@@ -601,39 +613,105 @@ function App() {
 
   return (
     <div style={{ padding: '20px 16px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', marginBottom: '16px' }}>
-        <button
-          onClick={goBack}
-          disabled={viewHistory.length === 0}
-          aria-label="Back"
-          style={{
-            position: 'absolute', left: 0, background: 'none',
-            border: `1px solid ${viewHistory.length === 0 ? '#3a3a3a' : '#ccc'}`,
-            borderRadius: '50%', width: '32px', height: '32px',
-            cursor: viewHistory.length === 0 ? 'default' : 'pointer',
-            fontSize: '16px', color: viewHistory.length === 0 ? '#555' : '#444',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-          }}>
-          ←
-        </button>
-        <h1 style={{ textAlign: 'center', margin: 0 }}>🎸 Riff Catalog</h1>
-        {/* Same full-app-reset handleRefreshApp already used on the Record
-            tab — now the only place it lives, reachable from any tab. */}
-        <button
-          onClick={handleRefreshApp}
-          aria-label="Refresh app"
-          title={accessToken ? 'Refresh app' : 'Reconnect Drive & refresh'}
-          style={{
-            position: 'absolute', right: 0, background: 'none', border: '1px solid #ccc',
-            borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
-            color: '#444', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
-          }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            <polyline points="23 4 23 10 17 10" />
-            <polyline points="1 20 1 14 7 14" />
-            <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
-          </svg>
-        </button>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', marginBottom: '16px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+          {user && (
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              aria-label="Menu"
+              aria-expanded={menuOpen}
+              style={{
+                background: menuOpen ? '#1a73e8' : 'none', border: '1px solid #ccc',
+                borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
+                color: menuOpen ? 'white' : '#444',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+              }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <line x1="3" y1="12" x2="21" y2="12" />
+                <line x1="3" y1="18" x2="21" y2="18" />
+              </svg>
+            </button>
+          )}
+          <button
+            onClick={goBack}
+            disabled={viewHistory.length === 0}
+            aria-label="Back"
+            style={{
+              position: 'relative', background: 'none',
+              border: `1px solid ${viewHistory.length === 0 ? '#3a3a3a' : '#ccc'}`,
+              borderRadius: '50%', width: '32px', height: '32px',
+              cursor: viewHistory.length === 0 ? 'default' : 'pointer',
+              fontSize: '16px', color: viewHistory.length === 0 ? '#555' : '#444',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+            }}>
+            ←
+          </button>
+        </div>
+        <h1 style={{ textAlign: 'center', margin: 0, flex: 1, minWidth: 0, fontSize: '24px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🎸 Riff Catalog</h1>
+        <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
+          {/* Always-visible shortcut back to Record, from any section. */}
+          {user && (
+            <button
+              onClick={() => goToView('record')}
+              aria-label="Go to Record"
+              title="Record"
+              style={{
+                background: view === 'record' ? '#cc0000' : 'none', border: '1px solid #cc0000',
+                borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
+                color: view === 'record' ? 'white' : '#cc0000', fontSize: '14px',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+              }}>
+              ●
+            </button>
+          )}
+          {/* Same full-app-reset handleRefreshApp already used on the Record
+              tab — now the only place it lives, reachable from any tab. */}
+          <button
+            onClick={handleRefreshApp}
+            aria-label="Refresh app"
+            title={accessToken ? 'Refresh app' : 'Reconnect Drive & refresh'}
+            style={{
+              background: 'none', border: '1px solid #ccc',
+              borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
+              color: '#444', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+            }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="23 4 23 10 17 10" />
+              <polyline points="1 20 1 14 7 14" />
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+            </svg>
+          </button>
+        </div>
+        {user && menuOpen && (
+          <>
+            <div onClick={() => setMenuOpen(false)}
+              style={{ position: 'fixed', inset: 0, zIndex: 40, backgroundColor: 'rgba(0,0,0,0.35)' }} />
+            <div role="menu" style={{
+              position: 'absolute', top: '40px', left: 0, zIndex: 50, width: '240px', maxWidth: '85vw',
+              maxHeight: 'calc(100vh - 90px)', overflowY: 'auto', WebkitOverflowScrolling: 'touch',
+              backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '10px',
+              boxShadow: '0 6px 20px rgba(0,0,0,0.3)', padding: '6px 0', textAlign: 'left',
+            }}>
+              {MENU_ITEMS.map(item => {
+                const active = view === item.id;
+                return (
+                  <button key={item.id} role="menuitem" onClick={() => goToView(item.id)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: '12px', width: '100%',
+                      padding: '14px 16px', border: 'none', cursor: 'pointer', fontSize: '16px',
+                      backgroundColor: active ? '#e8f0fe' : 'transparent',
+                      color: active ? '#1a73e8' : '#222', fontWeight: active ? '600' : '400',
+                      textAlign: 'left',
+                    }}>
+                    <span style={{ width: '22px', textAlign: 'center', color: item.id === 'record' ? '#cc0000' : undefined }}>{item.icon}</span>
+                    {item.label}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
       </div>
       {!user ? (
         <div style={{ display: 'flex', justifyContent: 'center', marginTop: '40px' }}>
@@ -700,13 +778,10 @@ function App() {
             </div>
           )}
 
-          <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', display: 'flex', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <button style={tabStyle(view === 'record')} onClick={() => goToView('record')}>Record</button>
-            <button style={tabStyle(view === 'library')} onClick={() => goToView('library')}>Library</button>
-            <button style={tabStyle(view === 'keyfinder')} onClick={() => goToView('keyfinder')}>Key Finder</button>
-            <button style={tabStyle(view === 'practice')} onClick={() => goToView('practice')}>Practice</button>
-            <button style={tabStyle(view === 'randomizer')} onClick={() => goToView('randomizer')}>Randomizer</button>
-            <button style={tabStyle(view === 'debug')} onClick={() => goToView('debug')}>Debug</button>
+          {/* Which section you're in (the tab bar is now the hamburger menu).
+              A section with its own sub-tabs puts them inside its own view. */}
+          <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', padding: '6px 0 8px', fontSize: '15px', fontWeight: '600', color: '#1a73e8', textAlign: 'center' }}>
+            {(MENU_ITEMS.find(i => i.id === view) || {}).label}
           </div>
 
           <div style={{ display: view === 'record' ? 'flex' : 'none', flexDirection: 'column', alignItems: 'center' }}>
