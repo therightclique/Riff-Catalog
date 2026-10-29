@@ -1,5 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PianoKeyboard, PianoChordDiagram } from './PianoDiagram';
+import { NoteStrip, PlayChordButton } from './PlayControls';
+import { playChord, guitarChordMidi, pianoChordMidi, installAudioUnlock } from './AudioEngine';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, CHORD_QUALITY_COLORS, RELATIVE_KEY_COLOR, readableTextOn } from './theme';
@@ -274,6 +276,12 @@ function KeyFinder({ onFilterByKey }) {
     try { localStorage.setItem('rc_keyfinder_instrument', v); } catch { /* remembering is optional */ }
   };
   const isPiano = instrument === 'piano';
+
+  // Sound: browsers (iOS especially) only allow audio after a tap, so the first
+  // taps anywhere switch it on; by the time a note is tapped it plays instantly.
+  useEffect(() => { installAudioUnlock(); }, []);
+  const playChordNow = (note, quality, shape) =>
+    playChord(instrument, isPiano ? pianoChordMidi(note, quality) : guitarChordMidi(shape));
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
 
   // The relative key shares all seven notes with the selected one: for a
@@ -539,7 +547,10 @@ function KeyFinder({ onFilterByKey }) {
             </div>
           </div>
 
-          {/* Fretboard (guitar) or full keyboard (piano) */}
+          {/* Tap-to-play notes of the key */}
+          <NoteStrip selectedKey={selectedKey} instrument={instrument} />
+
+          {/* Fretboard (guitar) or keyboard (piano) */}
           <ZoomHint />
           {isPiano ? (
             <div
@@ -577,6 +588,9 @@ function KeyFinder({ onFilterByKey }) {
                         <div>
                           {chordDiagram}
                           <ChordTones root={note} quality={quality} />
+                          <div style={{ textAlign: 'center' }}>
+                            <PlayChordButton big onPlay={() => playChordNow(note, quality, shape)} />
+                          </div>
                         </div>
                       ),
                       secondaryContent: isPiano ? <PianoKeyboard selectedKey={selectedKey} /> : <FretboardDiagram selectedKey={selectedKey} />,
@@ -585,6 +599,7 @@ function KeyFinder({ onFilterByKey }) {
                     style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', cursor: 'pointer' }}>
                     <span style={{ fontSize: '11px', color: '#888' }}>{degree}{quality}</span>
                     {chordDiagram}
+                    <PlayChordButton onPlay={() => playChordNow(note, quality, shape)} />
                   </div>
                 );
               })}

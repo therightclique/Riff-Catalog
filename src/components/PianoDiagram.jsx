@@ -2,9 +2,9 @@ import { getScaleNotes } from './FretboardDiagram';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 
 // Piano versions of the Key Finder's diagrams:
-//   • PianoKeyboard    — the standard 88-key keyboard (A0–C8) with the notes
-//                        of a key highlighted (the piano counterpart of the
-//                        fretboard)
+//   • PianoKeyboard    — a three-octave keyboard (C3–B5, spanning middle C)
+//                        with the notes of a key highlighted (the piano
+//                        counterpart of the fretboard)
 //   • PianoChordDiagram — one octave, with a chord's three notes highlighted
 // Root / 3rd / 5th use the same colors (from theme.js, chosen in Settings) as
 // every other diagram; the remaining notes of the key are blue, as on the
@@ -73,7 +73,7 @@ function Keys({ keys, whiteW, blackW, whiteH, blackH, top, roleOf, labelSize, bl
   );
 }
 
-// ── The full keyboard for a key ─────────────────────────────────────────
+// ── The three-octave keyboard for a key ─────────────────────────────────────────
 export function PianoKeyboard({ selectedKey }) {
   if (!selectedKey) return null;
   const scaleNotes = getScaleNotes(selectedKey);
@@ -85,10 +85,10 @@ export function PianoKeyboard({ selectedKey }) {
     roleByPc[CHROMATIC.indexOf(n.note)] = role;
   });
 
-  const whiteW = 22, blackW = 13, whiteH = 120, blackH = 75, top = 4;
-  const { keys, whiteCount } = layoutKeys(21, 108, whiteW, blackW); // A0 … C8 — the standard 88 keys
+  const whiteW = 24, blackW = 14, whiteH = 130, blackH = 82, top = 4;
+  const { keys, whiteCount } = layoutKeys(48, 83, whiteW, blackW); // C3 … B5 — three octaves, middle C (C4) in the middle
   const svgWidth = whiteCount * whiteW;
-  const svgHeight = top + whiteH + 18;
+  const svgHeight = top + whiteH + 20;
   const dot = (color, extra = {}) => (
     <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: color, verticalAlign: 'middle', marginRight: '4px', ...extra }}></span>
   );
@@ -104,10 +104,10 @@ export function PianoKeyboard({ selectedKey }) {
       <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         style={{ width: '100%', maxWidth: `${svgWidth}px`, display: 'block', margin: '0 auto' }}>
         <Keys keys={keys} whiteW={whiteW} blackW={blackW} whiteH={whiteH} blackH={blackH} top={top}
-          roleOf={pc => roleByPc[pc] || null} labelSize={10} blackLabelSize={8} />
+          roleOf={pc => roleByPc[pc] || null} labelSize={13} blackLabelSize={10} />
         {/* Octave numbers under each C (C4 = middle C) */}
         {keys.filter(k => k.pc === 0).map(k => (
-          <text key={k.midi} x={k.x + whiteW / 2} y={top + whiteH + 13} textAnchor="middle" fontSize="10" fill="#888">
+          <text key={k.midi} x={k.x + whiteW / 2} y={top + whiteH + 14} textAnchor="middle" fontSize="12" fill="#888">
             C{Math.floor(k.midi / 12) - 1}
           </text>
         ))}
