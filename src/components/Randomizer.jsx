@@ -120,7 +120,7 @@ function Wheel({ options, rotation, animating, transitionMs, easing = 'cubic-bez
 
   return (
     <div
-      style={{ position: 'relative', width: size, maxWidth: '90vw', margin: '0 auto', touchAction: 'none', cursor: 'grab' }}
+      style={{ position: 'relative', width: 'min(300px, 90vw, 27vh)', margin: '0 auto', touchAction: 'none', cursor: 'grab' }}
       onPointerDown={onPointerDownWheel}
     >
       <div style={{
@@ -484,8 +484,8 @@ export default function Randomizer({ accessToken }) {
   const busy = spinning || dragging || snapping || momentumActive;
 
   return (
-    <div style={{ marginTop: '20px' }}>
-      <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '14px' }}>
+    <div style={{ marginTop: '4px' }}>
+      <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', margin: '0 0 10px' }}>
         Spin/drag the wheel to seed a song one piece at a time.
       </p>
 
@@ -568,7 +568,7 @@ export default function Randomizer({ accessToken }) {
           value={accumulated}
           onChange={e => setAccumulated(e.target.value)}
           placeholder="Spin the wheel and hit “Add to idea” to build this up — or type here directly."
-          rows={4}
+          rows={2}
           style={{
             width: '100%', padding: '10px 12px', fontSize: '14px', borderRadius: '8px',
             border: '1px solid var(--rc-line)', boxSizing: 'border-box', resize: 'vertical',
@@ -577,7 +577,7 @@ export default function Randomizer({ accessToken }) {
         />
       </div>
 
-      <div style={{ marginTop: '18px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           value={setName}
           onChange={e => setSetName(e.target.value)}
@@ -598,7 +598,7 @@ export default function Randomizer({ accessToken }) {
         </p>
       )}
 
-      <div style={{ marginTop: '20px', textAlign: 'center' }}>
+      <div style={{ marginTop: '8px', textAlign: 'center' }}>
         <button onClick={toggleSavedList}
           style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline' }}>
           {loadingList ? 'Loading…' : savedSets !== null ? 'Hide saved ideas' : 'Show saved ideas'}
