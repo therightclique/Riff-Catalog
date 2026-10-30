@@ -192,6 +192,7 @@ export default function Jam() {
     setTimeout(() => setSavedMsg(''), 2500);
   };
   const loadBeat = (b) => {
+    if (mode !== 'custom') { setMode('custom'); machine.current?.setBeat(customBeat.current); }
     setGrid({ ...b.grid });
     changeBpm(b.bpm);
     setBeatName(b.name);
@@ -345,9 +346,31 @@ export default function Jam() {
               );
             })}
           </div>
+          {myBeats.length > 0 && (
+            <div style={{ marginTop: '16px', textAlign: 'left' }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#888', textTransform: 'uppercase', marginBottom: '6px' }}>My beats</div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                {myBeats.map(b => (
+                  <button key={b.id} onClick={() => loadBeat(b)} aria-label={`Load ${b.name}`}
+                    style={{ padding: '12px', borderRadius: '10px', cursor: 'pointer', touchAction: 'manipulation', textAlign: 'left',
+                      border: '2px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>
+                    <div style={{ fontSize: '14px', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</div>
+                    <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>{'\u270F\uFE0F'} Your beat {'\u00B7'} {b.bpm} BPM</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       ) : (
         <div>
+          <select value="" onChange={e => { const b = myBeats.find(x => x.id === e.target.value); if (b) loadBeat(b); }}
+            disabled={myBeats.length === 0} aria-label="Load a saved beat"
+            style={{ width: '100%', padding: '10px 12px', fontSize: '14px', fontWeight: '600', borderRadius: '8px', marginBottom: '10px', boxSizing: 'border-box',
+              border: '1px solid #1a73e8', backgroundColor: 'var(--rc-surface)', color: myBeats.length ? '#1a73e8' : '#888' }}>
+            <option value="">{myBeats.length ? `\u{1F4C2} Load a saved beat\u2026 (${myBeats.length})` : '\u{1F4C2} No saved beats yet'}</option>
+            {myBeats.map(b => <option key={b.id} value={b.id}>{b.name} {'\u00B7'} {b.bpm} BPM</option>)}
+          </select>
           <div style={{ fontSize: '13px', color: '#888', marginBottom: '10px' }}>
             One bar of 16 steps — tap a square to turn it on or off. Edits are heard right away.
           </div>
