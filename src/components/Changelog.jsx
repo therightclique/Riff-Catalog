@@ -2,6 +2,58 @@ import { useState } from 'react';
 
 const CHANGELOG = [
   {
+    date: '2026-10-29',
+    displayDate: 'October 29, 2026',
+    version: '2.1',
+    entries: [
+      {
+        title: 'New menu',
+        items: [
+          'The tab bar is replaced by a \u2630 menu button at the top left. Tap it to jump to any section; the list scrolls, so it can keep growing',
+          'Sections in the menu: Record, Library, Key Finder, Practice, Jam, Randomizer, Changelog, Debug and Settings',
+          'A red \u25CF Record button is always in the header, so you can get back to recording in one tap when inspiration strikes',
+          'The header shows the name of the section you\u2019re in, with a back button to return to where you were',
+          'Everything at the top of the screen sits a little lower, so it no longer blurs into the edge of the phone and the buttons there are easier to hit',
+        ],
+      },
+      {
+        title: 'Settings',
+        items: [
+          'New Settings section with a color picker for the Root, 3rd, 5th and Other notes, plus a hex box for exact colors. Other defaults to blue',
+          'Your colors are used everywhere notes are colored: fretboards, keyboards, chord diagrams, the tap-to-play note strip and Practice',
+          'Changes save instantly, stick between sessions, and sync across your devices through Google Drive. Reset to defaults puts the originals back',
+        ],
+      },
+      {
+        title: 'Key Finder: piano and sound',
+        items: [
+          'New Guitar / Piano selector. Piano shows a three-octave keyboard with the notes of the key highlighted in your colors, and each chord appears on a one-octave keyboard. Your choice is remembered',
+          'Tap \u25B6 Play on any chord diagram to hear it, lightly strummed so every note can be heard \u2014 a clean guitar or a grand piano, matching the selected instrument',
+          'Tap the notes of the key to play them with almost no delay, so you can tap out simple melodies',
+          '\u25B6 Play scale plays the key up through the octave at a relaxed pace. Pressing it again stops the scale that\u2019s playing before starting over',
+          'Chord cards no longer use color for Major, minor and diminished, so they never clash with your note colors. Major is solid white, minor is black with a white outline, and diminished is black with diagonal white stripes. The legend shows all three',
+        ],
+      },
+      {
+        title: 'Jam: play along to drums',
+        items: [
+          'New Jam section. Choose from 12 looping drum beats, with a simple fill every 4th bar',
+          'Start and stop with one big button; dots show the beat and bar markers show where you are in the 4-bar loop',
+          'Set the tempo with the slider or the \u22125 / \u22121 / +1 / +5 buttons, and change it while the beat is playing. Each beat shows the range of tempos it sounds best at',
+          'Switching to another beat while playing waits for the next bar so the groove never breaks, and the drums keep playing if you visit another section',
+          'Make your own: a 16-step grid for Kick, Snare, Tom 1, Tom 2, Crash, Ride, Open hat and Closed hat. Tap squares to build a one-bar beat; each drum sounds as you add it, and changes are heard while it plays',
+          'Your own beat uses the same Start/Stop and tempo as the preset beats, is remembered on your device, and can be wiped with Clear all',
+        ],
+      },
+      {
+        title: 'Library fix',
+        items: [
+          'If you change a clip\u2019s key by hand and tap Analyze, it now re-analyzes the clip and assigns the detected key. Before, nothing happened',
+        ],
+      },
+    ],
+  },
+  {
     date: '2026-10-06',
     displayDate: 'October 6, 2026',
     version: '2.0',
