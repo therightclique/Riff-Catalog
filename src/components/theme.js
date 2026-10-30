@@ -19,8 +19,8 @@
 //                          and chord note names
 //                        • the key's note list after recording and under
 //                          the Key dropdown in a clip's details
-//   CHORD_QUALITY_COLORS the Key Finder's seven scale-degree cards:
-//                        major / minor / diminished
+//   CHORD_QUALITY_STYLES the Key Finder's seven scale-degree cards:
+//                        major / minor / diminished (black & white patterns)
 //   RELATIVE_KEY_COLOR   the ring that marks the relative major/minor card
 
 export const DEFAULT_NOTE_ROLE_COLORS = Object.freeze({
@@ -35,10 +35,18 @@ export const DEFAULT_NOTE_ROLE_COLORS = Object.freeze({
 // choice. Nothing should copy these at load time — read them when drawing.
 export const NOTE_ROLE_COLORS = { ...DEFAULT_NOTE_ROLE_COLORS };
 
-export const CHORD_QUALITY_COLORS = {
-  M:   '#00c853', // major      — green
-  m:   '#2979ff', // minor      — blue
-  dim: '#ff1744', // diminished — red
+// Chord quality is shown in black & white (not color) so it never clashes
+// with the note colors chosen in Settings:
+//   major      — solid white card
+//   minor      — black card with a white outline
+//   diminished — black card filled with diagonal white lines
+export const CHORD_QUALITY_STYLES = {
+  M:   { background: '#ffffff', border: '2px solid #ffffff', ink: '#000000', pill: null },
+  m:   { background: '#000000', border: '2px solid #ffffff', ink: '#ffffff', pill: null },
+  dim: {
+    background: 'repeating-linear-gradient(45deg, #000000 0, #000000 4px, #ffffff 4px, #ffffff 7px)',
+    border: '2px solid #ffffff', ink: '#ffffff', pill: '#000000',
+  },
 };
 
 export const RELATIVE_KEY_COLOR = '#e879f9'; // magenta — unused by anything else, so it can't be mistaken

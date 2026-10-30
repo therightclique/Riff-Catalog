@@ -4,7 +4,7 @@ import { NoteStrip, PlayChordButton } from './PlayControls';
 import { playChord, guitarChordMidi, pianoChordMidi, installAudioUnlock } from './AudioEngine';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
-import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, CHORD_QUALITY_COLORS, RELATIVE_KEY_COLOR, readableTextOn } from './theme';
+import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, CHORD_QUALITY_STYLES, RELATIVE_KEY_COLOR } from './theme';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -487,10 +487,10 @@ function KeyFinder({ onFilterByKey }) {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', width: '100%' }}>
               {scaleNotes.map(({ degree, quality, note }, idx) => {
                 const chordLabel = quality === 'M' ? note : quality === 'dim' ? `${note}°` : `${note}m`;
-                // Solid, saturated fill so the quality reads from across the
-                // room; the text color flips dark/light automatically.
-                const fill = CHORD_QUALITY_COLORS[quality];
-                const ink = readableTextOn(fill);
+                // Quality is black & white: major = white, minor = black with
+                // a white outline, diminished = diagonal white stripes.
+                const qs = CHORD_QUALITY_STYLES[quality];
+                const ink = qs.ink;
                 const isRelative = idx === relIndex;
                 return (
                   <div key={degree}
@@ -498,16 +498,21 @@ function KeyFinder({ onFilterByKey }) {
                     style={{
                     display: 'flex', flexDirection: 'column', alignItems: 'center',
                     padding: '10px 2px', borderRadius: '8px',
-                    backgroundColor: fill, border: `1px solid ${fill}`,
+                    background: qs.background, border: qs.border,
                     // The relative key's card gets a ring in its own color.
                     // outline (not border) so highlighting it can't shift the layout.
                     ...(isRelative ? { outline: `3px solid ${RELATIVE_KEY_COLOR}`, outlineOffset: '2px' } : {}),
                   }}>
-                    <span style={{ fontSize: '14px', fontWeight: '700', color: ink }}>
-                      {degree}<span style={{ fontSize: '10px', fontWeight: '600' }}>{quality}</span>
-                    </span>
-                    <span style={{ fontSize: '20px', fontWeight: '800', marginTop: '4px', color: ink, lineHeight: 1.1 }}>{note}</span>
-                    {isRelative && <span style={{ fontSize: '14px', fontWeight: '800', color: ink, lineHeight: 1 }}>↔</span>}
+                    <div style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      ...(qs.pill ? { backgroundColor: qs.pill, borderRadius: '5px', padding: '1px 4px' } : {}),
+                    }}>
+                      <span style={{ fontSize: '14px', fontWeight: '700', color: ink }}>
+                        {degree}<span style={{ fontSize: '10px', fontWeight: '600' }}>{quality}</span>
+                      </span>
+                      <span style={{ fontSize: '20px', fontWeight: '800', marginTop: '4px', color: ink, lineHeight: 1.1 }}>{note}</span>
+                      {isRelative && <span style={{ fontSize: '14px', fontWeight: '800', color: ink, lineHeight: 1 }}>↔</span>}
+                    </div>
                     {onFilterByKey && (
                       <button
                         onClick={() => onFilterByKey(`${note} ${quality === 'M' ? 'Major' : quality === 'dim' ? 'Major' : 'Minor'}`)}
@@ -532,8 +537,9 @@ function KeyFinder({ onFilterByKey }) {
               {[['M', 'Major'], ['m', 'minor'], ['dim', 'diminished']].map(([q, label]) => (
                 <span key={q}>
                   <span style={{
-                    backgroundColor: CHORD_QUALITY_COLORS[q], color: readableTextOn(CHORD_QUALITY_COLORS[q]),
-                    padding: '2px 8px', borderRadius: '4px', fontWeight: '700',
+                    background: CHORD_QUALITY_STYLES[q].background, border: CHORD_QUALITY_STYLES[q].border,
+                    color: CHORD_QUALITY_STYLES[q].ink, padding: '1px 8px', borderRadius: '4px', fontWeight: '700',
+                    ...(CHORD_QUALITY_STYLES[q].pill ? { textShadow: '0 0 3px #000, 0 0 3px #000, 0 0 3px #000' } : {}),
                   }}>{q}</span> {label}
                 </span>
               ))}

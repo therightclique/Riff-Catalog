@@ -115,12 +115,12 @@ export function createEngine(ctx) {
     return entry;
   }
 
-  function guitarNote(midi, when, vel) {
+  function guitarNote(midi, when, vel, dest = guitarBus) {
     const { buf, rate } = pluck(midi);
     const src = ctx.createBufferSource();
     src.buffer = buf; src.playbackRate.value = rate;
     const g = ctx.createGain(); g.gain.value = vel;
-    src.connect(g); g.connect(guitarBus);
+    src.connect(g); g.connect(dest);
     src.start(when);
     src.onended = () => { try { g.disconnect(); } catch { /* already gone */ } };
     track(g, when + buf.duration / rate);
@@ -145,7 +145,7 @@ export function createEngine(ctx) {
     return hammerBuf;
   };
 
-  function pianoNote(midi, when, vel) {
+  function pianoNote(midi, when, vel, dest = pianoBus) {
     const f = midiToFreq(midi);
     const decay = clamp(5.2 - (midi - 36) * 0.045, 1.3, 5.2);   // lower notes ring longer
     const level = vel * clamp(0.5 - (midi - 60) * 0.004, 0.25, 0.62);
@@ -169,21 +169,44 @@ export function createEngine(ctx) {
       osc.connect(lp);
       osc.start(when); osc.stop(end + 0.05);
     }
-    lp.connect(g); g.connect(pianoBus);
+    lp.connect(g); g.connect(dest);
 
     const tap = ctx.createBufferSource();                              // hammer thump
     tap.buffer = getHammer();
     const tapFilter = ctx.createBiquadFilter(); tapFilter.type = 'bandpass'; tapFilter.frequency.value = clamp(f * 3, 400, 3000);
     const tapGain = ctx.createGain(); tapGain.gain.value = 0.35 * vel;
-    tap.connect(tapFilter); tapFilter.connect(tapGain); tapGain.connect(pianoBus);
+    tap.connect(tapFilter); tapFilter.connect(tapGain); tapGain.connect(dest);
     tap.start(when);
 
     track(g, end);
   }
 
   // ── public ──
-  const note = (instrument, midi, when = ctx.currentTime + 0.005, vel = 0.9) =>
-    (instrument === 'guitar' ? guitarNote : pianoNote)(midi, when, vel);
+  const note = (instrument, midi, when = ctx.currentTime + 0.005, vel = 0.9, dest) =>
+    (instrument === 'guitar' ? guitarNote : pianoNote)(midi, when, vel, dest ?? (instrument === 'guitar' ? guitarBus : pianoBus));
+
+  // A scale run plays through its own fader so it can be cut off cleanly:
+  // starting a new run (or stopping) fades the previous one out in a few ms.
+  let seq = null;
+  const stopSequence = () => {
+    if (!seq) return;
+    const { gain } = seq; seq = null;
+    const now = ctx.currentTime;
+    try {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setValueAtTime(gain.gain.value, now);
+      gain.gain.linearRampToValueAtTime(0, now + 0.04);
+    } catch { /* already gone */ }
+    setTimeout(() => { try { gain.disconnect(); } catch { /* already gone */ } }, 120);
+  };
+  const sequence = (instrument, midis, gapSeconds) => {
+    stopSequence();
+    const gain = ctx.createGain();
+    gain.connect(instrument === 'guitar' ? guitarBus : pianoBus);
+    seq = { gain };
+    const t0 = ctx.currentTime + 0.06;   // a hair after the old run's fade-out
+    midis.forEach((m, i) => note(instrument, m, t0 + i * gapSeconds, 0.9, gain));
+  };
 
   // Strummed from the lowest note to the highest.
   const chord = (instrument, midis, when = ctx.currentTime + 0.005) => {
@@ -192,7 +215,7 @@ export function createEngine(ctx) {
     sorted.forEach((m, i) => note(instrument, m, when + i * step, clamp(0.92 - i * 0.04, 0.6, 0.95)));
   };
 
-  return { note, chord, ctx };
+  return { note, chord, sequence, stopSequence, ctx };
 }
 
 // ── the shared engine for the app ───────────────────────────────────────
@@ -253,7 +276,5 @@ export const playNote = (instrument, midi) => whenRunning(e => e.note(instrument
 
 // Plays a list of notes one after another (e.g. the scale going up).
 export const playSequence = (instrument, midis, gapSeconds = 0.44) =>
-  whenRunning(e => {
-    const t0 = e.ctx.currentTime + 0.005;
-    midis.forEach((m, i) => e.note(instrument, m, t0 + i * gapSeconds));
-  });
+  whenRunning(e => e.sequence(instrument, midis, gapSeconds));
+export const stopSequence = () => { if (sharedEngine) sharedEngine.stopSequence(); };
