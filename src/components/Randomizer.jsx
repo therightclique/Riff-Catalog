@@ -120,7 +120,7 @@ function Wheel({ options, rotation, animating, transitionMs, easing = 'cubic-bez
 
   return (
     <div
-      style={{ position: 'relative', width: 'min(300px, 90vw, 27vh)', margin: '0 auto', touchAction: 'none', cursor: 'grab' }}
+      style={{ position: 'relative', width: 'min(300px, 90vw)', margin: '0 auto', touchAction: 'none', cursor: 'grab' }}
       onPointerDown={onPointerDownWheel}
     >
       <div style={{
@@ -475,9 +475,9 @@ export default function Randomizer({ accessToken }) {
     cursor: disabled ? 'default' : 'pointer',
   });
   const spinBtnStyle = (disabled) => ({
-    padding: '10px 18px', backgroundColor: disabled ? 'var(--rc-line)' : 'var(--rc-surface)',
-    color: 'var(--rc-ink)', border: `3px solid ${disabled ? 'var(--rc-line)' : '#f5c400'}`,
-    borderRadius: '10px', fontSize: '16px', fontWeight: '700',
+    padding: '5px 14px', backgroundColor: disabled ? 'var(--rc-line)' : 'var(--rc-surface)',
+    color: 'var(--rc-ink)', border: `2px solid ${disabled ? 'var(--rc-line)' : '#f5c400'}`,
+    borderRadius: '10px', fontSize: '14px', fontWeight: '700',
     cursor: disabled ? 'default' : 'pointer',
   });
 
@@ -514,7 +514,7 @@ export default function Randomizer({ accessToken }) {
           ▶
         </button>
       </div>
-      <p style={{ textAlign: 'center', fontSize: '11px', color: '#888', marginBottom: '16px' }}>
+      <p style={{ textAlign: 'center', fontSize: '11px', color: '#888', margin: '4px 0 6px' }}>
         {CATEGORIES.findIndex(c => c.id === categoryId) + 1} of {CATEGORIES.length}
       </p>
 
@@ -533,7 +533,7 @@ export default function Randomizer({ accessToken }) {
         onPointerDownWheel={handlePointerDownWheel}
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginTop: '14px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', marginTop: '10px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px' }}>
           <button onClick={handleSpin} disabled={busy} style={spinBtnStyle(busy)}>
             {spinning ? '🎡 Spinning…' : momentumActive ? '🎡 Coasting…' : dragging ? '🎡 Drag to pick…' : '🎡 Spin'}
@@ -543,7 +543,7 @@ export default function Randomizer({ accessToken }) {
           </button>
         </div>
 
-        <div style={{ minHeight: '20px', fontSize: '16px', fontWeight: '700', color: '#1a73e8' }}>
+        <div style={{ minHeight: '18px', fontSize: '15px', fontWeight: '700', color: '#1a73e8' }}>
           {result !== null && !busy ? `You got: ${category.suffix ? result + category.suffix : noteLabel(result)}` : ''}
         </div>
       </div>
@@ -577,17 +577,17 @@ export default function Randomizer({ accessToken }) {
         />
       </div>
 
-      <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ marginTop: '8px', display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
         <input
           value={setName}
           onChange={e => setSetName(e.target.value)}
           placeholder="Name this idea (optional)"
           style={{
-            flex: 1, minWidth: '160px', padding: '8px 12px', fontSize: '14px',
+            flex: 1, minWidth: '160px', padding: '6px 12px', fontSize: '14px',
             borderRadius: '8px', border: '1px solid var(--rc-line)', boxSizing: 'border-box',
           }}
         />
-        <button onClick={handleSave} disabled={saving} style={btn('#1a73e8', saving)}>
+        <button onClick={handleSave} disabled={saving} style={{ ...btn('#1a73e8', saving), padding: '7px 18px' }}>
           {saving ? 'Saving…' : '☁ Save to Drive'}
         </button>
       </div>
@@ -598,7 +598,7 @@ export default function Randomizer({ accessToken }) {
         </p>
       )}
 
-      <div style={{ marginTop: '8px', textAlign: 'center' }}>
+      <div style={{ marginTop: '4px', textAlign: 'center' }}>
         <button onClick={toggleSavedList}
           style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline' }}>
           {loadingList ? 'Loading…' : savedSets !== null ? 'Hide saved ideas' : 'Show saved ideas'}
