@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { keyLabel } from './Notation';
 import { fetchClips, getAudioUrl, trashFile, renameFile } from './DriveLibrary';
 import { loadMetadata, loadAllMetadata, listSidecars, saveMetadata } from './MetadataService';
 import { listTextFiles, readTextFile } from './DriveUploader';
@@ -33,12 +34,12 @@ function BulkEditor({ count, onApply, onCancel }) {
 
   const selectStyle = {
     padding: '6px 8px', fontSize: '13px', borderRadius: '6px',
-    border: '1px solid #ccc', backgroundColor: 'white', color: '#222', width: '100%',
+    border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', width: '100%',
   };
 
   return (
-    <div style={{ backgroundColor: '#fffbf0', border: '1px solid #f0c040', borderRadius: '8px', padding: '14px', marginBottom: '12px' }}>
-      <p style={{ fontSize: '13px', fontWeight: '600', color: '#7a5000', margin: '0 0 12px' }}>
+    <div style={{ backgroundColor: 'var(--rc-note)', border: '1px solid #f0c040', borderRadius: '8px', padding: '14px', marginBottom: '12px' }}>
+      <p style={{ fontSize: '13px', fontWeight: '600', color: 'var(--rc-warn-ink)', margin: '0 0 12px' }}>
         Edit {count} selected clip{count !== 1 ? 's' : ''} — only filled fields will be updated:
       </p>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginBottom: '12px' }}>
@@ -46,7 +47,7 @@ function BulkEditor({ count, onApply, onCancel }) {
           <label style={{ fontSize: '11px', fontWeight: '600', color: '#888', textTransform: 'uppercase', display: 'block', marginBottom: '4px' }}>Key</label>
           <select style={selectStyle} value={fields.key || ''} onChange={e => e.target.value ? set('key', e.target.value) : unset('key')}>
             <option value="">— No change —</option>
-            {ALL_KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+            {ALL_KEYS.map(k => <option key={k} value={k}>{keyLabel(k)}</option>)}
           </select>
         </div>
         <div>
@@ -81,7 +82,7 @@ function BulkEditor({ count, onApply, onCancel }) {
         </button>
         <button
           onClick={onCancel}
-          style={{ padding: '7px 16px', backgroundColor: 'transparent', color: '#555', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}
+          style={{ padding: '7px 16px', backgroundColor: 'transparent', color: 'var(--rc-ink2)', border: '1px solid var(--rc-line)', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}
         >
           Cancel
         </button>
@@ -141,7 +142,7 @@ function PlaybackBar({ audio, isPaused }) {
 
   const skipBtn = {
     padding: '4px 8px', borderRadius: '6px', border: '1px solid #b5d4f0',
-    backgroundColor: 'white', color: '#1a73e8', fontSize: '12px', fontWeight: '600',
+    backgroundColor: 'var(--rc-surface)', color: '#1a73e8', fontSize: '12px', fontWeight: '600',
     cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap',
   };
 
@@ -165,7 +166,7 @@ function PlaybackBar({ audio, isPaused }) {
           5s ⟳
         </button>
       </div>
-      <div style={{ textAlign: 'center', fontSize: '11px', color: '#666', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
+      <div style={{ textAlign: 'center', fontSize: '11px', color: 'var(--rc-ink2)', marginTop: '2px', fontVariantNumeric: 'tabular-nums' }}>
         {formatClock(time)}{duration ? ` / ${formatClock(duration)}` : ''}
       </div>
     </div>
@@ -175,21 +176,21 @@ function PlaybackBar({ audio, isPaused }) {
 function RecentlyAdded({ clips, metadataMap, playingId, isPaused, audio, onPlay, formatDate }) {
   const [open, setOpen] = useState(false);
   return (
-    <div style={{ marginBottom: '16px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+    <div style={{ marginBottom: '16px', border: '1px solid var(--rc-line)', borderRadius: '8px', overflow: 'hidden' }}>
       <div onClick={() => setOpen(!open)} style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '8px 14px', backgroundColor: '#f0f7ff', cursor: 'pointer', userSelect: 'none',
-        borderBottom: open ? '1px solid #e0e0e0' : 'none',
+        padding: '8px 14px', backgroundColor: 'var(--rc-info)', cursor: 'pointer', userSelect: 'none',
+        borderBottom: open ? '1px solid var(--rc-line)' : 'none',
       }}>
-        <span style={{ fontSize: '13px', fontWeight: '600', color: '#1a3d8b' }}>Recently Added</span>
+        <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--rc-blue-ink)' }}>Recently Added</span>
         <span style={{ fontSize: '12px', color: '#888' }}>{open ? '▲' : '▼'}</span>
       </div>
       {open && (
-        <div style={{ backgroundColor: 'white' }}>
+        <div style={{ backgroundColor: 'var(--rc-surface)' }}>
           {clips.map(clip => {
             const meta = metadataMap[clip.id];
             return (
-              <div key={clip.id} style={{ borderBottom: '1px solid #f0f0f0' }}>
+              <div key={clip.id} style={{ borderBottom: '1px solid var(--rc-line)' }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: '10px',
                 padding: '8px 14px',
@@ -207,7 +208,7 @@ function RecentlyAdded({ clips, metadataMap, playingId, isPaused, audio, onPlay,
                   </div>
                   <div style={{ fontSize: '11px', color: '#888' }}>
                     {formatDate(clip.createdTime)}
-                    {meta?.key ? ` · ${meta.key}` : ''}
+                    {meta?.key ? ` · ${keyLabel(meta.key)}` : ''}
                     {meta?.bpm ? ` · ${meta.bpm} BPM` : ''}
                   </div>
                 </div>
@@ -785,8 +786,8 @@ function Library({
   };
 
   const iconBtnStyle = {
-    background: 'none', border: '1px solid #ddd', borderRadius: '6px',
-    padding: '4px 8px', cursor: 'pointer', fontSize: '16px', color: '#444', flexShrink: 0, lineHeight: 1,
+    background: 'none', border: '1px solid var(--rc-line)', borderRadius: '6px',
+    padding: '4px 8px', cursor: 'pointer', fontSize: '16px', color: 'var(--rc-ink2)', flexShrink: 0, lineHeight: 1,
   };
 
   // Same footprint as iconBtnStyle (fixed width/height instead of
@@ -794,17 +795,17 @@ function Library({
   // without the button itself growing — flex centering keeps the larger
   // character contained inside that fixed box rather than overflowing it.
   const renameBtnStyle = {
-    background: 'none', border: '1px solid #ddd', borderRadius: '6px',
+    background: 'none', border: '1px solid var(--rc-line)', borderRadius: '6px',
     width: '32px', height: '32px', boxSizing: 'border-box',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
-    cursor: 'pointer', fontSize: '19px', color: '#444', flexShrink: 0, padding: 0,
+    cursor: 'pointer', fontSize: '19px', color: 'var(--rc-ink2)', flexShrink: 0, padding: 0,
   };
 
   const speedBtnStyle = (active) => ({
     padding: '3px 8px', borderRadius: '4px', fontSize: '12px', cursor: 'pointer',
-    border: active ? '2px solid #1a73e8' : '1px solid #ccc',
-    backgroundColor: active ? '#1a73e8' : 'white',
-    color: active ? 'white' : '#555',
+    border: active ? '2px solid #1a73e8' : '1px solid var(--rc-line)',
+    backgroundColor: active ? '#1a73e8' : 'var(--rc-surface)',
+    color: active ? 'white' : 'var(--rc-ink2)',
   });
 
   // Full-page placeholder only on the very first load. Later reloads (e.g.
@@ -824,7 +825,7 @@ function Library({
   const pendingSection = pendingClips.length > 0 && (
     <div style={{ marginBottom: '16px', border: '1px solid #f0a050', borderRadius: '8px', overflow: 'hidden' }}>
       <div style={{
-        padding: '8px 14px', backgroundColor: '#ffe3c2', color: '#8a4b00', fontSize: '13px', fontWeight: '600',
+        padding: '8px 14px', backgroundColor: 'var(--rc-orange)', color: 'var(--rc-orange-ink)', fontSize: '13px', fontWeight: '600',
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px',
       }}>
         <span>📱 On this device — not on Drive yet ({pendingClips.length})</span>
@@ -837,12 +838,12 @@ function Library({
         const disabled = !isOnline || syncBusy;
         const detail = [
           formatDate(rec.createdTime),
-          rec.metadata?.key,
+          keyLabel(rec.metadata?.key),
           rec.metadata?.bpm ? `${rec.metadata.bpm} BPM` : null,
           formatSize(rec.size),
         ].filter(Boolean).join(' · ');
         return (
-          <div key={rec.id} style={{ backgroundColor: '#fff3e0', borderTop: '1px solid #f5cf9f' }}>
+          <div key={rec.id} style={{ backgroundColor: 'var(--rc-orange2)', borderTop: '1px solid #f5cf9f' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 12px' }}>
               <button onClick={() => handlePlay({ id: rec.id, name: rec.name, local: true })} style={{
                 width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0, border: 'none', cursor: 'pointer',
@@ -852,9 +853,9 @@ function Library({
               </button>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: '500', wordBreak: 'break-word' }}>{rec.name}</div>
-                <div style={{ fontSize: '12px', color: '#8a6a3a' }}>{detail}</div>
+                <div style={{ fontSize: '12px', color: 'var(--rc-orange2-ink)' }}>{detail}</div>
                 {rec.driveAudioId && (
-                  <div style={{ fontSize: '11px', color: '#8a6a3a' }}>Audio is already on Drive — finishing up</div>
+                  <div style={{ fontSize: '11px', color: 'var(--rc-orange2-ink)' }}>Audio is already on Drive — finishing up</div>
                 )}
               </div>
               <button
@@ -896,7 +897,7 @@ function Library({
         </h2>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
-            style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #ccc', backgroundColor: 'white', color: '#222' }}>
+            style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>
             {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <button onClick={loadClips} style={{ padding: '6px 12px', cursor: 'pointer' }}>Refresh</button>
@@ -924,7 +925,7 @@ function Library({
       )}
 
       {playingId && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '12px', color: '#555' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontSize: '12px', color: 'var(--rc-ink2)' }}>
           <span>Speed:</span>
           {[0.5, 0.75, 1].map(s => (
             <button key={s} onClick={() => handleSpeedChange(s)} style={speedBtnStyle(playbackSpeed === s)}>
@@ -951,10 +952,10 @@ function Library({
       {undoSnapshot && (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          backgroundColor: '#e8f5e2', border: '1px solid #b5d9a5', borderRadius: '8px',
+          backgroundColor: 'var(--rc-ok)', border: '1px solid #b5d9a5', borderRadius: '8px',
           padding: '10px 14px', marginBottom: '10px',
         }}>
-          <span style={{ fontSize: '13px', color: '#2a6b17' }}>✅ Bulk edit applied.</span>
+          <span style={{ fontSize: '13px', color: 'var(--rc-ok-ink)' }}>✅ Bulk edit applied.</span>
           <button onClick={handleUndo}
             style={{ padding: '5px 14px', backgroundColor: '#2a6b17', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', cursor: 'pointer' }}>
             Undo
@@ -965,7 +966,7 @@ function Library({
       {sortedClips.length === 0 && <p style={{ color: '#888' }}>No clips match the current filters.</p>}
 
       {sortedClips.length > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', fontSize: '13px', color: '#555' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', fontSize: '13px', color: 'var(--rc-ink2)' }}>
           <input type="checkbox"
             checked={selectedIds.size === sortedClips.length && sortedClips.length > 0}
             onChange={e => e.target.checked ? selectAll(sortedClips) : deselectAll()}
@@ -1039,8 +1040,8 @@ function Library({
 
       {sortedClips.map(clip => (
         <div key={clip.id} style={{
-          marginBottom: '8px', border: '1px solid #ddd', borderRadius: '8px',
-          backgroundColor: playingId === clip.id ? '#f0f7ff' : '#fafafa', overflow: 'hidden',
+          marginBottom: '8px', border: '1px solid var(--rc-line)', borderRadius: '8px',
+          backgroundColor: playingId === clip.id ? 'var(--rc-info)' : 'var(--rc-card)', overflow: 'hidden',
         }}>
           <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', padding: '12px' }}>
             <input type="checkbox"
@@ -1062,7 +1063,7 @@ function Library({
               style={{
                 background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0,
                 fontSize: '18px', padding: '0 2px', lineHeight: 1,
-                color: metadataMap[clip.id]?.favorite ? '#f5b301' : '#555',
+                color: metadataMap[clip.id]?.favorite ? '#f5b301' : 'var(--rc-ink2)',
               }}>
               {metadataMap[clip.id]?.favorite ? '★' : '☆'}
             </button>
@@ -1095,9 +1096,9 @@ function Library({
                       whiteSpace:nowrap on each half keeps "A Minor" or
                       "120 BPM" from splitting mid-value if the line wraps. */}
                   {(metadataMap[clip.id]?.key || metadataMap[clip.id]?.bpm) && (
-                    <div style={{ fontSize: '12px', color: '#666', marginTop: '3px' }}>
+                    <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', marginTop: '3px' }}>
                       {metadataMap[clip.id]?.key && (
-                        <span style={{ fontWeight: '600', whiteSpace: 'nowrap' }}>{metadataMap[clip.id].key}</span>
+                        <span style={{ fontWeight: '600', whiteSpace: 'nowrap' }}>{keyLabel(metadataMap[clip.id].key)}</span>
                       )}
                       {metadataMap[clip.id]?.key && metadataMap[clip.id]?.bpm && ' - '}
                       {metadataMap[clip.id]?.bpm && (
@@ -1148,9 +1149,9 @@ function Library({
                   from scratch. Saved together with everything else when
                   "Save Metadata" is pressed below, same as every other
                   field on this card. */}
-              <div style={{ backgroundColor: '#f5f0ff', border: '1px solid #d8c8f5', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+              <div style={{ backgroundColor: 'var(--rc-purple)', border: '1px solid var(--rc-purple-line)', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', gap: '8px', flexWrap: 'wrap' }}>
-                  <label style={{ fontSize: '11px', fontWeight: '600', color: '#5b3b8c', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  <label style={{ fontSize: '11px', fontWeight: '600', color: 'var(--rc-purple-ink)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                     Song Idea
                   </label>
                   {songIdeaPickerFor === clip.id ? (
@@ -1170,7 +1171,7 @@ function Library({
                       }}
                       style={{
                         padding: '4px 8px', fontSize: '12px', borderRadius: '6px',
-                        border: '1px solid #ccc', backgroundColor: 'white', color: '#222',
+                        border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)',
                         maxWidth: '200px',
                       }}
                     >
@@ -1196,8 +1197,8 @@ function Library({
                   placeholder="Load a saved idea from the Randomizer, or type your own..."
                   style={{
                     width: '100%', minHeight: '60px', padding: '8px', fontSize: '14px',
-                    border: '1px solid #d8c8f5', borderRadius: '6px', boxSizing: 'border-box',
-                    backgroundColor: 'white', color: '#222', resize: 'vertical',
+                    border: '1px solid var(--rc-purple-line)', borderRadius: '6px', boxSizing: 'border-box',
+                    backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', resize: 'vertical',
                   }}
                 />
               </div>

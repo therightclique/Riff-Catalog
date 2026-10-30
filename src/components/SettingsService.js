@@ -1,4 +1,5 @@
-// The app's saved settings. Right now: the root / 3rd / 5th colors.
+// The app's saved settings: the note colors, strum speed and sharps/flats.
+// (Light/dark lives in Appearance.js — it's saved per device, not synced.)
 //
 // Saved two places, so a choice survives restarts AND follows the user to
 // other devices:
@@ -10,6 +11,8 @@
 // Drive as soon as a connection and token are available.
 
 import { NOTE_ROLE_COLORS, DEFAULT_NOTE_ROLE_COLORS, applyNoteRoleColors } from './theme';
+import { applyAccidentals } from './Notation';
+import { setStrumScale } from './AudioEngine';
 import { getOrCreateFolder, FOLDER_NAME } from './DriveUploader';
 
 const LS_KEY = 'rc_settings';
@@ -36,10 +39,29 @@ export function subscribeSettingsStatus(fn) {
   return () => statusListeners.delete(fn);
 }
 
+const DEFAULT_PREFS = Object.freeze({ strum: 1, accidentals: 'sharps' });
+let prefs = { ...DEFAULT_PREFS };
+const prefListeners = new Set();
+export const getPrefs = () => prefs;
+export function subscribePrefs(fn) { prefListeners.add(fn); return () => prefListeners.delete(fn); }
+
+// Put a set of preferences into effect (startup, a change here, or adopted from another device).
+function applyPrefs(p) {
+  const next = {
+    strum: Number.isFinite(p?.strum) && p.strum >= 0.1 && p.strum <= 3 ? p.strum : DEFAULT_PREFS.strum,
+    accidentals: p?.accidentals === 'flats' ? 'flats' : 'sharps',
+  };
+  prefs = next;
+  setStrumScale(next.strum);
+  applyAccidentals(next.accidentals);
+  prefListeners.forEach(fn => { try { fn(prefs); } catch { /* ignore */ } });
+}
+
 const snapshot = () => ({
   version: 1,
   updatedAt,
   noteRoleColors: { ...NOTE_ROLE_COLORS },
+  prefs: { ...prefs },
 });
 
 function saveLocal() {
@@ -54,6 +76,7 @@ function saveLocal() {
     if (!raw) return;
     const s = JSON.parse(raw);
     applyNoteRoleColors(s.noteRoleColors);
+    applyPrefs(s.prefs);
     updatedAt = s.updatedAt || null;
     dirty = !!s.dirty;
     if (dirty) status = 'device-only';
@@ -73,6 +96,16 @@ export function changeNoteRoleColors(partial) {
 }
 
 export const resetNoteRoleColors = () => changeNoteRoleColors(DEFAULT_NOTE_ROLE_COLORS);
+
+// Apply + save a preference change right away, e.g. { strum: 1.6 } or { accidentals: 'flats' }.
+export function changePrefs(partial) {
+  applyPrefs({ ...prefs, ...partial });
+  updatedAt = new Date().toISOString();
+  dirty = true;
+  saveLocal();
+  setStatus(token && navigator.onLine ? 'saving' : 'device-only');
+  schedulePush();
+}
 
 // ── Drive ───────────────────────────────────────────────────────────────
 
@@ -155,6 +188,7 @@ export async function syncSettings(newToken) {
       const remoteTime = remote?.updatedAt || '';
       if (!dirty && remoteTime > (updatedAt || '')) {
         applyNoteRoleColors(remote.noteRoleColors);
+        if (remote.prefs) applyPrefs(remote.prefs);
         updatedAt = remoteTime;
         saveLocal();
         setStatus('saved');

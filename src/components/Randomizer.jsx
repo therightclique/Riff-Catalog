@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { uploadTextFile, listTextFiles, readTextFile } from './DriveUploader';
+import { noteLabel } from './Notation';
 
 // ── Shuffle helpers ──────────────────────────────────────────────────────
 
@@ -162,7 +163,7 @@ function Wheel({ options, rotation, animating, transitionMs, easing = 'cubic-bez
                 dominantBaseline="middle"
                 transform={`rotate(${mid - 90} ${labelPos.x} ${labelPos.y})`}
                 style={{ pointerEvents: 'none' }}>
-                {opt}
+                {noteLabel(opt)}
               </text>
             </g>
           );
@@ -400,7 +401,7 @@ export default function Randomizer({ accessToken }) {
 
   const handleAdd = () => {
     if (result === null) return;
-    const value = category.suffix ? `${result}${category.suffix}` : result;
+    const value = category.suffix ? `${result}${category.suffix}` : noteLabel(result);
     setAccumulated(prev => (prev ? `${prev}, ${value}` : value));
   };
 
@@ -466,7 +467,7 @@ export default function Randomizer({ accessToken }) {
 
   const selectStyle = {
     padding: '8px 12px', fontSize: '14px', borderRadius: '8px',
-    border: '1px solid #ccc', backgroundColor: 'white', color: '#222',
+    border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)',
   };
   const btn = (bg, disabled) => ({
     padding: '9px 18px', backgroundColor: disabled ? '#555' : bg, color: 'white',
@@ -474,8 +475,8 @@ export default function Randomizer({ accessToken }) {
     cursor: disabled ? 'default' : 'pointer',
   });
   const spinBtnStyle = (disabled) => ({
-    padding: '10px 26px', backgroundColor: disabled ? '#eee' : 'white',
-    color: '#222', border: `3px solid ${disabled ? '#ccc' : '#f5c400'}`,
+    padding: '10px 26px', backgroundColor: disabled ? '#eee' : 'var(--rc-surface)',
+    color: 'var(--rc-ink)', border: `3px solid ${disabled ? 'var(--rc-line)' : '#f5c400'}`,
     borderRadius: '10px', fontSize: '16px', fontWeight: '700',
     cursor: disabled ? 'default' : 'pointer',
   });
@@ -539,7 +540,7 @@ export default function Randomizer({ accessToken }) {
         </button>
 
         <div style={{ minHeight: '28px', fontSize: '16px', fontWeight: '700', color: '#1a73e8' }}>
-          {result !== null && !busy ? `You got: ${category.suffix ? result + category.suffix : result}` : ''}
+          {result !== null && !busy ? `You got: ${category.suffix ? result + category.suffix : noteLabel(result)}` : ''}
         </div>
 
         <button onClick={handleAdd} disabled={result === null || busy} style={btn('#1a73e8', result === null || busy)}>
@@ -570,7 +571,7 @@ export default function Randomizer({ accessToken }) {
           rows={4}
           style={{
             width: '100%', padding: '10px 12px', fontSize: '14px', borderRadius: '8px',
-            border: '1px solid #ccc', boxSizing: 'border-box', resize: 'vertical',
+            border: '1px solid var(--rc-line)', boxSizing: 'border-box', resize: 'vertical',
             fontFamily: 'inherit',
           }}
         />
@@ -583,7 +584,7 @@ export default function Randomizer({ accessToken }) {
           placeholder="Name this idea (optional)"
           style={{
             flex: 1, minWidth: '160px', padding: '8px 12px', fontSize: '14px',
-            borderRadius: '8px', border: '1px solid #ccc', boxSizing: 'border-box',
+            borderRadius: '8px', border: '1px solid var(--rc-line)', boxSizing: 'border-box',
           }}
         />
         <button onClick={handleSave} disabled={saving} style={btn('#1a73e8', saving)}>

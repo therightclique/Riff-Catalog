@@ -22,6 +22,10 @@ const CHANGELOG = [
           'New Settings section with a color picker for the Root, 3rd, 5th and Other notes, plus a hex box for exact colors. Other defaults to blue',
           'Your colors are used everywhere notes are colored: fretboards, keyboards, chord diagrams, the tap-to-play note strip and Practice',
           'Changes save instantly, stick between sessions, and sync across your devices through Google Drive. Reset to defaults puts the originals back',
+          'Note names: choose Sharps (C\u266F) or Flats (D\u266D). Keys, scales, chords, fretboards, keyboards, the Randomizer, Practice and the Library all follow your choice, spelled the way a musician would write them (Bb Major is Bb C D Eb F G A). Existing clips are unchanged',
+          'Strum speed: a slider from Instant to Very slow sets how fast chords are strummed, with a \u25B6 Hear it button to try it',
+          'Appearance: Match device, Light or Dark, applied to every section including the Changelog. This is saved per device',
+          'Account & storage: see who\u2019s signed in and sign out, see recordings waiting to sync (with Sync now), clear the saved clip details cached on the device, and check the app version',
         ],
       },
       {
@@ -554,25 +558,25 @@ function ChangelogDay({ day }) {
         }}>
           v{day.version}
         </div>
-        <div style={{ flex: 1, height: '1px', backgroundColor: '#2a2a2a' }} />
+        <div style={{ flex: 1, height: '1px', backgroundColor: 'var(--rc-line)' }} />
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {day.entries.map((entry) => (
           <div key={entry.title} style={{
-            border: '1px solid #2a2a2a', borderRadius: '10px', overflow: 'hidden',
+            border: '1px solid var(--rc-line)', borderRadius: '10px', overflow: 'hidden',
           }}>
             <div style={{
-              padding: '10px 16px', backgroundColor: '#1e1e1e',
-              fontSize: '14px', fontWeight: '600', color: '#ddd',
-              borderBottom: '1px solid #2a2a2a',
+              padding: '10px 16px', backgroundColor: 'var(--rc-card)',
+              fontSize: '14px', fontWeight: '600', color: 'var(--rc-ink)',
+              borderBottom: '1px solid var(--rc-line)',
             }}>
               {entry.title}
             </div>
             <ul style={{ margin: 0, padding: '12px 16px 12px 32px', listStyleType: 'disc' }}>
               {entry.items.map((item, i) => (
                 <li key={i} style={{
-                  fontSize: '13px', color: '#aaa', lineHeight: '1.7', marginBottom: '2px',
+                  fontSize: '13px', color: 'var(--rc-ink2)', lineHeight: '1.7', marginBottom: '2px',
                 }}>
                   {item}
                 </li>
@@ -609,8 +613,8 @@ export default function Changelog() {
           <button
             onClick={() => setShowArchive(v => !v)}
             style={{
-              width: '100%', padding: '10px 16px', backgroundColor: '#1e1e1e',
-              border: '1px solid #2a2a2a', borderRadius: '8px', color: '#26af55',
+              width: '100%', padding: '10px 16px', backgroundColor: 'var(--rc-card)',
+              border: '1px solid var(--rc-line)', borderRadius: '8px', color: '#26af55',
               fontSize: '13px', cursor: 'pointer', display: 'flex',
               justifyContent: 'space-between', alignItems: 'center',
             }}

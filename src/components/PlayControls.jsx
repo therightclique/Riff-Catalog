@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 import { getScaleNotes } from './FretboardDiagram';
+import { noteIn } from './Notation';
 import { playNote, playSequence, scaleMidi } from './AudioEngine';
 
 // Row of tappable notes for a key: root up through the octave. Colored like
@@ -41,7 +42,7 @@ export function NoteStrip({ selectedKey, instrument }) {
               key={`${n.note}-${n.degree}`}
               onPointerDown={tap(i)}
               onContextMenu={e => e.preventDefault()}
-              aria-label={`Play ${n.note}`}
+              aria-label={`Play ${noteIn(n.note, selectedKey)}`}
               style={{
                 flex: 1, minWidth: 0, height: '58px', borderRadius: '8px', border: 'none', cursor: 'pointer',
                 backgroundColor: bg, color: ink, fontWeight: '800', fontSize: '15px', padding: 0,
@@ -49,7 +50,7 @@ export function NoteStrip({ selectedKey, instrument }) {
                 transform: pressed === i ? 'scale(0.92)' : 'none', filter: pressed === i ? 'brightness(1.25)' : 'none',
                 transition: 'transform 60ms, filter 60ms',
               }}>
-              {n.note}
+              {noteIn(n.note, selectedKey)}
               <div style={{ fontSize: '9px', fontWeight: '600', opacity: 0.8 }}>{n.degree === '8' ? '8va' : n.degree}</div>
             </button>
           );
@@ -59,8 +60,8 @@ export function NoteStrip({ selectedKey, instrument }) {
         <button
           onPointerDown={e => { e.preventDefault(); playSequence(instrument, midis); }}
           style={{
-            padding: '8px 18px', fontSize: '13px', borderRadius: '8px', border: '1px solid #ccc',
-            backgroundColor: 'white', color: '#333', cursor: 'pointer', touchAction: 'manipulation', userSelect: 'none',
+            padding: '8px 18px', fontSize: '13px', borderRadius: '8px', border: '1px solid var(--rc-line)',
+            backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', cursor: 'pointer', touchAction: 'manipulation', userSelect: 'none',
           }}>
           ▶ Play scale
         </button>
@@ -78,7 +79,7 @@ export function PlayChordButton({ onPlay, big = false }) {
       aria-label="Play chord"
       style={{
         padding: big ? '10px 28px' : '3px 14px', fontSize: big ? '16px' : '12px', borderRadius: big ? '10px' : '12px',
-        border: '1px solid #1a73e8', backgroundColor: 'white', color: '#1a73e8', fontWeight: '700', cursor: 'pointer',
+        border: '1px solid #1a73e8', backgroundColor: 'var(--rc-surface)', color: '#1a73e8', fontWeight: '700', cursor: 'pointer',
         touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
         marginTop: big ? '14px' : '2px',
       }}>

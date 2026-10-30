@@ -285,7 +285,7 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
           return (
             <div key={i} style={{
               width: '34px', height: '34px', borderRadius: '50%',
-              backgroundColor: lit ? (i === 0 ? '#e07a10' : '#1a73e8') : '#d9d9d9',
+              backgroundColor: lit ? (i === 0 ? '#e07a10' : '#1a73e8') : 'var(--rc-dot)',
               transform: lit ? 'scale(1.2)' : 'none', transition: 'background-color 60ms, transform 60ms',
             }} />
           );
@@ -297,14 +297,14 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
 
   const stepBtn = (label, delta) => (
     <button onClick={() => setM({ bpm: clampBpm(metro.bpm + delta) })} aria-label={`${delta > 0 ? 'Faster' : 'Slower'} by ${Math.abs(delta)}`}
-      style={{ width: '44px', height: '38px', borderRadius: '8px', border: '1px solid #ccc', backgroundColor: '#fff', color: '#222', fontSize: '14px', fontWeight: '600', cursor: 'pointer', touchAction: 'manipulation' }}>
+      style={{ width: '44px', height: '38px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', fontSize: '14px', fontWeight: '600', cursor: 'pointer', touchAction: 'manipulation' }}>
       {label}
     </button>
   );
   const chip = (active, label, onClick, key) => (
     <button key={key} onClick={onClick} aria-pressed={active}
       style={{ minWidth: '40px', height: '36px', padding: '0 10px', borderRadius: '8px', fontSize: '14px', fontWeight: '700', cursor: 'pointer',
-        border: `2px solid ${active ? '#1a73e8' : '#ddd'}`, backgroundColor: active ? '#e8f0fe' : '#fff', color: '#222' }}>
+        border: `2px solid ${active ? '#1a73e8' : 'var(--rc-line)'}`, backgroundColor: active ? 'var(--rc-sel)' : 'var(--rc-surface)', color: 'var(--rc-ink)' }}>
       {label}
     </button>
   );
@@ -322,7 +322,7 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
         </div>
       ) : !recording ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '18px' }}>
-          <div style={{ width: '100%', maxWidth: '340px', padding: '10px 14px', backgroundColor: '#f9f9f9', borderRadius: '10px', color: '#222', textAlign: 'center' }}>
+          <div style={{ width: '100%', maxWidth: '340px', padding: '10px 14px', backgroundColor: 'var(--rc-card)', borderRadius: '10px', color: 'var(--rc-ink)', textAlign: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', fontSize: '14px', fontWeight: '700', cursor: 'pointer' }}>
               <input type="checkbox" checked={metro.on} onChange={e => setM({ on: e.target.checked })} />
               ⏱ Metronome &amp; count-in
@@ -330,7 +330,7 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
             {metro.on && (
               <div style={{ marginTop: '12px' }}>
                 <div style={{ fontSize: '30px', fontWeight: '800', lineHeight: 1.1 }}>
-                  {metro.bpm}<span style={{ fontSize: '13px', fontWeight: '600', color: '#666', marginLeft: '6px' }}>BPM</span>
+                  {metro.bpm}<span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--rc-ink2)', marginLeft: '6px' }}>BPM</span>
                 </div>
                 <input type="range" min="40" max="220" step="1" value={metro.bpm} onChange={e => setM({ bpm: clampBpm(e.target.value) })}
                   aria-label="Metronome tempo" style={{ width: '100%', margin: '6px 0' }} />
@@ -338,11 +338,11 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
                   {stepBtn('−5', -5)}{stepBtn('−1', -1)}{stepBtn('+1', 1)}{stepBtn('+5', 5)}
                   <TapTempoButton min={40} max={220} onBpm={bpm => setM({ bpm })} style={{ height: '38px', padding: '0 12px' }} />
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', margin: '12px 0 6px' }}>Beats per bar</div>
+                <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', margin: '12px 0 6px' }}>Beats per bar</div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '6px', flexWrap: 'wrap' }}>
                   {[2, 3, 4, 5, 6, 7].map(n => chip(metro.beats === n, n, () => setM({ beats: n }), n))}
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', margin: '12px 0 6px' }}>Count-in</div>
+                <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', margin: '12px 0 6px' }}>Count-in</div>
                 <div style={{ display: 'flex', justifyContent: 'center', gap: '6px' }}>
                   {chip(metro.bars === 1, '1 bar', () => setM({ bars: 1 }), 'b1')}
                   {chip(metro.bars === 2, '2 bars', () => setM({ bars: 2 }), 'b2')}

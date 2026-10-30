@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { FretboardDiagram } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, BigTabDisplay, ZoomHint } from './DiagramDetailView';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
+import { keyLabel, noteLabel, textLabel } from './Notation';
 
 const ALL_KEYS = [
   'A Major','A# Major','B Major','C Major','C# Major','D Major',
@@ -2302,9 +2303,9 @@ const BOX_LICK_DATA = {
   },
 };
 const DIFF_COLORS = {
-  Beginner:     {bg:'#e8f5e2',color:'#2a6b17',border:'#b5d9a5'},
-  Intermediate: {bg:'#fff8e1',color:'#7a5000',border:'#f0c040'},
-  Advanced:     {bg:'#fde8e8',color:'#8b1a1a',border:'#f0b8b8'},
+  Beginner:     {bg:'var(--rc-ok)',color:'var(--rc-ok-ink)',border:'#b5d9a5'},
+  Intermediate: {bg:'var(--rc-warn)',color:'var(--rc-warn-ink)',border:'#f0c040'},
+  Advanced:     {bg:'var(--rc-bad)',color:'var(--rc-bad-ink)',border:'#f0b8b8'},
 };
 
 // The reference "measure length" every box-mode diagram is padded out to,
@@ -2380,11 +2381,11 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', wrapperRe
       })
     : undefined;
   return (
-    <div style={{border:'1px solid #ddd',borderRadius:'10px',overflow:'hidden',backgroundColor:'#fafafa'}}>
-      <div style={{padding:'10px 16px',backgroundColor:'#f0f0f0',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'6px'}}>
+    <div style={{border:'1px solid var(--rc-line)',borderRadius:'10px',overflow:'hidden',backgroundColor:'var(--rc-card)'}}>
+      <div style={{padding:'10px 16px',backgroundColor:'var(--rc-card)',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'6px'}}>
         <div>
           <span style={{fontWeight:'600',fontSize:'14px'}}>{title}</span>
-          {subtitle && <span style={{marginLeft:'10px',fontSize:'12px',color:'#666'}}>{subtitle}</span>}
+          {subtitle && <span style={{marginLeft:'10px',fontSize:'12px',color:'var(--rc-ink2)'}}>{subtitle}</span>}
         </div>
         {diff && (
           <span style={{padding:'2px 8px',borderRadius:'20px',fontSize:'12px',fontWeight:'600',backgroundColor:diff.bg,color:diff.color,border:`1px solid ${diff.border}`}}>
@@ -2448,7 +2449,7 @@ function TabCard({ title, subtitle, tab, difficulty, align = 'center', wrapperRe
           scrolling past the first few cards — a page-level legend only
           helps until you scroll it out of view. */}
       {showLegend && (
-        <div style={{ borderTop: '1px solid #e5e5e5', padding: '8px 16px' }}>
+        <div style={{ borderTop: '1px solid var(--rc-line)', padding: '8px 16px' }}>
           <DegreeLegend />
         </div>
       )}
@@ -2605,7 +2606,7 @@ export default function Practice() {
         return <TabCard
           key={item.id||idx}
           title={`${effectiveGroup} - Box ${selectedBox}`}
-          subtitle={selectedKey?`in ${selectedKey}`:`Root ${item.root}`}
+          subtitle={selectedKey?`in ${keyLabel(selectedKey)}`:`Root ${noteLabel(item.root)}`}
           tab={renderSingleNoteWithRoot(notes, MAX_BOX_LICK_NOTES, isFirst ? rowRefsContainer : null)}
           difficulty={item.difficulty}
           align="left"
@@ -2626,7 +2627,7 @@ export default function Practice() {
       return <TabCard
         key={item.id||idx}
         title={item.scale}
-        subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'}
+        subtitle={selectedKey?`in ${keyLabel(selectedKey)}`:'select a key for tab'}
         tab={renderSingleNote(notes, effectiveGroup, noteRoot, MAX_FREE_LICK_NOTES, isFirst ? rowRefsContainer : null)}
         difficulty={item.difficulty}
         wrapperRef={isFirst ? wrapperMeasureRef : null}
@@ -2644,7 +2645,7 @@ export default function Practice() {
       return <TabCard
         key={item.id||idx}
         title={item.scale}
-        subtitle={selectedKey?`in ${selectedKey}`:'select a key for tab'}
+        subtitle={selectedKey?`in ${keyLabel(selectedKey)}`:'select a key for tab'}
         tab={renderDoubleStop(pairs, effectiveGroup, dsRoot, MAX_DS_PAIRS, isFirst ? rowRefsContainer : null)}
         difficulty={item.difficulty}
         wrapperRef={isFirst ? wrapperMeasureRef : null}
@@ -2664,8 +2665,8 @@ export default function Practice() {
       const isFirst = idx === 0;
       return <TabCard
         key={item.name+item.key+idx}
-        title={item.name}
-        subtitle={`Key of ${item.key}`}
+        title={textLabel(item.name)}
+        subtitle={`Key of ${keyLabel(item.key)}`}
         tab={renderChords(chords, MAX_CHORD_COUNT, isFirst ? rowRefsContainer : null)}
         wrapperRef={isFirst ? wrapperMeasureRef : null}
         computedWidth={computedBoxWidth}
@@ -2683,7 +2684,7 @@ export default function Practice() {
   };
 
   const labelStyle = {fontSize:'11px',fontWeight:'600',color:'#888',textTransform:'uppercase',marginBottom:'4px',display:'block'};
-  const selectStyle = {padding:'8px 12px',fontSize:'14px',borderRadius:'8px',border:'1px solid #ccc',backgroundColor:'white',color:'#222',width:'100%'};
+  const selectStyle = {padding:'8px 12px',fontSize:'14px',borderRadius:'8px',border:'1px solid var(--rc-line)',backgroundColor:'var(--rc-surface)',color:'var(--rc-ink)',width:'100%'};
 
   return (
     <div style={{marginTop:'20px'}}>
@@ -2706,10 +2707,10 @@ export default function Practice() {
           <select value={selectedKey} onChange={e=>handleKeyChange(e.target.value)} style={selectStyle}>
             <option value="">{mode==='chords'?'All keys':'Any key'}</option>
             {mode==='chords'
-              ? ALL_KEYS.map(k=><option key={k} value={k}>{k}</option>)
+              ? ALL_KEYS.map(k=><option key={k} value={k}>{keyLabel(k)}</option>)
               : <>
-                  <optgroup label="Major Keys">{ALL_KEYS.filter(k=>k.includes('Major')).map(k=><option key={k} value={k}>{k}</option>)}</optgroup>
-                  <optgroup label="Minor Keys">{ALL_KEYS.filter(k=>k.includes('Minor')).map(k=><option key={k} value={k}>{k}</option>)}</optgroup>
+                  <optgroup label="Major Keys">{ALL_KEYS.filter(k=>k.includes('Major')).map(k=><option key={k} value={k}>{keyLabel(k)}</option>)}</optgroup>
+                  <optgroup label="Minor Keys">{ALL_KEYS.filter(k=>k.includes('Minor')).map(k=><option key={k} value={k}>{keyLabel(k)}</option>)}</optgroup>
                 </>
             }
           </select>

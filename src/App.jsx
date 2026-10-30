@@ -16,6 +16,7 @@ import Settings from './components/Settings';
 import Jam from './components/Jam';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
+import { keyLabel, subscribeAccidentals } from './components/Notation';
 import { initDebugLog } from './components/DebugLog';
 
 initDebugLog();
@@ -32,7 +33,7 @@ const ALL_KEYS = [
 
 function abbreviateKey(key) {
   if (!key) return key;
-  return key.replace('Major', 'Maj').replace('Minor', 'Min');
+  return keyLabel(key).replace('Major', 'Maj').replace('Minor', 'Min');
 }
 
 async function checkDuplicate(accessToken, name) {
@@ -184,6 +185,7 @@ function App() {
   // adopted from another device), so no screen keeps showing the old ones.
   const [, bumpColors] = useReducer(n => n + 1, 0);
   useEffect(() => subscribeNoteRoleColors(bumpColors), []);
+  useEffect(() => subscribeAccidentals(bumpColors), []);   // sharps/flats changed in Settings
   // Sync saved settings with Google Drive: on sign-in / new token, when the
   // app returns to the foreground, and when the connection comes back.
   useEffect(() => {
@@ -478,9 +480,9 @@ function App() {
 
   const candidateBtnStyle = (isSelected, isFirst) => ({
     padding: '6px 12px', borderRadius: '20px', cursor: 'pointer', fontSize: '13px',
-    border: isSelected ? '2px solid #1a73e8' : isFirst ? '2px solid #2a6b17' : '1px solid #ccc',
-    backgroundColor: isSelected ? '#1a73e8' : 'white',
-    color: isSelected ? 'white' : '#333',
+    border: isSelected ? '2px solid #1a73e8' : isFirst ? '2px solid #2a6b17' : '1px solid var(--rc-line)',
+    backgroundColor: isSelected ? '#1a73e8' : 'var(--rc-surface)',
+    color: isSelected ? 'white' : 'var(--rc-ink)',
     fontWeight: isSelected || isFirst ? '600' : '400',
   });
 
@@ -648,9 +650,9 @@ function App() {
               aria-label="Menu"
               aria-expanded={menuOpen}
               style={{
-                background: menuOpen ? '#1a73e8' : 'none', border: '1px solid #ccc',
+                background: menuOpen ? '#1a73e8' : 'none', border: '1px solid var(--rc-line)',
                 borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
-                color: menuOpen ? 'white' : '#444',
+                color: menuOpen ? 'white' : 'var(--rc-ink2)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
               }}>
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
@@ -666,10 +668,10 @@ function App() {
             aria-label="Back"
             style={{
               position: 'relative', background: 'none',
-              border: `1px solid ${viewHistory.length === 0 ? '#3a3a3a' : '#ccc'}`,
+              border: `1px solid ${viewHistory.length === 0 ? '#3a3a3a' : 'var(--rc-line)'}`,
               borderRadius: '50%', width: '32px', height: '32px',
               cursor: viewHistory.length === 0 ? 'default' : 'pointer',
-              fontSize: '16px', color: viewHistory.length === 0 ? '#555' : '#444',
+              fontSize: '16px', color: viewHistory.length === 0 ? 'var(--rc-ink2)' : 'var(--rc-ink2)',
               display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
             }}>
             ←
@@ -699,9 +701,9 @@ function App() {
             aria-label="Refresh app"
             title={accessToken ? 'Refresh app' : 'Reconnect Drive & refresh'}
             style={{
-              background: 'none', border: '1px solid #ccc',
+              background: 'none', border: '1px solid var(--rc-line)',
               borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer',
-              color: '#444', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+              color: 'var(--rc-ink2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
             }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <polyline points="23 4 23 10 17 10" />
@@ -717,7 +719,7 @@ function App() {
             <div role="menu" style={{
               position: 'absolute', top: '40px', left: 0, zIndex: 50, width: '240px', maxWidth: '85vw',
               maxHeight: 'calc(100vh - 90px)', overflowY: 'auto', WebkitOverflowScrolling: 'touch',
-              backgroundColor: '#fff', border: '1px solid #ccc', borderRadius: '10px',
+              backgroundColor: 'var(--rc-surface)', border: '1px solid var(--rc-line)', borderRadius: '10px',
               boxShadow: '0 6px 20px rgba(0,0,0,0.3)', padding: '6px 0', textAlign: 'left',
             }}>
               {MENU_ITEMS.map(item => {
@@ -727,8 +729,8 @@ function App() {
                     style={{
                       display: 'flex', alignItems: 'center', gap: '12px', width: '100%',
                       padding: '14px 16px', border: 'none', cursor: 'pointer', fontSize: '16px',
-                      backgroundColor: active ? '#e8f0fe' : 'transparent',
-                      color: active ? '#1a73e8' : '#222', fontWeight: active ? '600' : '400',
+                      backgroundColor: active ? 'var(--rc-sel)' : 'transparent',
+                      color: active ? '#1a73e8' : 'var(--rc-ink)', fontWeight: active ? '600' : '400',
                       textAlign: 'left',
                     }}>
                     <span style={{ width: '22px', textAlign: 'center', color: item.id === 'record' ? '#cc0000' : undefined }}>{item.icon}</span>
@@ -746,7 +748,7 @@ function App() {
         </div>
       ) : (
         <div>
-          <p style={{ color: '#555', textAlign: 'center' }}>
+          <p style={{ color: 'var(--rc-ink2)', textAlign: 'center' }}>
             Signed in as {user.name} &nbsp;·&nbsp;
             <span style={{ color: accessToken ? 'green' : 'orange' }}>
               Drive {accessToken ? '✅' : '⏳'}
@@ -761,8 +763,8 @@ function App() {
               disabled={reconnecting}
               style={{
                 display: 'block', width: '100%', margin: '0 0 16px', padding: '10px 14px',
-                backgroundColor: '#fff4e0', border: '1px solid #f0c060', borderRadius: '8px',
-                color: '#7a5000', fontSize: '13px', cursor: reconnecting ? 'default' : 'pointer',
+                backgroundColor: 'var(--rc-warn2)', border: '1px solid #f0c060', borderRadius: '8px',
+                color: 'var(--rc-warn-ink)', fontSize: '13px', cursor: reconnecting ? 'default' : 'pointer',
                 textAlign: 'center',
               }}>
               {reconnecting ? '⏳ Reconnecting to Drive…' : '⏳ Drive disconnected — tap to reconnect'}
@@ -773,8 +775,8 @@ function App() {
               visible the moment the connection returns. */}
           {pendingClips.length > 0 && (
             <div style={{
-              margin: '0 0 16px', padding: '10px 14px', backgroundColor: '#fff1e0',
-              border: '1px solid #f0a050', borderRadius: '8px', color: '#7a4200',
+              margin: '0 0 16px', padding: '10px 14px', backgroundColor: 'var(--rc-warn2)',
+              border: '1px solid #f0a050', borderRadius: '8px', color: 'var(--rc-warn-ink)',
               fontSize: '13px', textAlign: 'center',
             }}>
               {syncState?.running ? (
@@ -797,9 +799,9 @@ function App() {
           {syncMessage && (
             <div style={{
               margin: '0 0 16px', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', textAlign: 'center',
-              backgroundColor: syncMessage.kind === 'ok' ? '#e6f6ea' : '#fff4e0',
+              backgroundColor: syncMessage.kind === 'ok' ? 'var(--rc-ok)' : 'var(--rc-warn2)',
               border: `1px solid ${syncMessage.kind === 'ok' ? '#9fd4ab' : '#f0c060'}`,
-              color: syncMessage.kind === 'ok' ? '#1f6b34' : '#7a5000',
+              color: syncMessage.kind === 'ok' ? 'var(--rc-ok-ink)' : 'var(--rc-warn-ink)',
             }}>
               {syncMessage.text}
             </div>
@@ -807,7 +809,7 @@ function App() {
 
           {/* Which section you're in (the tab bar is now the hamburger menu).
               A section with its own sub-tabs puts them inside its own view. */}
-          <div style={{ borderBottom: '1px solid #ddd', marginBottom: '20px', padding: '6px 0 8px', fontSize: '15px', fontWeight: '600', color: '#1a73e8', textAlign: 'center' }}>
+          <div style={{ borderBottom: '1px solid var(--rc-line)', marginBottom: '20px', padding: '6px 0 8px', fontSize: '15px', fontWeight: '600', color: '#1a73e8', textAlign: 'center' }}>
             {(MENU_ITEMS.find(i => i.id === view) || {}).label}
           </div>
 
@@ -840,7 +842,7 @@ function App() {
                       View changelog
                     </button>
                   </p>
-                  <p style={{ marginTop: '4px', fontSize: '11px', color: '#666', textAlign: 'center' }}>
+                  <p style={{ marginTop: '4px', fontSize: '11px', color: 'var(--rc-ink2)', textAlign: 'center' }}>
                     Version {CURRENT_VERSION} · Updated {LAST_UPDATED}
                   </p>
                 </>
@@ -851,11 +853,11 @@ function App() {
                   {analyzing && <p style={{ color: '#888', fontSize: '14px', textAlign: 'center' }}>🔍 Analyzing audio...</p>}
 
                   {analysis && (
-                    <div style={{ backgroundColor: '#f0f7ff', border: '1px solid #b5d4f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                    <div style={{ backgroundColor: 'var(--rc-info)', border: '1px solid #b5d4f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                       <div style={{ fontSize: '14px', marginBottom: '10px', textAlign: 'center' }}>
                         <strong>🥁 BPM:</strong> {analysis.bpm || '—'}{analysis.bpmFromMetronome && <span style={{ color: '#888', fontSize: '12px' }}> (metronome)</span>}
                       </div>
-                      <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '13px', color: 'var(--rc-ink2)', marginBottom: '8px', textAlign: 'center' }}>
                         <strong>🎵 Possible keys</strong> — tap to select:
                       </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
@@ -868,7 +870,7 @@ function App() {
                         <button onClick={() => { setShowOtherKey(!showOtherKey); setSelectedKey(null); }}
                           style={{ padding: '6px 12px', borderRadius: '20px', cursor: 'pointer',
                             border: showOtherKey ? '2px solid #1a73e8' : '1px dashed #aaa',
-                            backgroundColor: showOtherKey ? '#e8f0fe' : 'transparent',
+                            backgroundColor: showOtherKey ? 'var(--rc-sel)' : 'transparent',
                             color: showOtherKey ? '#1a73e8' : '#888', fontSize: '13px' }}>
                           Other…
                         </button>
@@ -882,17 +884,17 @@ function App() {
                       {showOtherKey && (
                         <div style={{ marginTop: '10px' }}>
                           <select style={{ width: '100%', padding: '8px', fontSize: '14px',
-                            border: '1px solid #1a73e8', borderRadius: '6px', backgroundColor: '#fff', color: '#222' }}
+                            border: '1px solid #1a73e8', borderRadius: '6px', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}
                             value={selectedKey || ''} onChange={e => setSelectedKey(e.target.value)}>
                             <option value="">— Select a key —</option>
-                            {ALL_KEYS.map(k => <option key={k} value={k}>{k}</option>)}
+                            {ALL_KEYS.map(k => <option key={k} value={k}>{keyLabel(k)}</option>)}
                           </select>
                         </div>
                       )}
                       {selectedKey && (
                         <>
                           <p style={{ margin: '8px 0 0', fontSize: '13px', color: '#1a73e8', textAlign: 'center' }}>
-                            Selected: <strong>{selectedKey}</strong>
+                            Selected: <strong>{keyLabel(selectedKey)}</strong>
                           </p>
                           {/* Notes of the selected key, so the suggestion can be
                               checked against what was actually played. Derived
@@ -906,8 +908,8 @@ function App() {
 
                   {/* Duplicate warning */}
                   {duplicateWarning && (
-                    <div style={{ backgroundColor: '#fff8e1', border: '1px solid #f0c040', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
-                      <p style={{ fontSize: '13px', color: '#7a5000', margin: '0 0 10px' }}>
+                    <div style={{ backgroundColor: 'var(--rc-warn)', border: '1px solid #f0c040', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
+                      <p style={{ fontSize: '13px', color: 'var(--rc-warn-ink)', margin: '0 0 10px' }}>
                         ⚠️ A clip named <strong>"{duplicateWarning.original}"</strong> already exists in your library.
                         Both files would be kept — nothing would be replaced.
                       </p>
@@ -921,7 +923,7 @@ function App() {
                           Upload anyway
                         </button>
                         <button onClick={() => setDuplicateWarning(null)}
-                          style={{ padding: '6px 14px', background: 'none', border: '1px solid #ccc', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', color: '#555' }}>
+                          style={{ padding: '6px 14px', background: 'none', border: '1px solid var(--rc-line)', borderRadius: '6px', fontSize: '13px', cursor: 'pointer', color: 'var(--rc-ink2)' }}>
                           Edit name
                         </button>
                       </div>
@@ -998,7 +1000,8 @@ function App() {
           )}
           {visitedViews.has('settings') && (
             <div style={{ display: view === 'settings' ? 'block' : 'none' }}>
-              <Settings />
+              <Settings user={user} signedIn={!!accessToken} online={isOnline} pendingCount={pendingClips.length}
+                onSync={() => handleSync()} onSignOut={handleLogout} version={CURRENT_VERSION} updated={LAST_UPDATED} />
             </div>
           )}
           {visitedViews.has('debug') && (

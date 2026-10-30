@@ -4,6 +4,7 @@ import { NoteStrip, PlayChordButton } from './PlayControls';
 import { playChord, guitarChordMidi, pianoChordMidi, installAudioUnlock } from './AudioEngine';
 import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
+import { noteLabel, noteIn, keyLabel } from './Notation';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, CHORD_QUALITY_STYLES, RELATIVE_KEY_COLOR } from './theme';
 
 const ALL_KEYS = [
@@ -110,7 +111,7 @@ function chordRoleByNote(root, quality) {
   return map;
 }
 
-function ChordTones({ root, quality }) {
+function ChordTones({ root, quality, spellKey }) {
   const tones = getChordTones(root, quality);
   return (
     <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', marginTop: '10px' }}>
@@ -121,7 +122,7 @@ function ChordTones({ root, quality }) {
             <div style={{
               fontSize: '18px', fontWeight: '700', minWidth: '46px', padding: '4px 10px', borderRadius: '8px',
               backgroundColor: CHORD_ROLE_COLORS[role], color: CHORD_ROLE_TEXT[role],
-            }}>{note}</div>
+            }}>{noteIn(note, spellKey)}</div>
             <div style={{ fontSize: '10px', fontWeight: '600', color: CHORD_ROLE_COLORS[role], marginTop: '3px' }}>{label}</div>
           </div>
         );
@@ -147,7 +148,7 @@ const DIAGRAM_SCALE = 1.3;
 
 // Mini chord diagram SVG
 // frets array: index 0 = low E (left), index 5 = high E (right)
-function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
+function ChordDiagram({ shape, chordName, rootNote, quality = 'M', spellKey }) {
   if (!shape) return null;
 
   // Which role (root / 3rd / 5th) each note of this chord plays, for coloring.
@@ -228,7 +229,7 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
               <g key={strIdx}>
                 <circle cx={x} cy={padTop - 6} r="5" fill={CHORD_ROLE_COLORS[role]} stroke="rgba(0,0,0,0.4)" strokeWidth="0.6" />
                 <text x={x} y={padTop - 6} dy="0.35em" textAnchor="middle" fontSize="6.5" fontWeight="800"
-                  fill={CHORD_ROLE_TEXT[role]} style={{ pointerEvents: 'none', userSelect: 'none' }}>{actualNote}</text>
+                  fill={CHORD_ROLE_TEXT[role]} style={{ pointerEvents: 'none', userSelect: 'none' }}>{noteIn(actualNote, spellKey)}</text>
               </g>
             )
             : <circle key={strIdx} cx={x} cy={padTop - 6} r="3" fill="none" stroke="#aaa" strokeWidth="0.8" />;
@@ -254,7 +255,7 @@ function ChordDiagram({ shape, chordName, rootNote, quality = 'M' }) {
               inside a 12-unit dot. Text color flips dark/light per the
               theme so it's readable on whatever role color is set. */}
           <text x={d.col} y={d.row} dy="0.35em" textAnchor="middle" fontSize="7.5" fontWeight="800"
-            fill={CHORD_ROLE_TEXT[d.role] || '#111111'} style={{ pointerEvents: 'none', userSelect: 'none' }}>{d.note}</text>
+            fill={CHORD_ROLE_TEXT[d.role] || '#111111'} style={{ pointerEvents: 'none', userSelect: 'none' }}>{noteIn(d.note, spellKey)}</text>
         </g>
       ))}
 
@@ -283,13 +284,14 @@ function KeyFinder({ onFilterByKey }) {
   const playChordNow = (note, quality, shape) =>
     playChord(instrument, isPiano ? pianoChordMidi(note, quality) : guitarChordMidi(shape));
   const scaleNotes = selectedKey ? getScaleNotes(selectedKey) : [];
+  const nl = (n) => noteIn(n, selectedKey);   // a note as written in the selected key (sharps or flats, per Settings)
 
   // The relative key shares all seven notes with the selected one: for a
   // major key it's the minor starting on the 6th degree; for a minor key,
   // the major starting on the 3rd. That degree's card gets highlighted.
   const isMinorKey = selectedKey.endsWith('Minor');
   const relIndex = isMinorKey ? 2 : 5;
-  const relativeKey = scaleNotes.length ? `${scaleNotes[relIndex].note} ${isMinorKey ? 'Major' : 'Minor'}` : null;
+  const relativeKey = scaleNotes.length ? keyLabel(`${scaleNotes[relIndex].note} ${isMinorKey ? 'Major' : 'Minor'}`) : null;
 
   // Zoom-to-full-screen for the fretboard and chord diagrams — mirrors
   // the same DiagramDetailView pattern Practice tab uses.
@@ -357,7 +359,7 @@ function KeyFinder({ onFilterByKey }) {
             <button key={id} role="tab" aria-selected={active} onClick={() => setInstrument(id)}
               style={{
                 padding: '8px 22px', fontSize: '14px', cursor: 'pointer', fontWeight: active ? '700' : '500',
-                border: '1px solid #1a73e8', backgroundColor: active ? '#1a73e8' : 'white', color: active ? 'white' : '#1a73e8',
+                border: '1px solid #1a73e8', backgroundColor: active ? '#1a73e8' : 'var(--rc-surface)', color: active ? 'white' : '#1a73e8',
                 borderRadius: i === 0 ? '8px 0 0 8px' : '0 8px 8px 0', marginLeft: i === 0 ? 0 : '-1px',
               }}>
               {label}
@@ -369,21 +371,21 @@ function KeyFinder({ onFilterByKey }) {
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '24px' }}>
         <select value={selectedKey} onChange={e => handleKeyDropdownChange(e.target.value)}
           style={{ padding: '10px 14px', fontSize: '16px', borderRadius: '8px',
-            border: '1px solid #ccc', backgroundColor: 'white', color: '#222', width: '100%', maxWidth: '300px' }}>
+            border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', width: '100%', maxWidth: '300px' }}>
           <option value="">— Select a key —</option>
           <optgroup label="Major Keys">
-            {ALL_KEYS.filter(k => k.includes('Major')).map(k => <option key={k} value={k}>{k}</option>)}
+            {ALL_KEYS.filter(k => k.includes('Major')).map(k => <option key={k} value={k}>{keyLabel(k)}</option>)}
           </optgroup>
           <optgroup label="Minor Keys">
-            {ALL_KEYS.filter(k => k.includes('Minor')).map(k => <option key={k} value={k}>{k}</option>)}
+            {ALL_KEYS.filter(k => k.includes('Minor')).map(k => <option key={k} value={k}>{keyLabel(k)}</option>)}
           </optgroup>
         </select>
       </div>
 
       {/* Reverse Key Lookup */}
       <div style={{
-        border: '1px solid #ddd', borderRadius: '10px', padding: '16px',
-        marginBottom: '28px', backgroundColor: '#fafafa',
+        border: '1px solid var(--rc-line)', borderRadius: '10px', padding: '16px',
+        marginBottom: '28px', backgroundColor: 'var(--rc-card)',
       }}>
         <button onClick={() => setLookupExpanded(v => !v)}
           style={{
@@ -391,7 +393,7 @@ function KeyFinder({ onFilterByKey }) {
             gap: '8px', background: 'none', border: 'none', cursor: 'pointer', padding: 0,
             marginBottom: lookupExpanded ? '4px' : '0',
           }}>
-          <h3 style={{ fontSize: '15px', margin: 0, color: '#222' }}>Reverse Key Lookup</h3>
+          <h3 style={{ fontSize: '15px', margin: 0, color: 'var(--rc-ink)' }}>Reverse Key Lookup</h3>
           <span style={{ fontSize: '12px', color: '#888' }}>{lookupExpanded ? '▲' : '▼'}</span>
         </button>
 
@@ -411,11 +413,11 @@ function KeyFinder({ onFilterByKey }) {
               <button key={note} onClick={() => toggleNote(note)}
                 style={{
                   padding: '10px 0', borderRadius: '8px', fontSize: '14px', fontWeight: '600',
-                  cursor: 'pointer', border: active ? '2px solid #1a73e8' : '1px solid #ccc',
-                  backgroundColor: active ? '#1a73e8' : 'white',
-                  color: active ? 'white' : '#333',
+                  cursor: 'pointer', border: active ? '2px solid #1a73e8' : '1px solid var(--rc-line)',
+                  backgroundColor: active ? '#1a73e8' : 'var(--rc-surface)',
+                  color: active ? 'white' : 'var(--rc-ink)',
                 }}>
-                {note}
+                {noteLabel(note)}
               </button>
             );
           })}
@@ -426,7 +428,7 @@ function KeyFinder({ onFilterByKey }) {
             style={{
               padding: '9px 22px', borderRadius: '8px', border: 'none', fontSize: '14px',
               fontWeight: '600', cursor: pickedNotes.length ? 'pointer' : 'default',
-              backgroundColor: pickedNotes.length ? '#cc0000' : '#e5e5e5',
+              backgroundColor: pickedNotes.length ? '#cc0000' : 'var(--rc-pip)',
               color: pickedNotes.length ? 'white' : '#999',
             }}>
             Find Keys
@@ -435,7 +437,7 @@ function KeyFinder({ onFilterByKey }) {
             <button onClick={clearLookup}
               style={{
                 padding: '9px 18px', borderRadius: '8px', fontSize: '14px',
-                border: '1px solid #ccc', backgroundColor: 'white', color: '#555', cursor: 'pointer',
+                border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink2)', cursor: 'pointer',
               }}>
               Clear
             </button>
@@ -461,11 +463,11 @@ function KeyFinder({ onFilterByKey }) {
                       style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         padding: '10px 14px', borderRadius: '8px', cursor: 'pointer',
-                        border: `1px solid ${exact ? '#b5d9a5' : '#ddd'}`,
-                        backgroundColor: exact ? '#e8f5e2' : 'white',
+                        border: `1px solid ${exact ? '#b5d9a5' : 'var(--rc-line)'}`,
+                        backgroundColor: exact ? 'var(--rc-ok)' : 'var(--rc-surface)',
                         fontSize: '14px', textAlign: 'left',
                       }}>
-                      <span style={{ fontWeight: '600', color: '#222' }}>{key}</span>
+                      <span style={{ fontWeight: '600', color: 'var(--rc-ink)' }}>{keyLabel(key)}</span>
                       <span style={{ fontSize: '12px', color: '#888' }}>
                         {matchCount}/{pickedNotes.length} notes match
                       </span>
@@ -486,7 +488,7 @@ function KeyFinder({ onFilterByKey }) {
           <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '6px', width: '100%' }}>
               {scaleNotes.map(({ degree, quality, note }, idx) => {
-                const chordLabel = quality === 'M' ? note : quality === 'dim' ? `${note}°` : `${note}m`;
+                const chordLabel = quality === 'M' ? nl(note) : quality === 'dim' ? `${nl(note)}°` : `${nl(note)}m`;
                 // Quality is black & white: major = white, minor = black with
                 // a white outline, diminished = diagonal white stripes.
                 const qs = CHORD_QUALITY_STYLES[quality];
@@ -510,7 +512,7 @@ function KeyFinder({ onFilterByKey }) {
                       <span style={{ fontSize: '14px', fontWeight: '700', color: ink }}>
                         {degree}<span style={{ fontSize: '10px', fontWeight: '600' }}>{quality}</span>
                       </span>
-                      <span style={{ fontSize: '20px', fontWeight: '800', marginTop: '4px', color: ink, lineHeight: 1.1 }}>{note}</span>
+                      <span style={{ fontSize: '20px', fontWeight: '800', marginTop: '4px', color: ink, lineHeight: 1.1 }}>{nl(note)}</span>
                       {isRelative && <span style={{ fontSize: '14px', fontWeight: '800', color: ink, lineHeight: 1 }}>↔</span>}
                     </div>
                     {onFilterByKey && (
@@ -519,7 +521,7 @@ function KeyFinder({ onFilterByKey }) {
                         title={`Find clips in ${chordLabel}`}
                         style={{
                           marginTop: '5px', padding: '2px 6px', fontSize: '9px', cursor: 'pointer',
-                          border: '1px solid #ccc', borderRadius: '4px', backgroundColor: 'white', color: '#555',
+                          border: '1px solid var(--rc-line)', borderRadius: '4px', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink2)',
                         }}
                       >
                         Find clips
@@ -561,7 +563,7 @@ function KeyFinder({ onFilterByKey }) {
           {isPiano ? (
             <div
               onClick={() => setDetailView({
-                title: `Keyboard — ${selectedKey}`, subtitle: '', difficulty: null,
+                title: `Keyboard — ${keyLabel(selectedKey)}`, subtitle: '', difficulty: null,
                 content: <PianoKeyboard selectedKey={selectedKey} />,
               })}
               style={{ cursor: 'pointer' }}
@@ -582,10 +584,10 @@ function KeyFinder({ onFilterByKey }) {
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '12px' }}>
               {scaleNotes.map(({ degree, quality, note }) => {
                 const shape = getChordShape(note, quality);
-                const chordLabel = quality === 'M' ? note : quality === 'dim' ? `${note}°` : `${note}m`;
+                const chordLabel = quality === 'M' ? nl(note) : quality === 'dim' ? `${nl(note)}°` : `${nl(note)}m`;
                 const chordDiagram = isPiano
-                  ? <PianoChordDiagram chordName={chordLabel} roleByNote={chordRoleByNote(note, quality)} />
-                  : <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} quality={quality} />;
+                  ? <PianoChordDiagram chordName={chordLabel} roleByNote={chordRoleByNote(note, quality)} spellKey={selectedKey} />
+                  : <ChordDiagram shape={shape} chordName={chordLabel} rootNote={note} quality={quality} spellKey={selectedKey} />;
                 return (
                   <div key={degree}
                     onClick={() => setDetailView({
@@ -593,7 +595,7 @@ function KeyFinder({ onFilterByKey }) {
                       content: (
                         <div>
                           {chordDiagram}
-                          <ChordTones root={note} quality={quality} />
+                          <ChordTones root={note} quality={quality} spellKey={selectedKey} />
                           <div style={{ textAlign: 'center' }}>
                             <PlayChordButton big onPlay={() => playChordNow(note, quality, shape)} />
                           </div>
@@ -624,7 +626,7 @@ function KeyFinder({ onFilterByKey }) {
               degree. */}
           <div style={{ marginTop: '28px', marginBottom: '8px' }}>
             <div style={{ fontSize: '13px', color: '#888', textAlign: 'center', marginBottom: '12px' }}>
-              Modes of {selectedKey} — tap a mode to see its notes
+              Modes of {keyLabel(selectedKey)} — tap a mode to see its notes
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px' }}>
               {(() => {
@@ -638,15 +640,15 @@ function KeyFinder({ onFilterByKey }) {
                       onClick={() => setExpandedMode(prev => (prev === i ? null : i))}
                       style={{
                         padding: '8px 12px', borderRadius: '8px',
-                        backgroundColor: isExpanded ? '#fff8e1' : '#f5f5f5',
-                        border: `1px solid ${isExpanded ? '#f0c040' : '#e0e0e0'}`,
+                        backgroundColor: isExpanded ? 'var(--rc-warn)' : 'var(--rc-card)',
+                        border: `1px solid ${isExpanded ? '#f0c040' : 'var(--rc-line)'}`,
                         textAlign: 'center', minWidth: '84px', cursor: 'pointer',
                       }}>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: '#222' }}>{note} {modeSeq[i]}</div>
+                      <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--rc-ink)' }}>{nl(note)} {modeSeq[i]}</div>
                       <div style={{ fontSize: '10px', color: '#999', marginTop: '2px' }}>degree {degree}</div>
                       {isExpanded && (
-                        <div style={{ fontSize: '11px', color: '#7a5000', fontWeight: '600', marginTop: '6px', whiteSpace: 'nowrap' }}>
-                          {modeNotes.join(' – ')}
+                        <div style={{ fontSize: '11px', color: 'var(--rc-warn-ink)', fontWeight: '600', marginTop: '6px', whiteSpace: 'nowrap' }}>
+                          {modeNotes.map(nl).join(' – ')}
                         </div>
                       )}
                     </div>

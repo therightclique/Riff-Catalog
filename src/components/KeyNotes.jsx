@@ -1,4 +1,5 @@
 import { getScaleNotes } from './FretboardDiagram';
+import { noteIn } from './Notation';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 
 // The seven notes of a key, with the root, 3rd, and 5th highlighted in the
@@ -46,7 +47,7 @@ export default function KeyNotes({ keyName, marginTop = '8px', align = 'center' 
               backgroundColor: c.bg, color: c.text, border: `1px solid ${c.border}`,
             }}
           >
-            {note}
+            {noteIn(note, keyName)}
           </span>
         );
       })}

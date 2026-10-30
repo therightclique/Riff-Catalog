@@ -113,7 +113,7 @@ export default function Debug({ accessToken }) {
         maxHeight: '60vh', overflowY: 'auto', border: '1px solid #2a2a2a',
       }}>
         {shown.length === 0 ? (
-          <p style={{ color: '#666', fontSize: '13px', textAlign: 'center', margin: '20px 0' }}>
+          <p style={{ color: 'var(--rc-ink2)', fontSize: '13px', textAlign: 'center', margin: '20px 0' }}>
             No entries.
           </p>
         ) : (
@@ -142,7 +142,7 @@ export default function Debug({ accessToken }) {
                     borderBottom: '1px solid #1e1e1e', whiteSpace: 'pre-wrap',
                     wordBreak: 'break-word', color: LEVEL_COLORS[e.level] || '#d0d0d0',
                   }}>
-                    <span style={{ color: '#666' }}>{time} </span>
+                    <span style={{ color: 'var(--rc-ink2)' }}>{time} </span>
                     <strong>{e.level.toUpperCase()}</strong>{' '}
                     {e.text}
                   </div>
@@ -153,7 +153,7 @@ export default function Debug({ accessToken }) {
         )}
       </div>
 
-      <p style={{ fontSize: '11px', color: '#666', textAlign: 'center', marginTop: '10px' }}>
+      <p style={{ fontSize: '11px', color: 'var(--rc-ink2)', textAlign: 'center', marginTop: '10px' }}>
         {entries.length} entries, saved across app sessions • tap Clear to reset • uploads go to RiffCatalog/Debug in your Drive
       </p>
     </div>

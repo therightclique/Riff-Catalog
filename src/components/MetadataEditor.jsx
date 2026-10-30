@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import KeyNotes from './KeyNotes';
+import { keyLabel } from './Notation';
 import { TapTempoButton } from './TapTempo';
 
 const ALL_KEYS = [
@@ -27,17 +28,17 @@ const MOODS = [
 
 function abbr(key) {
   if (!key) return key;
-  return key.replace('Major', 'Maj').replace('Minor', 'Min');
+  return keyLabel(key).replace('Major', 'Maj').replace('Minor', 'Min');
 }
 
 const fieldStyle = { marginBottom: '12px' };
 const labelStyle = {
-  display: 'block', fontSize: '12px', fontWeight: '600', color: '#555',
+  display: 'block', fontSize: '12px', fontWeight: '600', color: 'var(--rc-ink2)',
   marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.05em',
 };
 const inputStyle = {
-  width: '100%', padding: '8px', fontSize: '14px', border: '1px solid #ddd',
-  borderRadius: '6px', boxSizing: 'border-box', backgroundColor: '#ffffff', color: '#222222',
+  width: '100%', padding: '8px', fontSize: '14px', border: '1px solid var(--rc-line)',
+  borderRadius: '6px', boxSizing: 'border-box', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)',
 };
 const selectStyle = { ...inputStyle };
 
@@ -67,7 +68,7 @@ function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidate
   const remainingKeys = ALL_KEYS.filter(k => !candidateKeys.includes(k));
 
   return (
-    <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '8px', marginTop: '8px' }}>
+    <div style={{ padding: '16px', backgroundColor: 'var(--rc-card)', borderRadius: '8px', marginTop: '8px' }}>
 
       {/* Key */}
       <div style={fieldStyle}>
@@ -188,7 +189,7 @@ function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidate
           onChange={e => update('needsLyrics', e.target.checked)}
           style={{ width: '16px', height: '16px', cursor: 'pointer' }}
         />
-        <label htmlFor="needsLyrics" style={{ fontSize: '13px', color: '#555', cursor: 'pointer' }}>
+        <label htmlFor="needsLyrics" style={{ fontSize: '13px', color: 'var(--rc-ink2)', cursor: 'pointer' }}>
           Needs lyrics
         </label>
       </div>
@@ -202,9 +203,9 @@ function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidate
             return (
               <button key={mood} onClick={() => toggleMood(mood)} style={{
                 padding: '4px 10px', borderRadius: '20px', fontSize: '12px', cursor: 'pointer',
-                border: active ? '2px solid #1a73e8' : '1px solid #ccc',
-                backgroundColor: active ? '#1a73e8' : 'white',
-                color: active ? 'white' : '#555',
+                border: active ? '2px solid #1a73e8' : '1px solid var(--rc-line)',
+                backgroundColor: active ? '#1a73e8' : 'var(--rc-surface)',
+                color: active ? 'white' : 'var(--rc-ink2)',
               }}>
                 {mood}
               </button>
@@ -222,11 +223,11 @@ function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidate
         <div style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
           {(metadata.tags || []).map(tag => (
             <span key={tag} style={{
-              backgroundColor: '#e8f5e2', color: '#2a6b17', padding: '3px 10px',
+              backgroundColor: 'var(--rc-ok)', color: 'var(--rc-ok-ink)', padding: '3px 10px',
               borderRadius: '20px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px'
             }}>
               {tag}
-              <button onClick={() => removeTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#2a6b17', fontSize: '14px', padding: 0, lineHeight: 1 }}>×</button>
+              <button onClick={() => removeTag(tag)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--rc-ok-ink)', fontSize: '14px', padding: 0, lineHeight: 1 }}>×</button>
             </span>
           ))}
         </div>

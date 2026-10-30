@@ -1,4 +1,5 @@
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
+import { noteIn, keyLabel } from './Notation';
 
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const MAJOR_INTERVALS = [0, 2, 4, 5, 7, 9, 11];
@@ -75,7 +76,7 @@ export function FretboardDiagram({ selectedKey }) {
         <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: NOTE_ROLE_COLORS.fifth, verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
         5th &nbsp;
         <span style={{ display: 'inline-block', width: '12px', height: '12px', borderRadius: '50%', backgroundColor: NOTE_ROLE_COLORS.other, verticalAlign: 'middle', marginRight: '4px', marginLeft: '8px' }}></span>
-        Other — {selectedKey}
+        Other — {keyLabel(selectedKey)}
       </div>
       <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`}
         style={{ width: '100%', maxWidth: `${svgWidth}px`, display: 'block', margin: '0 auto' }}>
@@ -121,7 +122,7 @@ export function FretboardDiagram({ selectedKey }) {
             return (
               <g key={`${stringIdx}-${fret}`}>
                 <circle cx={cx} cy={cy} r="11" fill={colorForNote(note)} opacity="0.9" />
-                <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fill={textColorForNote(note)} fontWeight="600">{note}</text>
+                <text x={cx} y={cy + 4} textAnchor="middle" fontSize="9" fill={textColorForNote(note)} fontWeight="600">{noteIn(note, selectedKey)}</text>
               </g>
             );
           })

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { keyLabel } from './Notation';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -7,7 +8,7 @@ const ALL_KEYS = [
   'D# Minor', 'E Minor', 'F Minor', 'F# Minor', 'G Minor', 'G# Minor',
 ];
 
-function abbr(key) { return key.replace('Major', 'Maj').replace('Minor', 'Min'); }
+function abbr(key) { return keyLabel(key).replace('Major', 'Maj').replace('Minor', 'Min'); }
 
 const QUALITY_FLAGS = ['Keeper', 'Rough idea', 'Needs work'];
 const TIME_SIGNATURES = ['4/4', '3/4', '6/8', '5/4', '7/8', '12/8', 'Other'];
@@ -28,15 +29,15 @@ const MOODS = [
 const chipStyle = (active) => ({
   display: 'inline-block', padding: '4px 10px', borderRadius: '20px',
   fontSize: '12px', cursor: 'pointer', userSelect: 'none',
-  border: active ? '2px solid #1a73e8' : '1px solid #ccc',
-  backgroundColor: active ? '#1a73e8' : 'white',
-  color: active ? 'white' : '#333',
+  border: active ? '2px solid #1a73e8' : '1px solid var(--rc-line)',
+  backgroundColor: active ? '#1a73e8' : 'var(--rc-surface)',
+  color: active ? 'white' : 'var(--rc-ink)',
   fontWeight: active ? '600' : '400',
 });
 
 const selectStyle = {
   padding: '4px 8px', fontSize: '12px', borderRadius: '6px',
-  border: '1px solid #ccc', backgroundColor: 'white', color: '#222', width: '100%',
+  border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', width: '100%',
 };
 
 const sectionLabel = {
@@ -76,12 +77,12 @@ function FilterBar({ filters, onChange, availableTags }) {
   ].filter(Boolean).length;
 
   return (
-    <div style={{ marginBottom: '16px', border: '1px solid #e0e0e0', borderRadius: '8px', overflow: 'hidden' }}>
+    <div style={{ marginBottom: '16px', border: '1px solid var(--rc-line)', borderRadius: '8px', overflow: 'hidden' }}>
       <div onClick={() => setOpen(!open)} style={{
         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-        padding: '10px 14px', backgroundColor: '#f5f5f5', cursor: 'pointer', userSelect: 'none',
+        padding: '10px 14px', backgroundColor: 'var(--rc-card)', cursor: 'pointer', userSelect: 'none',
       }}>
-        <span style={{ fontSize: '13px', fontWeight: '600', color: '#444' }}>
+        <span style={{ fontSize: '13px', fontWeight: '600', color: 'var(--rc-ink2)' }}>
           Filter {activeCount > 0 && <span style={{ color: '#1a73e8' }}>({activeCount} active)</span>}
         </span>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -96,14 +97,14 @@ function FilterBar({ filters, onChange, availableTags }) {
       </div>
 
       {open && (
-        <div style={{ padding: '12px 14px', backgroundColor: 'white' }}>
+        <div style={{ padding: '12px 14px', backgroundColor: 'var(--rc-surface)' }}>
 
           {/* Key */}
           <div style={{ marginBottom: '12px' }}>
             <div style={sectionLabel}>Key</div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', alignItems: 'center' }}>
               <select value={filters.key || ''} onChange={e => set('key', e.target.value)}
-                style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid #ccc', backgroundColor: 'white', color: '#222' }}>
+                style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>
                 <option value="">Any key</option>
                 <optgroup label="Major Keys">
                   {ALL_KEYS.filter(k => k.includes('Major')).map(k => <option key={k} value={k}>{abbr(k)}</option>)}
@@ -169,7 +170,7 @@ function FilterBar({ filters, onChange, availableTags }) {
             <input type="checkbox" id="filterNeedsLyrics" checked={filters.needsLyrics || false}
               onChange={e => set('needsLyrics', e.target.checked)}
               style={{ width: '14px', height: '14px', cursor: 'pointer' }} />
-            <label htmlFor="filterNeedsLyrics" style={{ fontSize: '13px', color: '#555', cursor: 'pointer' }}>
+            <label htmlFor="filterNeedsLyrics" style={{ fontSize: '13px', color: 'var(--rc-ink2)', cursor: 'pointer' }}>
               Needs lyrics only
             </label>
           </div>
@@ -179,7 +180,7 @@ function FilterBar({ filters, onChange, availableTags }) {
             <input type="checkbox" id="filterFavorite" checked={filters.favorite || false}
               onChange={e => set('favorite', e.target.checked)}
               style={{ width: '14px', height: '14px', cursor: 'pointer' }} />
-            <label htmlFor="filterFavorite" style={{ fontSize: '13px', color: '#555', cursor: 'pointer' }}>
+            <label htmlFor="filterFavorite" style={{ fontSize: '13px', color: 'var(--rc-ink2)', cursor: 'pointer' }}>
               ★ Starred only
             </label>
           </div>

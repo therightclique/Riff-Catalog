@@ -42,7 +42,7 @@ export function TapTempoButton({ onBpm, min = 40, max = 300, style }) {
     <button type="button" onPointerDown={press} onContextMenu={e => e.preventDefault()} aria-label="Tap tempo"
       style={{
         padding: '8px 16px', fontSize: '14px', fontWeight: '700', borderRadius: '8px', cursor: 'pointer',
-        border: '1px solid #1a73e8', backgroundColor: taps ? '#e8f0fe' : '#fff', color: '#1a73e8',
+        border: '1px solid #1a73e8', backgroundColor: taps ? 'var(--rc-sel)' : 'var(--rc-surface)', color: '#1a73e8',
         touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
         ...style,
       }}>

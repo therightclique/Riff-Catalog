@@ -11,6 +11,35 @@
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
+  /* Surfaces and text used by the app's screens (Settings → Appearance switches these). */
+  --rc-card: #f9f9f9;
+  --rc-surface: #ffffff;
+  --rc-ink: #222222;
+  --rc-ink2: #555555;
+  --rc-line: #d9d9d9;
+  --rc-sel: #e8f0fe;
+  --rc-info: #f0f7ff;
+  --rc-warn: #fff8e1;
+  --rc-warn2: #fff4e0;
+  --rc-ok: #e8f5e2;
+  --rc-bad: #fde8e8;
+  --rc-cellA: #e4e4e4;
+  --rc-cellB: #d2d2d2;
+  --rc-dot: #d9d9d9;
+  --rc-pip: #e6e6e6;
+  --rc-warn-ink: #7a5000;
+  --rc-ok-ink: #2a6b17;
+  --rc-bad-ink: #8b1a1a;
+  --rc-note: #fffbf0;
+  --rc-blue-ink: #1a3d8b;
+  --rc-orange: #ffe3c2;
+  --rc-orange-ink: #8a4b00;
+  --rc-orange2: #fff3e0;
+  --rc-orange2-ink: #8a6a3a;
+  --rc-purple: #f5f0ff;
+  --rc-purple-ink: #5b3b8c;
+  --rc-purple-line: #d8c8f5;
+
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, Consolas, monospace;
@@ -30,8 +59,56 @@
   }
 }
 
+/* Light/dark chosen in Settings → Appearance sets data-theme on <html>.
+   With no choice ("Match device") the media query below decides. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --text: #9ca3af;
+  --text-h: #f3f4f6;
+  --bg: #16171d;
+  --border: #2e303a;
+  --code-bg: #1f2028;
+  --accent: #c084fc;
+  --accent-bg: rgba(192, 132, 252, 0.15);
+  --accent-border: rgba(192, 132, 252, 0.5);
+  --social-bg: rgba(47, 48, 58, 0.5);
+  --shadow:
+    rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+  --rc-card: #22242d;
+  --rc-surface: #2c2f3a;
+  --rc-ink: #ececf1;
+  --rc-ink2: #b6bac6;
+  --rc-line: #3d4050;
+  --rc-sel: #20365c;
+  --rc-info: #1d2d47;
+  --rc-warn: #3a3420;
+  --rc-warn2: #3a2f1e;
+  --rc-ok: #1f3a24;
+  --rc-bad: #402424;
+  --rc-cellA: #3a3d49;
+  --rc-cellB: #2f323d;
+  --rc-dot: #454859;
+  --rc-pip: #3a3d49;
+  --rc-warn-ink: #f0c870;
+  --rc-ok-ink: #8fd47a;
+  --rc-bad-ink: #ff9a9a;
+  --rc-note: #3a3420;
+  --rc-blue-ink: #9bbcff;
+  --rc-orange: #4a3418;
+  --rc-orange-ink: #f5c98a;
+  --rc-orange2: #3d2f1e;
+  --rc-orange2-ink: #d9b98a;
+  --rc-purple: #2e2548;
+  --rc-purple-ink: #c9b0f5;
+  --rc-purple-line: #55447a;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --text: #9ca3af;
     --text-h: #f3f4f6;
     --bg: #16171d;
@@ -43,6 +120,33 @@
     --social-bg: rgba(47, 48, 58, 0.5);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
+    --rc-card: #22242d;
+    --rc-surface: #2c2f3a;
+    --rc-ink: #ececf1;
+    --rc-ink2: #b6bac6;
+    --rc-line: #3d4050;
+    --rc-sel: #20365c;
+    --rc-info: #1d2d47;
+    --rc-warn: #3a3420;
+    --rc-warn2: #3a2f1e;
+    --rc-ok: #1f3a24;
+    --rc-bad: #402424;
+    --rc-cellA: #3a3d49;
+    --rc-cellB: #2f323d;
+    --rc-dot: #454859;
+    --rc-pip: #3a3d49;
+    --rc-warn-ink: #f0c870;
+    --rc-ok-ink: #8fd47a;
+    --rc-bad-ink: #ff9a9a;
+    --rc-note: #3a3420;
+    --rc-blue-ink: #9bbcff;
+    --rc-orange: #4a3418;
+    --rc-orange-ink: #f5c98a;
+    --rc-orange2: #3d2f1e;
+    --rc-orange2-ink: #d9b98a;
+    --rc-purple: #2e2548;
+    --rc-purple-ink: #c9b0f5;
+    --rc-purple-line: #55447a;
   }
 
   #social .button-icon {

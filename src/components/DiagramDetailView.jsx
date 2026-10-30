@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { FretboardDiagram } from './FretboardDiagram';
+import { keyLabel } from './Notation';
 
 // Single, page-level hint that diagrams are tappable to zoom — meant to
 // appear ONCE per page, not once per diagram.
@@ -19,7 +20,7 @@ export function ZoomableFretboard({ selectedKey, onOpenDetail }) {
   return (
     <div
       onClick={() => onOpenDetail({
-        title: `Fretboard — ${selectedKey}`, subtitle: '', difficulty: null,
+        title: `Fretboard — ${keyLabel(selectedKey)}`, subtitle: '', difficulty: null,
         content: <FretboardDiagram selectedKey={selectedKey} />,
       })}
       style={{ cursor: 'pointer' }}
@@ -45,9 +46,9 @@ export function BigTabDisplay({ children }) {
 }
 
 const DIFF_COLORS = {
-  Beginner:     { bg: '#e8f5e2', color: '#2a6b17', border: '#b5d9a5' },
-  Intermediate: { bg: '#fff8e1', color: '#7a5000', border: '#f0c040' },
-  Advanced:     { bg: '#fde8e8', color: '#8b1a1a', border: '#f0b8b8' },
+  Beginner:     { bg: 'var(--rc-ok)', color: 'var(--rc-ok-ink)', border: '#b5d9a5' },
+  Intermediate: { bg: 'var(--rc-warn)', color: 'var(--rc-warn-ink)', border: '#f0c040' },
+  Advanced:     { bg: 'var(--rc-bad)', color: 'var(--rc-bad-ink)', border: '#f0b8b8' },
 };
 
 // Full-screen detail view for ANY diagram in the app — box licks, free
@@ -250,7 +251,7 @@ export function DiagramDetailView({
             </div>
           )}
           {active}
-          <p style={{ textAlign: 'center', color: '#666', fontSize: '12px', margin: 0 }}>
+          <p style={{ textAlign: 'center', color: 'var(--rc-ink2)', fontSize: '12px', margin: 0 }}>
             Pinch to zoom · drag to pan when zoomed · double-tap to reset
           </p>
         </div>

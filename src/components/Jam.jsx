@@ -158,7 +158,7 @@ export default function Jam() {
 
   const stepBtn = (label, delta) => (
     <button onClick={() => changeBpm(bpm + delta)} aria-label={`${delta > 0 ? 'Faster' : 'Slower'} by ${Math.abs(delta)}`}
-      style={{ width: '46px', height: '40px', borderRadius: '8px', border: '1px solid #ccc', backgroundColor: '#fff', color: '#222',
+      style={{ width: '46px', height: '40px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)',
         fontSize: '14px', fontWeight: '600', cursor: 'pointer', touchAction: 'manipulation' }}>
       {label}
     </button>
@@ -171,7 +171,7 @@ export default function Jam() {
       <button key={id} onClick={() => chooseMode(id)} role="tab" aria-selected={active}
         style={{
           padding: '8px 12px', fontSize: '14px', cursor: 'pointer', fontWeight: active ? '700' : '500',
-          border: '1px solid #1a73e8', backgroundColor: active ? '#1a73e8' : 'white', color: active ? 'white' : '#1a73e8',
+          border: '1px solid #1a73e8', backgroundColor: active ? '#1a73e8' : 'var(--rc-surface)', color: active ? 'white' : '#1a73e8',
           borderRadius: i === 0 ? '8px 0 0 8px' : i === 2 ? '0 8px 8px 0' : 0, marginLeft: i === 0 ? 0 : '-1px',
         }}>
         {label}
@@ -195,7 +195,7 @@ export default function Jam() {
       </div>
 
       {/* Transport */}
-      <div style={{ padding: '16px', backgroundColor: '#f9f9f9', borderRadius: '10px', color: '#222', marginBottom: '20px' }}>
+      <div style={{ padding: '16px', backgroundColor: 'var(--rc-card)', borderRadius: '10px', color: 'var(--rc-ink)', marginBottom: '20px' }}>
         <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '12px' }}>{beat.name}</div>
 
         <button onClick={toggle} aria-label={playing ? 'Stop' : 'Start'}
@@ -213,7 +213,7 @@ export default function Jam() {
           {Array.from({ length: beat.beatsPerBar }, (_, i) => (
             <div key={i} style={{
               width: mode === 'metronome' ? '34px' : '22px', height: mode === 'metronome' ? '34px' : '22px', borderRadius: '50%',
-              backgroundColor: pos && pos.beat === i ? (mode === 'metronome' && i === 0 ? '#e07a10' : '#1a73e8') : '#d9d9d9',
+              backgroundColor: pos && pos.beat === i ? (mode === 'metronome' && i === 0 ? '#e07a10' : '#1a73e8') : 'var(--rc-dot)',
               transform: pos && pos.beat === i ? 'scale(1.2)' : 'none', transition: 'background-color 60ms, transform 60ms',
             }} />
           ))}
@@ -226,7 +226,7 @@ export default function Jam() {
               return (
                 <div key={i} style={{
                   minWidth: '44px', padding: '3px 0', borderRadius: '6px', fontSize: '11px', fontWeight: '700',
-                  backgroundColor: on ? (isFillBar && pos.fill ? '#e07a10' : '#1a73e8') : '#e6e6e6',
+                  backgroundColor: on ? (isFillBar && pos.fill ? '#e07a10' : '#1a73e8') : 'var(--rc-pip)',
                   color: on ? '#fff' : '#777',
                 }}>
                   {isFillBar ? 'Bar 4 · fill' : `Bar ${i + 1}`}
@@ -238,9 +238,9 @@ export default function Jam() {
 
         {/* Tempo — shared by preset beats and your own */}
         <div style={{ marginTop: '20px' }}>
-          <div style={{ fontSize: '12px', color: '#666', fontWeight: '600', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Tempo</div>
+          <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', fontWeight: '600', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Tempo</div>
           <div style={{ fontSize: '40px', fontWeight: '800', lineHeight: 1.1, margin: '2px 0 8px' }}>
-            {bpm}<span style={{ fontSize: '14px', fontWeight: '600', color: '#666', marginLeft: '6px' }}>BPM</span>
+            {bpm}<span style={{ fontSize: '14px', fontWeight: '600', color: 'var(--rc-ink2)', marginLeft: '6px' }}>BPM</span>
           </div>
           <input type="range" min={MIN_BPM} max={MAX_BPM} step="1" value={bpm}
             onChange={e => changeBpm(e.target.value)} aria-label="Tempo in beats per minute"
@@ -269,7 +269,7 @@ export default function Jam() {
                 <button key={n} onClick={() => chooseMetroBeats(n)} aria-pressed={active}
                   style={{
                     width: '52px', height: '44px', borderRadius: '10px', fontSize: '16px', fontWeight: '700', cursor: 'pointer', touchAction: 'manipulation',
-                    border: `2px solid ${active ? '#1a73e8' : '#ddd'}`, backgroundColor: active ? '#e8f0fe' : '#fff', color: '#222',
+                    border: `2px solid ${active ? '#1a73e8' : 'var(--rc-line)'}`, backgroundColor: active ? 'var(--rc-sel)' : 'var(--rc-surface)', color: 'var(--rc-ink)',
                   }}>
                   {n}
                 </button>
@@ -290,10 +290,10 @@ export default function Jam() {
                 <button key={b.id} onClick={() => chooseBeat(b.id)} aria-pressed={active}
                   style={{
                     padding: '12px', borderRadius: '10px', cursor: 'pointer', touchAction: 'manipulation',
-                    border: `2px solid ${active ? '#1a73e8' : '#ddd'}`, backgroundColor: active ? '#e8f0fe' : '#fff', color: '#222',
+                    border: `2px solid ${active ? '#1a73e8' : 'var(--rc-line)'}`, backgroundColor: active ? 'var(--rc-sel)' : 'var(--rc-surface)', color: 'var(--rc-ink)',
                   }}>
                   <div style={{ fontSize: '14px', fontWeight: '700' }}>{b.name}</div>
-                  <div style={{ fontSize: '12px', color: '#666', marginTop: '2px', lineHeight: 1.3 }}>{b.desc}</div>
+                  <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', marginTop: '2px', lineHeight: 1.3 }}>{b.desc}</div>
                   <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>{b.beatsPerBar}/4 · {b.bpm[0]}–{b.bpm[1]} BPM</div>
                 </button>
               );
@@ -305,7 +305,7 @@ export default function Jam() {
           <div style={{ fontSize: '13px', color: '#888', marginBottom: '10px' }}>
             One bar of 16 steps — tap a square to turn it on or off. Edits are heard right away.
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '12px 8px', backgroundColor: '#f9f9f9', borderRadius: '10px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', padding: '12px 8px', backgroundColor: 'var(--rc-card)', borderRadius: '10px' }}>
             {/* Beat numbers */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '0' }}>
               <div style={{ width: '54px', flexShrink: 0 }} />
@@ -315,7 +315,7 @@ export default function Jam() {
             </div>
             {ROWS.map(row => (
               <div key={row.key} style={{ display: 'flex', alignItems: 'center' }}>
-                <div style={{ width: '54px', flexShrink: 0, fontSize: '11px', fontWeight: '700', color: '#333', textAlign: 'left', lineHeight: 1.1, paddingRight: '4px' }}>
+                <div style={{ width: '54px', flexShrink: 0, fontSize: '11px', fontWeight: '700', color: 'var(--rc-ink)', textAlign: 'left', lineHeight: 1.1, paddingRight: '4px' }}>
                   {row.label}
                 </div>
                 <div style={{ flex: 1, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '5px' }}>
@@ -331,7 +331,7 @@ export default function Jam() {
                             style={{
                               height: '34px', minWidth: 0, padding: 0, border: playhead ? '2px solid #1a73e8' : '1px solid rgba(0,0,0,0.12)',
                               borderRadius: '3px', cursor: 'pointer', touchAction: 'manipulation', userSelect: 'none', WebkitUserSelect: 'none',
-                              backgroundColor: on ? row.color : (group % 2 === 0 ? '#e4e4e4' : '#d2d2d2'),
+                              backgroundColor: on ? row.color : (group % 2 === 0 ? 'var(--rc-cellA)' : 'var(--rc-cellB)'),
                               outline: playhead && on ? '2px solid #fff' : 'none',
                               filter: playhead ? 'brightness(1.12)' : 'none',
                             }} />
@@ -345,8 +345,8 @@ export default function Jam() {
           </div>
           <div style={{ marginTop: '12px' }}>
             <button onClick={clearGrid} disabled={gridEmpty}
-              style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '8px', border: '1px solid #ccc', backgroundColor: '#fff',
-                color: gridEmpty ? '#aaa' : '#222', cursor: gridEmpty ? 'default' : 'pointer' }}>
+              style={{ padding: '8px 18px', fontSize: '13px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)',
+                color: gridEmpty ? '#aaa' : 'var(--rc-ink)', cursor: gridEmpty ? 'default' : 'pointer' }}>
               Clear all
             </button>
           </div>

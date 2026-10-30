@@ -29,6 +29,12 @@ function readSidecarCache() {
   }
 }
 
+// Forget the saved clip details (Settings → Account & storage). They simply
+// download again the next time the Library opens.
+export function clearSidecarCache() {
+  try { localStorage.removeItem(SIDECAR_CACHE_KEY); } catch { /* nothing to clear */ }
+}
+
 function writeSidecarCache(cache) {
   try {
     localStorage.setItem(SIDECAR_CACHE_KEY, JSON.stringify(cache));

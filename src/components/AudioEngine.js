@@ -11,6 +11,10 @@ const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', '
 const GUITAR_OPEN_MIDI = [40, 45, 50, 55, 59, 64]; // low E, A, D, G, B, high E
 const STRUM_SECONDS = { guitar: 0.09, piano: 0.065 }; // gap between successive notes of a chord
 
+// How drawn out a chord strum is, as a multiple of the default (Settings → Strum speed).
+let strumScale = 1;
+export function setStrumScale(v) { strumScale = Math.min(3, Math.max(0.1, Number(v) || 1)); }
+
 export const midiToFreq = (m) => 440 * Math.pow(2, (m - 69) / 12);
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const pitchClass = (name) => CHROMATIC.indexOf(name);
@@ -211,7 +215,7 @@ export function createEngine(ctx) {
   // Strummed from the lowest note to the highest.
   const chord = (instrument, midis, when = ctx.currentTime + 0.005) => {
     const sorted = [...midis].sort((a, b) => a - b);
-    const step = STRUM_SECONDS[instrument] ?? 0.035;
+    const step = (STRUM_SECONDS[instrument] ?? 0.035) * strumScale;
     sorted.forEach((m, i) => note(instrument, m, when + i * step, clamp(0.92 - i * 0.04, 0.6, 0.95)));
   };
 
