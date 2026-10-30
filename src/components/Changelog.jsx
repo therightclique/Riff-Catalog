@@ -42,11 +42,13 @@ const CHANGELOG = [
         title: 'Jam: play along to drums',
         items: [
           'New Jam section. Choose from 12 looping drum beats, with a simple fill every 4th bar',
-          'Start and stop with one big button; dots show the beat and bar markers show where you are in the 4-bar loop',
+          'Play and stop with one big button; dots show the beat and bar markers show where you are in the 4-bar loop',
           'Set the tempo with the slider or the \u22125 / \u22121 / +1 / +5 buttons, and change it while the beat is playing. Each beat shows the range of tempos it sounds best at',
           'Switching to another beat while playing waits for the next bar so the groove never breaks, and the drums keep playing if you visit another section',
           'Make your own: a 16-step grid for Kick, Snare, Tom 1, Tom 2, Crash, Ride, Open hat and Closed hat. Tap squares to build a one-bar beat; each drum sounds as you add it, and changes are heard while it plays',
-          'Your own beat uses the same Start/Stop and tempo as the preset beats, is remembered on your device, and can be wiped with Clear all',
+          'Your own beat uses the same Play/Stop and tempo as the preset beats, is remembered on your device, and can be wiped with Clear all',
+          'Name and save your beats: type a name, tap Save, and tap Load to bring any saved beat back (pattern and tempo). Saved beats also show under the presets on the Beats tab. They stay on the device you saved them on',
+          'The Play button now sits under the tempo controls, so it stays in view while you edit the grid',
         ],
       },
       {
@@ -55,7 +57,7 @@ const CHANGELOG = [
           'New Tap tempo button: tap along to any music and it works out the BPM, getting more accurate with each tap. A pause of a couple of seconds starts it over',
           'It\u2019s in Jam, where it sets the tempo, and in a clip\u2019s details right under Tempo (BPM), where it fills in the field for you',
           'Jam has a new Metronome tab: a steady click with a big pulsing light that you can follow without any sound. Beat 1 is orange with a higher click. Choose 2 to 7 beats per bar',
-          'The metronome uses the same Start/Stop and tempo controls as the drum beats, and remembers your last setting',
+          'The metronome uses the same Play/Stop and tempo controls as the drum beats, and remembers your last setting',
         ],
       },
       {

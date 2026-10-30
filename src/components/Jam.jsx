@@ -70,6 +70,7 @@ export default function Jam() {
   const [beatName, setBeatName] = useState('');
   const [savedMsg, setSavedMsg] = useState('');
   const [confirmDel, setConfirmDel] = useState(null);
+  const [showLoad, setShowLoad] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(null);                    // { bar, step, beat, fill } while playing
   const [noAudio, setNoAudio] = useState(false);
@@ -198,6 +199,7 @@ export default function Jam() {
     setBeatName(b.name);
     setSavedMsg('');
     setConfirmDel(null);
+    setShowLoad(false);
   };
   const deleteBeat = (id) => {
     setMyBeats(list => list.filter(b => b.id !== id));
@@ -244,16 +246,6 @@ export default function Jam() {
       {/* Transport */}
       <div style={{ padding: '16px', backgroundColor: 'var(--rc-card)', borderRadius: '10px', color: 'var(--rc-ink)', marginBottom: '20px' }}>
         <div style={{ fontSize: '15px', fontWeight: '700', marginBottom: '12px' }}>{beat.name}</div>
-
-        <button onClick={toggle} aria-label={playing ? 'Stop' : 'Start'}
-          style={{
-            width: '100%', maxWidth: '280px', height: '56px', borderRadius: '12px', border: 'none', cursor: 'pointer',
-            fontSize: '18px', fontWeight: '800', color: '#fff', touchAction: 'manipulation',
-            backgroundColor: playing ? '#cc0000' : '#2a8a3a',
-          }}>
-          {playing ? '■  Stop' : '▶  Start'}
-        </button>
-        {noAudio && <div style={{ fontSize: '12px', color: '#a00', marginTop: '8px' }}>Couldn't start audio on this device.</div>}
 
         {/* Where we are in the loop */}
         <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }} aria-label="Beat">
@@ -304,6 +296,17 @@ export default function Jam() {
             </div>
           )}
         </div>
+
+        <button onClick={toggle} aria-label={playing ? 'Stop' : 'Play'}
+          style={{
+            width: '100%', maxWidth: '280px', height: '56px', marginTop: '18px', borderRadius: '12px', border: 'none', cursor: 'pointer',
+            fontSize: '18px', fontWeight: '800', color: '#fff', touchAction: 'manipulation',
+            backgroundColor: playing ? '#cc0000' : '#2a8a3a',
+          }}>
+          {playing ? '■  Stop' : '▶  Play'}
+        </button>
+        {noAudio && <div style={{ fontSize: '12px', color: '#a00', marginTop: '8px' }}>Couldn't start audio on this device.</div>}
+
       </div>
 
       {mode === 'metronome' ? (
@@ -364,13 +367,6 @@ export default function Jam() {
         </>
       ) : (
         <div>
-          <select value="" onChange={e => { const b = myBeats.find(x => x.id === e.target.value); if (b) loadBeat(b); }}
-            disabled={myBeats.length === 0} aria-label="Load a saved beat"
-            style={{ width: '100%', padding: '10px 12px', fontSize: '14px', fontWeight: '600', borderRadius: '8px', marginBottom: '10px', boxSizing: 'border-box',
-              border: '1px solid #1a73e8', backgroundColor: 'var(--rc-surface)', color: myBeats.length ? '#1a73e8' : '#888' }}>
-            <option value="">{myBeats.length ? `\u{1F4C2} Load a saved beat\u2026 (${myBeats.length})` : '\u{1F4C2} No saved beats yet'}</option>
-            {myBeats.map(b => <option key={b.id} value={b.id}>{b.name} {'\u00B7'} {b.bpm} BPM</option>)}
-          </select>
           <div style={{ fontSize: '13px', color: '#888', marginBottom: '10px' }}>
             One bar of 16 steps — tap a square to turn it on or off. Edits are heard right away.
           </div>
@@ -432,14 +428,20 @@ export default function Jam() {
                 cursor: !trimmedName || gridEmpty ? 'default' : 'pointer' }}>
               {existing ? '\u{1F4BE} Update' : '\u{1F4BE} Save'}
             </button>
+            <button onClick={() => { setShowLoad(v => !v); setConfirmDel(null); }} aria-expanded={showLoad}
+              style={{ padding: '8px 14px', fontSize: '14px', fontWeight: '600', borderRadius: '8px', whiteSpace: 'nowrap', cursor: 'pointer',
+                border: '1px solid #1a73e8', backgroundColor: showLoad ? 'var(--rc-sel)' : 'var(--rc-surface)', color: '#1a73e8' }}>
+              {'\u{1F4C2} Load'}
+            </button>
           </div>
           <div style={{ minHeight: '18px', marginTop: '4px', fontSize: '12px', color: savedMsg ? 'var(--rc-ok-ink)' : '#888' }}>
             {savedMsg || (gridEmpty ? 'Add some hits to the grid, then name and save it.' : existing ? 'Saving again under this name replaces that beat. Tempo is saved too.' : 'The tempo is saved with the beat.')}
           </div>
 
-          {myBeats.length > 0 && (
-            <div style={{ marginTop: '14px', textAlign: 'left' }}>
+          {showLoad && (
+            <div style={{ marginTop: '10px', textAlign: 'left' }}>
               <div style={{ fontSize: '12px', fontWeight: '600', color: '#888', textTransform: 'uppercase', marginBottom: '6px' }}>My beats</div>
+              {myBeats.length === 0 && <div style={{ fontSize: '13px', color: '#888' }}>No saved beats yet. Make a beat, name it and tap Save.</div>}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {myBeats.map(b => {
                   const loaded = b.name.toLowerCase() === trimmedName.toLowerCase();
