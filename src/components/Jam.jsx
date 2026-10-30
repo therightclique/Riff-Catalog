@@ -33,6 +33,24 @@ const loadCustom = () => {
   return tracks;
 };
 
+const normGrid = (g) => {
+  const out = {};
+  for (const r of ROWS) {
+    const v = g && g[r.key];
+    out[r.key] = typeof v === 'string' && v.length === STEPS && /^[x.]+$/.test(v) ? v : EMPTY_ROW;
+  }
+  return out;
+};
+
+const loadMyBeats = () => {
+  try {
+    const list = JSON.parse(localStorage.getItem('rc_jam_beats') || '[]');
+    return (Array.isArray(list) ? list : [])
+      .filter(b => b && typeof b.name === 'string' && b.name.trim())
+      .map(b => ({ id: String(b.id || b.name), name: b.name.trim(), bpm: clampBpm(b.bpm || 100), grid: normGrid(b.grid) }));
+  } catch { return []; }
+};
+
 const loadSaved = () => {
   try {
     const s = JSON.parse(localStorage.getItem('rc_jam') || '{}');
@@ -48,6 +66,10 @@ export default function Jam() {
   const [mode, setMode] = useState(saved.mode);            // 'presets' | 'custom' | 'metronome'
   const [metroBeats, setMetroBeats] = useState(saved.metroBeats);
   const [grid, setGrid] = useState(loadCustom);            // { k: 'x...x...', s: ... } — the user's own beat
+  const [myBeats, setMyBeats] = useState(loadMyBeats);       // named beats the user saved: [{ id, name, bpm, grid }]
+  const [beatName, setBeatName] = useState('');
+  const [savedMsg, setSavedMsg] = useState('');
+  const [confirmDel, setConfirmDel] = useState(null);
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(null);                    // { bar, step, beat, fill } while playing
   const [noAudio, setNoAudio] = useState(false);
@@ -65,6 +87,9 @@ export default function Jam() {
   useEffect(() => {
     try { localStorage.setItem('rc_jam', JSON.stringify({ beatId, bpm, mode, metroBeats })); } catch { /* remembering is optional */ }
   }, [beatId, bpm, mode, metroBeats]);
+  useEffect(() => {
+    try { localStorage.setItem('rc_jam_beats', JSON.stringify(myBeats)); } catch { /* remembering is optional */ }
+  }, [myBeats]);
   useEffect(() => {
     customBeat.current.tracks = grid;                       // heard on the very next step
     try { localStorage.setItem('rc_jam_custom', JSON.stringify(grid)); } catch { /* remembering is optional */ }
@@ -155,6 +180,28 @@ export default function Jam() {
     setGrid(empty);
   };
   const gridEmpty = ROWS.every(r => !grid[r.key].includes('x'));
+
+  const trimmedName = beatName.trim();
+  const existing = myBeats.find(b => b.name.toLowerCase() === trimmedName.toLowerCase());
+  const saveBeat = () => {
+    if (!trimmedName || gridEmpty) return;
+    const entry = { id: existing ? existing.id : `b${Date.now().toString(36)}`, name: existing ? existing.name : trimmedName, bpm, grid: { ...grid } };
+    setMyBeats(list => existing ? list.map(b => (b.id === existing.id ? entry : b)) : [...list, entry]);
+    setBeatName(entry.name);
+    setSavedMsg(existing ? `Updated \u201C${entry.name}\u201D` : `Saved \u201C${entry.name}\u201D`);
+    setTimeout(() => setSavedMsg(''), 2500);
+  };
+  const loadBeat = (b) => {
+    setGrid({ ...b.grid });
+    changeBpm(b.bpm);
+    setBeatName(b.name);
+    setSavedMsg('');
+    setConfirmDel(null);
+  };
+  const deleteBeat = (id) => {
+    setMyBeats(list => list.filter(b => b.id !== id));
+    setConfirmDel(null);
+  };
 
   const stepBtn = (label, delta) => (
     <button onClick={() => changeBpm(bpm + delta)} aria-label={`${delta > 0 ? 'Faster' : 'Slower'} by ${Math.abs(delta)}`}
@@ -349,6 +396,55 @@ export default function Jam() {
               Clear all
             </button>
           </div>
+
+          {/* Name and save the beat on the grid */}
+          <div style={{ marginTop: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <input value={beatName} onChange={e => setBeatName(e.target.value.slice(0, 40))} placeholder="Name this beat"
+              aria-label="Beat name" onKeyDown={e => { if (e.key === 'Enter') saveBeat(); }}
+              style={{ flex: 1, minWidth: 0, padding: '8px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--rc-line)', boxSizing: 'border-box',
+                backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }} />
+            <button onClick={saveBeat} disabled={!trimmedName || gridEmpty}
+              style={{ padding: '8px 14px', fontSize: '14px', fontWeight: '600', borderRadius: '8px', border: 'none', whiteSpace: 'nowrap',
+                backgroundColor: !trimmedName || gridEmpty ? 'var(--rc-line)' : '#1a73e8', color: !trimmedName || gridEmpty ? '#888' : 'white',
+                cursor: !trimmedName || gridEmpty ? 'default' : 'pointer' }}>
+              {existing ? '\u{1F4BE} Update' : '\u{1F4BE} Save'}
+            </button>
+          </div>
+          <div style={{ minHeight: '18px', marginTop: '4px', fontSize: '12px', color: savedMsg ? 'var(--rc-ok-ink)' : '#888' }}>
+            {savedMsg || (gridEmpty ? 'Add some hits to the grid, then name and save it.' : existing ? 'Saving again under this name replaces that beat. Tempo is saved too.' : 'The tempo is saved with the beat.')}
+          </div>
+
+          {myBeats.length > 0 && (
+            <div style={{ marginTop: '14px', textAlign: 'left' }}>
+              <div style={{ fontSize: '12px', fontWeight: '600', color: '#888', textTransform: 'uppercase', marginBottom: '6px' }}>My beats</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {myBeats.map(b => {
+                  const loaded = b.name.toLowerCase() === trimmedName.toLowerCase();
+                  return (
+                    <div key={b.id} style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '6px 6px 6px 12px', borderRadius: '10px',
+                      border: `2px solid ${loaded ? '#1a73e8' : 'var(--rc-line)'}`, backgroundColor: loaded ? 'var(--rc-sel)' : 'var(--rc-surface)' }}>
+                      <button onClick={() => loadBeat(b)} aria-label={`Load ${b.name}`}
+                        style={{ flex: 1, minWidth: 0, textAlign: 'left', background: 'none', border: 'none', padding: '4px 0', cursor: 'pointer', color: 'var(--rc-ink)', touchAction: 'manipulation' }}>
+                        <div style={{ fontSize: '14px', fontWeight: '700', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{b.name}</div>
+                        <div style={{ fontSize: '11px', color: '#888' }}>{b.bpm} BPM</div>
+                      </button>
+                      {confirmDel === b.id ? (
+                        <>
+                          <button onClick={() => deleteBeat(b.id)} style={{ padding: '6px 10px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: 'none', backgroundColor: '#cc0000', color: 'white', cursor: 'pointer' }}>Delete</button>
+                          <button onClick={() => setConfirmDel(null)} style={{ padding: '6px 10px', fontSize: '12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', cursor: 'pointer' }}>Keep</button>
+                        </>
+                      ) : (
+                        <>
+                          <button onClick={() => loadBeat(b)} style={{ padding: '6px 10px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid #1a73e8', backgroundColor: 'var(--rc-surface)', color: '#1a73e8', cursor: 'pointer' }}>Load</button>
+                          <button onClick={() => setConfirmDel(b.id)} aria-label={`Delete ${b.name}`} style={{ padding: '6px 10px', fontSize: '12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink2)', cursor: 'pointer' }}>{'\u2715'}</button>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
