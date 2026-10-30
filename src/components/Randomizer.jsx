@@ -36,6 +36,8 @@ const CHORD_DEGREE_OPTIONS = shuffleNoAdjacentDupes(['1', '2', '3', '4', '5', '6
 
 const TEMPO_OPTIONS = shuffle(['60', '70', '80', '90', '100', '110', '120', '130', '140', '150', '160', '170', '180', '190', '200']);
 
+const TEMPO_FEEL_OPTIONS = shuffleNoAdjacentDupes(['Normal', 'Half-Time', 'Double-Time'].flatMap(f => [f, f, f, f]));
+
 const CATEGORIES = [
   { id: 'key', label: 'Musical Key', options: ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#'] },
   { id: 'majorMinor', label: 'Major / Minor', options: MAJOR_MINOR_OPTIONS },
@@ -54,6 +56,7 @@ const CATEGORIES = [
   { id: 'timeSignature', label: 'Time Signature', options: TIME_SIGNATURE_OPTIONS },
   { id: 'chordDegree', label: 'Chord Progression (scale degree)', options: CHORD_DEGREE_OPTIONS },
   { id: 'tempo', label: 'Tempo (BPM)', options: TEMPO_OPTIONS, suffix: ' BPM' },
+  { id: 'tempoFeel', label: 'Tempo Feel', options: TEMPO_FEEL_OPTIONS },
 ];
 
 const SPIN_DURATION_MS = 5000;
