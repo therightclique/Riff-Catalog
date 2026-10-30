@@ -600,7 +600,6 @@ export default function Changelog() {
 
   return (
     <div style={{ marginTop: '20px', maxWidth: '700px', margin: '20px auto', padding: '0 16px' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '8px' }}>Changelog</h2>
       <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '32px' }}>
         A running log of everything added and changed in Riff Catalog.
       </p>

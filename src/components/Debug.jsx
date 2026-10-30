@@ -60,7 +60,6 @@ export default function Debug({ accessToken }) {
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '6px' }}>Debug</h2>
       <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '16px' }}>
         Console output and errors captured from this session.
       </p>

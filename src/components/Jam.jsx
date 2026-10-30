@@ -181,7 +181,6 @@ export default function Jam() {
 
   return (
     <div style={{ marginTop: '20px', textAlign: 'center' }}>
-      <h2 style={{ marginBottom: '6px' }}>Jam</h2>
       <p style={{ fontSize: '13px', color: '#888', margin: '0 0 14px' }}>
         {mode === 'custom' ? 'Tap out your own one-bar beat and play along. It loops.'
           : mode === 'metronome' ? 'A steady click with a pulsing light. Tap along to find a tempo.'

@@ -753,8 +753,6 @@ function App() {
             <span style={{ color: accessToken ? 'green' : 'orange' }}>
               Drive {accessToken ? '✅' : '⏳'}
             </span>
-            &nbsp;·&nbsp;
-            <button onClick={handleLogout} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', fontSize: '14px' }}>Sign out</button>
           </p>
 
           {!accessToken && isOnline && (

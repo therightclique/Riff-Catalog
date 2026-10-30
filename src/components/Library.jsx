@@ -892,9 +892,9 @@ function Library({
   return (
     <div style={{ marginTop: '20px' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-        <h2 style={{ margin: 0 }}>
-          Library ({sortedClips.length}{sortedClips.length !== clips.length ? ` of ${clips.length}` : ''})
-        </h2>
+        <div style={{ fontSize: '18px', fontWeight: '700' }}>
+          {sortedClips.length}{sortedClips.length !== clips.length ? ` of ${clips.length}` : ''} clip{clips.length === 1 ? '' : 's'}
+        </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>

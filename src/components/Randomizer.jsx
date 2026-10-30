@@ -485,9 +485,8 @@ export default function Randomizer({ accessToken }) {
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <h2 style={{ textAlign: 'center', marginBottom: '6px' }}>Randomizer</h2>
-      <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '18px' }}>
-        Spin the wheel, drag it yourself, or give it a flick to seed a song idea one piece at a time.
+      <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', marginBottom: '14px' }}>
+        Spin/drag the wheel to seed a song one piece at a time.
       </p>
 
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
@@ -534,7 +533,7 @@ export default function Randomizer({ accessToken }) {
         onPointerDownWheel={handlePointerDownWheel}
       />
 
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '20px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '6px', marginTop: '14px' }}>
         <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px' }}>
           <button onClick={handleSpin} disabled={busy} style={spinBtnStyle(busy)}>
             {spinning ? '🎡 Spinning…' : momentumActive ? '🎡 Coasting…' : dragging ? '🎡 Drag to pick…' : '🎡 Spin'}
@@ -544,12 +543,12 @@ export default function Randomizer({ accessToken }) {
           </button>
         </div>
 
-        <div style={{ minHeight: '28px', fontSize: '16px', fontWeight: '700', color: '#1a73e8' }}>
+        <div style={{ minHeight: '20px', fontSize: '16px', fontWeight: '700', color: '#1a73e8' }}>
           {result !== null && !busy ? `You got: ${category.suffix ? result + category.suffix : noteLabel(result)}` : ''}
         </div>
       </div>
 
-      <div style={{ marginTop: '28px' }}>
+      <div style={{ marginTop: '2px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
           <label style={{ fontSize: '12px', fontWeight: '600', color: '#888', textTransform: 'uppercase' }}>
             Your song idea

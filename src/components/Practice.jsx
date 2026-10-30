@@ -2688,7 +2688,6 @@ export default function Practice() {
 
   return (
     <div style={{marginTop:'20px'}}>
-      <h2 style={{textAlign:'center',marginBottom:'20px'}}>Practice</h2>
 
       <div style={{display:'flex',flexWrap:'wrap',gap:'16px',justifyContent:'center',marginBottom:'20px'}}>
 

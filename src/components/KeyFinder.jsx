@@ -349,7 +349,6 @@ function KeyFinder({ onFilterByKey }) {
 
   return (
     <div style={{ marginTop: '20px' }}>
-      <h2 style={{ marginBottom: '16px', textAlign: 'center' }}>Key Finder</h2>
 
       {/* Instrument selector */}
       <div role="tablist" aria-label="Instrument" style={{ display: 'flex', justifyContent: 'center', marginBottom: '14px' }}>
