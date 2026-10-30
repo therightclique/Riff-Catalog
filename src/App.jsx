@@ -330,6 +330,9 @@ function App() {
       console.error('Record-time analysis failed:', err);
     }
     console.log('Analysis result:', result);
+    // A take recorded with the metronome has a known tempo: use it rather than the detected one.
+    const metroTempo = capturedPcm?.tempo || null;
+    if (metroTempo) result = { ...(result || { candidates: [], analyzerVersion: null }), bpm: metroTempo, bpmFromMetronome: true };
     setAnalysis(result);
     if (result?.candidates?.length > 0) setSelectedKey(result.candidates[0].key);
     setAnalyzing(false);
@@ -850,7 +853,7 @@ function App() {
                   {analysis && (
                     <div style={{ backgroundColor: '#f0f7ff', border: '1px solid #b5d4f0', borderRadius: '8px', padding: '12px', marginBottom: '12px' }}>
                       <div style={{ fontSize: '14px', marginBottom: '10px', textAlign: 'center' }}>
-                        <strong>🥁 BPM:</strong> {analysis.bpm || '—'}
+                        <strong>🥁 BPM:</strong> {analysis.bpm || '—'}{analysis.bpmFromMetronome && <span style={{ color: '#888', fontSize: '12px' }}> (metronome)</span>}
                       </div>
                       <div style={{ fontSize: '13px', color: '#555', marginBottom: '8px', textAlign: 'center' }}>
                         <strong>🎵 Possible keys</strong> — tap to select:

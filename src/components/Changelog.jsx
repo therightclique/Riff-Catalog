@@ -46,6 +46,24 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Tap tempo and metronome',
+        items: [
+          'New Tap tempo button: tap along to any music and it works out the BPM, getting more accurate with each tap. A pause of a couple of seconds starts it over',
+          'It\u2019s in Jam, where it sets the tempo, and in a clip\u2019s details right under Tempo (BPM), where it fills in the field for you',
+          'Jam has a new Metronome tab: a steady click with a big pulsing light that you can follow without any sound. Beat 1 is orange with a higher click. Choose 2 to 7 beats per bar',
+          'The metronome uses the same Start/Stop and tempo controls as the drum beats, and remembers your last setting',
+        ],
+      },
+      {
+        title: 'Record with a metronome',
+        items: [
+          'The Record tab has a new Metronome & count-in option. Turn it on to set the tempo (slider, \u22125/\u22121/+1/+5 or Tap tempo), the beats per bar (2 to 7) and a 1- or 2-bar count-in',
+          'Press record and you hear the count-in. When it ends, recording starts right on beat 1 and the click goes silent, so it never ends up on your recording',
+          'While you record, a row of circles keeps time silently: one per beat, the current beat lit, beat 1 in orange, so you can see the start of each bar coming',
+          'The metronome tempo is saved with the clip as its BPM (marked \u201Cmetronome\u201D when you name it) instead of a guess from the audio. Cancel during the count-in to back out without recording',
+        ],
+      },
+      {
         title: 'Library fix',
         items: [
           'If you change a clip\u2019s key by hand and tap Analyze, it now re-analyzes the clip and assigns the detected key. Before, nothing happened',

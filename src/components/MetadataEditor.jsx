@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import KeyNotes from './KeyNotes';
+import { TapTempoButton } from './TapTempo';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -120,6 +121,7 @@ function MetadataEditor({ metadata, onChange, onAnalyze, analyzing, keyCandidate
           <label style={labelStyle}>Tempo (BPM)</label>
           <input style={inputStyle} type="number" min="40" max="300"
             value={metadata.bpm || ''} onChange={e => update('bpm', e.target.value)} placeholder="e.g. 120" />
+          <TapTempoButton min={40} max={300} onBpm={bpm => update('bpm', String(bpm))} style={{ marginTop: '6px', padding: '6px 12px', fontSize: '13px' }} />
         </div>
         <div style={fieldStyle}>
           <label style={labelStyle}>Time Signature</label>

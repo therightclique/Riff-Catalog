@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
-import { BEATS, getBeat, createDrumMachine, makeCustomBeat } from './DrumMachine';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { BEATS, getBeat, createDrumMachine, makeCustomBeat, makeMetronomeBeat } from './DrumMachine';
+import { TapTempoButton } from './TapTempo';
 import { getAudioContext, installAudioUnlock } from './AudioEngine';
 
 const MIN_BPM = 40, MAX_BPM = 220;
@@ -35,15 +36,17 @@ const loadCustom = () => {
 const loadSaved = () => {
   try {
     const s = JSON.parse(localStorage.getItem('rc_jam') || '{}');
-    return { beatId: getBeat(s.beatId).id, bpm: clampBpm(s.bpm || 100), mode: s.mode === 'custom' ? 'custom' : 'presets' };
-  } catch { return { beatId: BEATS[0].id, bpm: 100, mode: 'presets' }; }
+    const metroBeats = Math.min(7, Math.max(2, parseInt(s.metroBeats) || 4));
+    return { beatId: getBeat(s.beatId).id, bpm: clampBpm(s.bpm || 100), mode: ['custom', 'metronome'].includes(s.mode) ? s.mode : 'presets', metroBeats };
+  } catch { return { beatId: BEATS[0].id, bpm: 100, mode: 'presets', metroBeats: 4 }; }
 };
 
 export default function Jam() {
   const saved = useRef(loadSaved()).current;
   const [beatId, setBeatId] = useState(saved.beatId);
   const [bpm, setBpmState] = useState(saved.bpm);
-  const [mode, setMode] = useState(saved.mode);            // 'presets' | 'custom'
+  const [mode, setMode] = useState(saved.mode);            // 'presets' | 'custom' | 'metronome'
+  const [metroBeats, setMetroBeats] = useState(saved.metroBeats);
   const [grid, setGrid] = useState(loadCustom);            // { k: 'x...x...', s: ... } — the user's own beat
   const [playing, setPlaying] = useState(false);
   const [pos, setPos] = useState(null);                    // { bar, step, beat, fill } while playing
@@ -54,12 +57,14 @@ export default function Jam() {
   const customBeat = useRef(makeCustomBeat(grid));          // one stable object; the player reads its tracks live
 
   const presetBeat = getBeat(beatId);
-  const beat = mode === 'custom' ? customBeat.current : presetBeat;
+  const metroBeat = useMemo(() => makeMetronomeBeat(metroBeats), [metroBeats]);
+  const beatFor = (m) => (m === 'custom' ? customBeat.current : m === 'metronome' ? metroBeat : presetBeat);
+  const beat = beatFor(mode);
 
   useEffect(() => { installAudioUnlock(); }, []);
   useEffect(() => {
-    try { localStorage.setItem('rc_jam', JSON.stringify({ beatId, bpm, mode })); } catch { /* remembering is optional */ }
-  }, [beatId, bpm, mode]);
+    try { localStorage.setItem('rc_jam', JSON.stringify({ beatId, bpm, mode, metroBeats })); } catch { /* remembering is optional */ }
+  }, [beatId, bpm, mode, metroBeats]);
   useEffect(() => {
     customBeat.current.tracks = grid;                       // heard on the very next step
     try { localStorage.setItem('rc_jam_custom', JSON.stringify(grid)); } catch { /* remembering is optional */ }
@@ -129,7 +134,12 @@ export default function Jam() {
   const chooseMode = (m) => {
     if (m === mode) return;
     setMode(m);
-    machine.current?.setBeat(m === 'custom' ? customBeat.current : presetBeat);
+    machine.current?.setBeat(beatFor(m));
+  };
+
+  const chooseMetroBeats = (n) => {
+    setMetroBeats(n);
+    machine.current?.setBeat(makeMetronomeBeat(n));   // while playing, switches at the next bar line
   };
 
   const toggleCell = (key, i) => (e) => {
@@ -160,9 +170,9 @@ export default function Jam() {
     return (
       <button key={id} onClick={() => chooseMode(id)} role="tab" aria-selected={active}
         style={{
-          padding: '8px 18px', fontSize: '14px', cursor: 'pointer', fontWeight: active ? '700' : '500',
+          padding: '8px 12px', fontSize: '14px', cursor: 'pointer', fontWeight: active ? '700' : '500',
           border: '1px solid #1a73e8', backgroundColor: active ? '#1a73e8' : 'white', color: active ? 'white' : '#1a73e8',
-          borderRadius: i === 0 ? '8px 0 0 8px' : '0 8px 8px 0', marginLeft: i === 0 ? 0 : '-1px',
+          borderRadius: i === 0 ? '8px 0 0 8px' : i === 2 ? '0 8px 8px 0' : 0, marginLeft: i === 0 ? 0 : '-1px',
         }}>
         {label}
       </button>
@@ -173,12 +183,15 @@ export default function Jam() {
     <div style={{ marginTop: '20px', textAlign: 'center' }}>
       <h2 style={{ marginBottom: '6px' }}>Jam</h2>
       <p style={{ fontSize: '13px', color: '#888', margin: '0 0 14px' }}>
-        {mode === 'custom' ? 'Tap out your own one-bar beat and play along. It loops.' : 'Pick a beat and play along. It loops, with a fill every 4th bar.'}
+        {mode === 'custom' ? 'Tap out your own one-bar beat and play along. It loops.'
+          : mode === 'metronome' ? 'A steady click with a pulsing light. Tap along to find a tempo.'
+          : 'Pick a beat and play along. It loops, with a fill every 4th bar.'}
       </p>
 
       <div role="tablist" aria-label="Beat source" style={{ display: 'flex', justifyContent: 'center', marginBottom: '16px' }}>
-        {modeBtn('presets', '🥁 Preset beats', 0)}
+        {modeBtn('presets', '🥁 Beats', 0)}
         {modeBtn('custom', '✏️ Make your own', 1)}
+        {modeBtn('metronome', '⏱ Metronome', 2)}
       </div>
 
       {/* Transport */}
@@ -199,8 +212,8 @@ export default function Jam() {
         <div style={{ marginTop: '16px', display: 'flex', justifyContent: 'center', gap: '10px' }} aria-label="Beat">
           {Array.from({ length: beat.beatsPerBar }, (_, i) => (
             <div key={i} style={{
-              width: '22px', height: '22px', borderRadius: '50%',
-              backgroundColor: pos && pos.beat === i ? '#1a73e8' : '#d9d9d9',
+              width: mode === 'metronome' ? '34px' : '22px', height: mode === 'metronome' ? '34px' : '22px', borderRadius: '50%',
+              backgroundColor: pos && pos.beat === i ? (mode === 'metronome' && i === 0 ? '#e07a10' : '#1a73e8') : '#d9d9d9',
               transform: pos && pos.beat === i ? 'scale(1.2)' : 'none', transition: 'background-color 60ms, transform 60ms',
             }} />
           ))}
@@ -235,6 +248,9 @@ export default function Jam() {
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '8px' }}>
             {stepBtn('−5', -5)}{stepBtn('−1', -1)}{stepBtn('+1', 1)}{stepBtn('+5', 5)}
           </div>
+          <div style={{ marginTop: '10px' }}>
+            <TapTempoButton min={MIN_BPM} max={MAX_BPM} onBpm={changeBpm} style={{ height: '40px' }} />
+          </div>
           {mode === 'presets' && (
             <div style={{ fontSize: '11px', color: '#888', marginTop: '8px' }}>
               This beat sits well around {beat.bpm[0]}–{beat.bpm[1]} BPM
@@ -243,7 +259,28 @@ export default function Jam() {
         </div>
       </div>
 
-      {mode === 'presets' ? (
+      {mode === 'metronome' ? (
+        <div>
+          <div style={{ fontSize: '13px', color: '#888', marginBottom: '10px' }}>Beats per bar</div>
+          <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            {[2, 3, 4, 5, 6, 7].map(n => {
+              const active = n === metroBeats;
+              return (
+                <button key={n} onClick={() => chooseMetroBeats(n)} aria-pressed={active}
+                  style={{
+                    width: '52px', height: '44px', borderRadius: '10px', fontSize: '16px', fontWeight: '700', cursor: 'pointer', touchAction: 'manipulation',
+                    border: `2px solid ${active ? '#1a73e8' : '#ddd'}`, backgroundColor: active ? '#e8f0fe' : '#fff', color: '#222',
+                  }}>
+                  {n}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: '12px', color: '#888', marginTop: '12px', lineHeight: 1.5 }}>
+            The orange light and higher click mark beat 1. Tap along to the music with “Tap tempo” above to find its BPM, then add it to a clip’s details.
+          </div>
+        </div>
+      ) : mode === 'presets' ? (
         <>
           <div style={{ fontSize: '13px', color: '#888', marginBottom: '10px' }}>Choose a beat</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', textAlign: 'left' }}>

@@ -7,11 +7,12 @@
 //   x = normal hit   X = accent   o = soft (ghost) hit   . = rest
 //   k kick · s snare · h closed hat · o open hat · r rim click
 //   T high tom · M mid tom · F floor tom · c crash · d ride
+//   a metronome click, accent · m metronome click
 // Every 4th bar the end of the bar is replaced by a short fill, and the bar
 // after the fill starts with a crash.
 
 const VEL = { X: 1.0, x: 0.75, o: 0.38 };
-const LEVEL = { k: 1.0, s: 0.85, h: 0.32, o: 0.38, r: 0.6, T: 0.85, M: 0.85, F: 0.9, c: 0.55, d: 0.5 };
+const LEVEL = { k: 1.0, s: 0.85, h: 0.32, o: 0.38, r: 0.6, T: 0.85, M: 0.85, F: 0.9, c: 0.55, d: 0.5, a: 0.9, m: 0.8 };
 const LOOKAHEAD = 0.12;   // seconds scheduled ahead of the clock
 const TICK_MS = 25;       // how often the scheduler wakes up
 const FILL_EVERY = 4;     // bars
@@ -62,6 +63,14 @@ export const makeCustomBeat = (tracks = {}) => ({
   id: 'custom', name: 'My Beat', desc: 'Your own pattern', beatsPerBar: 4, stepsPerBeat: 4, steps: 16, bpm: [60, 160], fill: null, tracks,
 });
 
+// A metronome: one step per beat, a higher click on beat 1. `tracks` is
+// rebuilt for the number of beats in the bar.
+export const makeMetronomeBeat = (beatsPerBar = 4) => ({
+  id: 'metronome', name: `Metronome \u00B7 ${beatsPerBar} beats`, desc: 'Steady click', beatsPerBar, stepsPerBeat: 1, steps: beatsPerBar,
+  bpm: [40, 220], fill: null,
+  tracks: { a: 'X' + '.'.repeat(beatsPerBar - 1), m: '.' + 'x'.repeat(beatsPerBar - 1) },
+});
+
 // ── the drum sounds ─────────────────────────────────────────────────────
 
 export function createDrumMachine(ctx, { onHit } = {}) {
@@ -106,6 +115,16 @@ export function createDrumMachine(ctx, { onHit } = {}) {
       o.frequency.setValueAtTime(190, t); o.frequency.exponentialRampToValueAtTime(125, t + 0.08);
       const tg = ctx.createGain(); env(tg, t, v * 0.5, 0.11);
       o.connect(tg); tg.connect(bus); o.start(t); o.stop(t + 0.15);
+    },
+    // metronome clicks: a short, dry blip (accent is higher and brighter)
+    a(t, v) { voices.click(t, v, 1900); },
+    m(t, v) { voices.click(t, v, 1250); },
+    click(t, v, freq) {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = freq;
+      const g = ctx.createGain(); env(g, t, v * 0.8, 0.045);
+      o.connect(g); g.connect(bus); o.start(t); o.stop(t + 0.06);
+      const n = noiseSrc(t, 0.01), hp = filter('highpass', 3500), ng = ctx.createGain(); env(ng, t, v * 0.25, 0.008);
+      n.connect(hp); hp.connect(ng); ng.connect(bus);
     },
     r(t, v) {
       const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 1750;
@@ -211,15 +230,26 @@ export function createDrumMachine(ctx, { onHit } = {}) {
   }
 
   return {
-    start() {
-      if (playing) return;
-      begin(ctx.currentTime + 0.08);
+    start() { return this.startAt(ctx.currentTime + 0.08); },
+    // Start with the first beat exactly at audio-clock time `t`; returns `t`.
+    startAt(t) {
+      if (playing) return t;
+      begin(t);
       pump(ctx.currentTime + LOOKAHEAD);
       timer = setInterval(() => {
         const now = ctx.currentTime;
         if (nextTime < now - 0.15) nextTime = now + 0.05;      // the app was paused/backgrounded — resume cleanly, don't machine-gun to catch up
         pump(now + LOOKAHEAD);
       }, TICK_MS);
+      return t;
+    },
+    // Silence everything from audio-clock time `t` on (sample-accurate), while the
+    // beat keeps running so its position can still be shown. Used by the Record tab:
+    // audible count-in, then a silent pulse so nothing leaks into the microphone.
+    muteFrom(t) {
+      master.gain.cancelScheduledValues(0);
+      master.gain.setValueAtTime(0.66, Math.max(0, t - 0.02));
+      master.gain.setValueAtTime(0, Math.max(0, t - 0.005));
     },
     stop() {
       if (!playing) return;
