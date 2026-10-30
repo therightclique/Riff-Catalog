@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { uploadTextFile, listTextFiles, readTextFile } from './DriveUploader';
 import { noteLabel } from './Notation';
 
@@ -111,12 +111,47 @@ function nearestSliceIndex(rotation, n) {
 
 // ── Wheel ────────────────────────────────────────────────────────────────
 
+// Largest single font size at which every label on the wheel stays inside
+// its own wedge. Labels run along the wedge's centre line with their outer
+// end near the rim; the binding limits are (1) the inner end of the longest
+// label must clear the hub, and (2) the text's height must fit in the wedge
+// where it is narrowest, at that inner end. Text widths are measured with
+// the device's real font so it adapts to whatever the phone renders.
+const LABEL_FONT_MIN = 8;
+const LABEL_FONT_MAX = 28;
+function fitLabelFont(labels, n, outerR, hubR) {
+  let fontFamily = 'sans-serif';
+  let widths = labels.map(l => l.length * 0.6);
+  try {
+    fontFamily = getComputedStyle(document.body).fontFamily || fontFamily;
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = `600 100px ${fontFamily}`;
+    widths = labels.map(l => ctx.measureText(l).width / 100);
+  } catch (e) { /* fall back to the rough estimate */ }
+  const tanHalf = Math.tan(Math.PI / n);
+  let best = LABEL_FONT_MIN;
+  for (let fs = LABEL_FONT_MIN; fs <= LABEL_FONT_MAX; fs += 0.5) {
+    const ok = widths.every(w => {
+      const innerR = outerR - w * fs * 1.05;       // 5% safety on width
+      if (innerR < hubR + 5) return false;
+      return 0.55 * fs + 1.5 <= innerR * tanHalf;  // half text height + line gap
+    });
+    if (!ok) break;
+    best = fs;
+  }
+  return best;
+}
+
 function Wheel({ options, rotation, animating, transitionMs, easing = 'cubic-bezier(0.12, 0.67, 0.1, 1)', onPointerDownWheel }) {
   const size = 300;
   const cx = size / 2, cy = size / 2, r = size / 2 - 6;
+  const hubR = size * 0.09;
+  const labelR = r - 9;
   const n = options.length;
   const step = 360 / n;
-  const fontSize = n > 18 ? 8 : n > 14 ? 9 : n > 10 ? 10 : n > 6 ? 12 : 14;
+  const labels = options.map(noteLabel);
+  const labelKey = labels.join('|');
+  const fontSize = useMemo(() => fitLabelFont(labels, n, labelR, hubR), [labelKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div
@@ -145,7 +180,7 @@ function Wheel({ options, rotation, animating, transitionMs, easing = 'cubic-bez
           const p2 = pointAt(a2, r, cx, cy);
           const largeArc = step > 180 ? 1 : 0;
           const mid = a1 + step / 2;
-          const labelPos = pointAt(mid, r * 0.66, cx, cy);
+          const labelPos = pointAt(mid, labelR, cx, cy);
           return (
             <g key={i}>
               <path
@@ -159,11 +194,11 @@ function Wheel({ options, rotation, animating, transitionMs, easing = 'cubic-bez
                 fill="white"
                 fontSize={fontSize}
                 fontWeight="600"
-                textAnchor="middle"
-                dominantBaseline="middle"
+                textAnchor="end"
+                dominantBaseline="central"
                 transform={`rotate(${mid - 90} ${labelPos.x} ${labelPos.y})`}
                 style={{ pointerEvents: 'none' }}>
-                {noteLabel(opt)}
+                {labels[i]}
               </text>
             </g>
           );
