@@ -475,7 +475,7 @@ export default function Randomizer({ accessToken }) {
     cursor: disabled ? 'default' : 'pointer',
   });
   const spinBtnStyle = (disabled) => ({
-    padding: '10px 26px', backgroundColor: disabled ? '#eee' : 'var(--rc-surface)',
+    padding: '10px 18px', backgroundColor: disabled ? 'var(--rc-line)' : 'var(--rc-surface)',
     color: 'var(--rc-ink)', border: `3px solid ${disabled ? 'var(--rc-line)' : '#f5c400'}`,
     borderRadius: '10px', fontSize: '16px', fontWeight: '700',
     cursor: disabled ? 'default' : 'pointer',
@@ -535,17 +535,18 @@ export default function Randomizer({ accessToken }) {
       />
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', marginTop: '20px' }}>
-        <button onClick={handleSpin} disabled={busy} style={spinBtnStyle(busy)}>
-          {spinning ? '🎡 Spinning…' : momentumActive ? '🎡 Coasting…' : dragging ? '🎡 Drag to pick…' : '🎡 Spin'}
-        </button>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '10px' }}>
+          <button onClick={handleSpin} disabled={busy} style={spinBtnStyle(busy)}>
+            {spinning ? '🎡 Spinning…' : momentumActive ? '🎡 Coasting…' : dragging ? '🎡 Drag to pick…' : '🎡 Spin'}
+          </button>
+          <button onClick={handleAdd} disabled={result === null || busy} style={spinBtnStyle(result === null || busy)}>
+            ➕ Add to idea
+          </button>
+        </div>
 
         <div style={{ minHeight: '28px', fontSize: '16px', fontWeight: '700', color: '#1a73e8' }}>
           {result !== null && !busy ? `You got: ${category.suffix ? result + category.suffix : noteLabel(result)}` : ''}
         </div>
-
-        <button onClick={handleAdd} disabled={result === null || busy} style={btn('#1a73e8', result === null || busy)}>
-          ➕ Add to idea
-        </button>
       </div>
 
       <div style={{ marginTop: '28px' }}>
