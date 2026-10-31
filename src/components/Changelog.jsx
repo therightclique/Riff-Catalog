@@ -70,6 +70,16 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Randomizer',
+        items: [
+          'New Surprise me button: it builds a complete song idea in a couple of seconds. If the idea box isn\u2019t empty it first asks whether to save it to Drive or discard it',
+          'A new Tempo Feel wheel (Normal, Half-Time, Double-Time) comes after Tempo',
+          'Chord progression results now name the chord in the key you drew last, e.g. 1 (AMaj), 4 (DMaj), 6 (F#min). Draw a new key later in the same idea and the chords after it follow the new key',
+          'The text on every wheel is as large as it can be without touching the lines between slices',
+          'Spin, Add to idea and Surprise me share one row, the title and extra text are gone, and the whole screen fits without scrolling',
+        ],
+      },
+      {
         title: 'Library fix',
         items: [
           'If you change a clip\u2019s key by hand and tap Analyze, it now re-analyzes the clip and assigns the detected key. Before, nothing happened',

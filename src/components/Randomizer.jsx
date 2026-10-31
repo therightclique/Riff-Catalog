@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { uploadTextFile, listTextFiles, readTextFile } from './DriveUploader';
-import { noteLabel } from './Notation';
+import { noteLabel, noteIn } from './Notation';
+import { getScaleNotes } from './FretboardDiagram';
 
 // ── Shuffle helpers ──────────────────────────────────────────────────────
 
@@ -111,6 +112,36 @@ function nearestSliceIndex(rotation, n) {
   }
   return bestIdx;
 }
+
+// ── Chord names for the Chord Progression wheel ─────────────────────────
+// The wheel itself only draws degrees (1–7). When a degree is added to the
+// idea it is named in the most recently chosen key: "1 (AMaj)", "6 (F#min)".
+// The key is read back out of the idea text, so a later key in the same idea
+// changes the chords that follow it.
+const FLAT_TO_SHARP = { Db: 'C#', Eb: 'D#', Gb: 'F#', Ab: 'G#', Bb: 'A#', Cb: 'B', Fb: 'E', 'E#': 'F', 'B#': 'C' };
+const QUALITY_NAME = { M: 'Maj', m: 'min', dim: 'dim' };
+
+function detectKey(text) {
+  const tokens = (text || '').split(',').map(t => t.trim()).filter(Boolean);
+  let root = null, mode = null;
+  for (let i = tokens.length - 1; i >= 0 && (!root || !mode); i--) {
+    const t = tokens[i].replace('♭', 'b').replace('♯', '#');
+    if (!root && /^[A-G](#|b)?$/.test(t)) root = FLAT_TO_SHARP[t] || t;
+    else if (!mode && (t === 'Major' || t === 'Minor')) mode = t;
+  }
+  return root ? { root, mode: mode || 'Major' } : null;
+}
+
+function chordText(degree, ideaSoFar) {
+  const key = detectKey(ideaSoFar);
+  if (!key) return String(degree);
+  const keyStr = `${key.root} ${key.mode}`;
+  const entry = getScaleNotes(keyStr)[Number(degree) - 1];
+  if (!entry) return String(degree);
+  return `${degree} (${noteIn(entry.note, keyStr)}${QUALITY_NAME[entry.quality] || ''})`;
+}
+
+const sleep = (ms) => new Promise(res => setTimeout(res, ms));
 
 // ── Wheel ────────────────────────────────────────────────────────────────
 
@@ -237,6 +268,14 @@ export default function Randomizer({ accessToken }) {
   const [saving, setSaving] = useState(false);
   const [savedSets, setSavedSets] = useState(null);
   const [loadingList, setLoadingList] = useState(false);
+  // Where the caret is in the idea box (null = at the end). Add to idea inserts
+  // there, and chord names use the key found to the LEFT of it.
+  const [cursor, setCursor] = useState(null);
+  const ideaRef = useRef(null);
+  const [surprising, setSurprising] = useState(false);     // a Surprise me run is in progress
+  const [surprisePrompt, setSurprisePrompt] = useState(false);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
   const spinTimeout = useRef(null);
   const snapTimeout = useRef(null);
@@ -264,6 +303,13 @@ export default function Randomizer({ accessToken }) {
       // it just won't survive a reload
     }
   }, [accumulated]);
+
+  useLayoutEffect(() => {
+    const t = ideaRef.current;
+    if (t && cursor != null && t.selectionStart !== cursor && cursor <= accumulated.length) {
+      try { t.setSelectionRange(cursor, cursor); } catch { /* caret placement is cosmetic */ }
+    }
+  }, [accumulated, cursor]);
 
   const clearPendingTimers = () => {
     clearTimeout(spinTimeout.current);
@@ -437,15 +483,65 @@ export default function Randomizer({ accessToken }) {
 
   // ── Accumulator ────────────────────────────────────────────────────────
 
+  const valueFor = (cat, opt, ideaSoFar) => (
+    cat.suffix ? `${opt}${cat.suffix}` : cat.id === 'chordDegree' ? chordText(opt, ideaSoFar) : noteLabel(opt)
+  );
+
+  const caret = cursor == null ? accumulated.length : Math.min(cursor, accumulated.length);
+  const leftOfCaret = accumulated.slice(0, caret);
+
   const handleAdd = () => {
     if (result === null) return;
-    const value = category.suffix ? `${result}${category.suffix}` : noteLabel(result);
-    setAccumulated(prev => (prev ? `${prev}, ${value}` : value));
+    const value = valueFor(category, result, leftOfCaret);
+    const left = leftOfCaret.replace(/[,\s]+$/, '');
+    const right = accumulated.slice(caret).replace(/^[,\s]+/, '');
+    setAccumulated([left, value, right].filter(Boolean).join(', '));
+    setCursor((left ? left.length + 2 : 0) + value.length);   // caret lands just after what was added
   };
 
-  const handleClear = () => setAccumulated('');
+  // Surprise me: pick every wheel's result at random, no spinning to watch.
+  // The chord progression wheel is drawn 3–8 times; the rest once each.
+  const runSurprise = async () => {
+    clearPendingTimers();
+    stopMomentum();
+    setSurprisePrompt(false);
+    setSurprising(true);
+    setResult(null);
+    setSetName('');
+    setAccumulated('');
+    setCursor(null);
+    setRotation(r => r + 720 + Math.floor(Math.random() * 360));   // one quick spin of the wheel on screen
+    let text = '';
+    let lastDegree = null;
+    await sleep(500);
+    for (const cat of CATEGORIES) {
+      const times = cat.id === 'chordDegree' ? 3 + Math.floor(Math.random() * 6) : 1;
+      for (let i = 0; i < times; i++) {
+        if (!alive.current) return;
+        let opt = cat.options[Math.floor(Math.random() * cat.options.length)];
+        if (cat.id === 'chordDegree') {
+          for (let tries = 0; tries < 20 && opt === lastDegree; tries++) opt = cat.options[Math.floor(Math.random() * cat.options.length)];
+          lastDegree = opt;
+        }
+        const value = valueFor(cat, opt, text);
+        text = text ? `${text}, ${value}` : value;
+        setAccumulated(text);
+        await sleep(140);
+      }
+    }
+    if (alive.current) setSurprising(false);
+  };
+
+  const handleSurprise = () => {
+    if (busy) return;
+    if (accumulated.trim()) setSurprisePrompt(true);
+    else runSurprise();
+  };
+
+  const handleClear = () => { setAccumulated(''); setCursor(null); };
 
   const handleUndo = () => {
+    setCursor(null);
     setAccumulated(prev => {
       const lastComma = prev.lastIndexOf(',');
       if (lastComma === -1) return '';
@@ -456,10 +552,11 @@ export default function Randomizer({ accessToken }) {
   // ── Drive save/load ──────────────────────────────────────────────────
 
   const handleSave = async () => {
-    if (!accessToken) { setStatus('Not signed in to Drive.'); return; }
-    if (!accumulated.trim()) { setStatus('Nothing to save yet.'); return; }
+    if (!accessToken) { setStatus('Not signed in to Drive.'); return false; }
+    if (!accumulated.trim()) { setStatus('Nothing to save yet.'); return false; }
     setSaving(true);
     setStatus('Saving…');
+    let ok = false;
     try {
       const name = setName.trim() || 'Untitled idea';
       const d = new Date();
@@ -469,11 +566,19 @@ export default function Randomizer({ accessToken }) {
       await uploadTextFile(accessToken, fileName, accumulated, 'Randomizer');
       setStatus(`Saved: ${fileName}`);
       setSavedSets(null);
+      ok = true;
     } catch (err) {
       setStatus('Save failed: ' + err.message);
     }
     setSaving(false);
     setTimeout(() => setStatus(''), 5000);
+    return ok;
+  };
+
+  // Surprise me → "save your current idea?" → Save (then continue) / Discard / Cancel
+  const saveThenSurprise = async () => {
+    const ok = await handleSave();
+    if (ok) runSurprise();
   };
 
   const toggleSavedList = async () => {
@@ -519,10 +624,41 @@ export default function Randomizer({ accessToken }) {
     cursor: disabled ? 'default' : 'pointer',
   });
 
-  const busy = spinning || dragging || snapping || momentumActive;
+  const busy = spinning || dragging || snapping || momentumActive || surprising;
 
   return (
     <div style={{ marginTop: '4px' }}>
+      {surprisePrompt && (
+        <div role="dialog" aria-modal="true" aria-label="Save current idea?"
+          style={{ position: 'fixed', inset: 0, zIndex: 50, backgroundColor: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px' }}>
+          <div style={{ width: '100%', maxWidth: '340px', backgroundColor: 'var(--rc-card)', color: 'var(--rc-ink)', borderRadius: '14px', padding: '20px', boxShadow: '0 8px 30px rgba(0,0,0,0.4)' }}>
+            <div style={{ fontSize: '17px', fontWeight: '700', marginBottom: '6px' }}>Save your current idea?</div>
+            <div style={{ fontSize: '13px', color: 'var(--rc-ink2)', marginBottom: '10px' }}>
+              Surprise me clears the idea box first.
+            </div>
+            <div style={{ fontSize: '13px', textAlign: 'left', padding: '8px 10px', borderRadius: '8px', backgroundColor: 'var(--rc-surface)', border: '1px solid var(--rc-line)', maxHeight: '64px', overflow: 'hidden', marginBottom: '10px' }}>
+              {accumulated}
+            </div>
+            <input value={setName} onChange={e => setSetName(e.target.value)} placeholder="Name this idea (optional)"
+              style={{ width: '100%', boxSizing: 'border-box', padding: '8px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', marginBottom: '10px' }} />
+            {status && <div style={{ fontSize: '12px', color: '#d9534f', marginBottom: '8px' }}>{status}</div>}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <button onClick={saveThenSurprise} disabled={saving}
+                style={{ padding: '10px', fontSize: '15px', fontWeight: '700', borderRadius: '10px', border: 'none', backgroundColor: '#1a73e8', color: 'white', cursor: saving ? 'default' : 'pointer' }}>
+                {saving ? 'Saving…' : '☁ Save to Drive, then surprise me'}
+              </button>
+              <button onClick={runSurprise} disabled={saving}
+                style={{ padding: '10px', fontSize: '15px', fontWeight: '600', borderRadius: '10px', border: '1px solid #cc0000', backgroundColor: 'var(--rc-surface)', color: '#cc0000', cursor: 'pointer' }}>
+                Discard it and surprise me
+              </button>
+              <button onClick={() => { setSurprisePrompt(false); setStatus(''); }} disabled={saving}
+                style={{ padding: '8px', fontSize: '14px', borderRadius: '10px', border: 'none', background: 'none', color: 'var(--rc-ink2)', cursor: 'pointer' }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <p style={{ textAlign: 'center', color: '#888', fontSize: '13px', margin: '0 0 10px' }}>
         Spin/drag the wheel to seed a song one piece at a time.
       </p>
@@ -559,8 +695,8 @@ export default function Randomizer({ accessToken }) {
       <Wheel
         options={category.options}
         rotation={rotation}
-        animating={spinning || snapping}
-        transitionMs={spinning ? SPIN_DURATION_MS : SNAP_DURATION_MS}
+        animating={spinning || snapping || surprising}
+        transitionMs={surprising ? 600 : spinning ? SPIN_DURATION_MS : SNAP_DURATION_MS}
         // The big multi-rotation button spin wants that dramatic fast-start
         // curve (the Wheel default), but reusing it for the much shorter
         // snap-to-slice — especially right after momentum coasting hands
@@ -579,10 +715,13 @@ export default function Randomizer({ accessToken }) {
           <button onClick={handleAdd} disabled={result === null || busy} style={spinBtnStyle(result === null || busy)}>
             ➕ Add to idea
           </button>
+          <button onClick={handleSurprise} disabled={busy} style={spinBtnStyle(busy)}>
+            {surprising ? '✨ Building…' : '✨ Surprise me'}
+          </button>
         </div>
 
         <div style={{ minHeight: '18px', fontSize: '15px', fontWeight: '700', color: '#1a73e8' }}>
-          {result !== null && !busy ? `You got: ${category.suffix ? result + category.suffix : noteLabel(result)}` : ''}
+          {result !== null && !busy ? `You got: ${valueFor(category, result, leftOfCaret)}` : ''}
         </div>
       </div>
 
@@ -603,8 +742,10 @@ export default function Randomizer({ accessToken }) {
           </div>
         </div>
         <textarea
+          ref={ideaRef}
           value={accumulated}
-          onChange={e => setAccumulated(e.target.value)}
+          onChange={e => { setAccumulated(e.target.value); setCursor(e.target.selectionStart); }}
+          onSelect={e => setCursor(e.target.selectionStart)}
           placeholder="Spin the wheel and hit “Add to idea” to build this up — or type here directly."
           rows={2}
           style={{
