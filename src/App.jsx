@@ -15,7 +15,8 @@ import Randomizer from './components/Randomizer';
 import Settings from './components/Settings';
 import Jam from './components/Jam';
 import About from './components/About';
-import { reportUsage, noteTabView, noteRecording, noteEvent, installErrorCapture, installActiveTimer } from './components/UsageLog';
+import Dashboard from './components/Dashboard';
+import { reportUsage, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
 import { keyLabel, subscribeAccidentals } from './components/Notation';
@@ -104,7 +105,7 @@ function App() {
   // against the real tab list so a stale or hand-edited URL can't leave
   // the app on a blank view, then stripped from the address so a later
   // manual reload starts normally.
-  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings', 'jam', 'about'];
+  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings', 'jam', 'about', 'dashboard'];
   const [view, setView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -168,6 +169,8 @@ function App() {
   const [viewHistory, setViewHistory] = useState([]);
   const [visitedViews, setVisitedViews] = useState(() => new Set(['record', view]));
 
+  // Owner-only Dashboard: the server says whether this account is the owner; remembered on this device.
+  const [isOwner, setIsOwner] = useState(() => { try { return localStorage.getItem('rc_owner') === '1'; } catch { return false; } });
   // Hamburger menu: top-level sections live here. Add a section by adding
   // one line to MENU_ITEMS (plus its view below); the menu scrolls on its own.
   const MENU_ITEMS = [
@@ -180,6 +183,7 @@ function App() {
     { id: 'changelog', label: 'Changelog', icon: '📝' },
     { id: 'debug', label: 'Debug', icon: '🛠' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
+    ...(isOwner ? [{ id: 'dashboard', label: 'Dashboard', icon: '📊' }] : []),
     { id: 'about', label: 'About', icon: 'ℹ️' },
   ];
   const [menuOpen, setMenuOpen] = useState(false);
@@ -210,7 +214,9 @@ function App() {
     if (!accessToken || !user || usageReported.current) return;
     usageReported.current = true;
     noteTabView(view);
-    reportUsage(accessToken, CURRENT_VERSION);
+    Promise.resolve(reportUsage(accessToken, CURRENT_VERSION)).then(() => {
+      try { setIsOwner(localStorage.getItem('rc_owner') === '1'); } catch { /* ignore */ }
+    }).catch(() => {});
   }, [accessToken, user]);
   useEffect(() => {
     if (!menuOpen) return;
@@ -344,6 +350,7 @@ function App() {
       result = await analyzeAudio(blob, capturedPcm);
     } catch (err) {
       console.error('Record-time analysis failed:', err);
+      noteProblem('analysis', problemCode(err));
     }
     console.log('Analysis result:', result);
     // A take recorded with the metronome has a known tempo: use it rather than the detected one.
@@ -441,9 +448,11 @@ function App() {
           accessToken, blob, name, mimeType, initialMetadata, local?.createdTime, local?.id
         );
         console.log(`[timing] uploadToDrive total: ${Math.round(performance.now() - t0)}ms`);
+        noteUpload((performance.now() - t0) / 1000);
         const verified = await verifyDriveFile(accessToken, result.id, blob.size);
 
         if (verified && result.sidecarSaved) {
+          noteMilestone('driveSave');
           if (local) await deletePending(local.id);
           finishReview({ name: result.name, offline: false });
           await settle();
@@ -469,9 +478,11 @@ function App() {
         }
         console.warn('[upload] could not verify upload on Drive — keeping device copy');
         noteEvent('uploadFail');
+        noteProblem('upload', 'unverified');
       } catch (err) {
         console.error('[upload] Drive upload failed — keeping device copy:', err);
         noteEvent('uploadFail');
+        noteProblem('upload', problemCode(err));
       }
     }
 
@@ -510,6 +521,7 @@ function App() {
   // the Record-tab refresh link.
   const reconnectDrive = async () => {
     if (!window.google?.accounts?.oauth2) return false;
+    noteEvent('reauth');
     try {
       const gotToken = await new Promise((resolve) => {
         const tokenClient = window.google.accounts.oauth2.initTokenClient({
@@ -627,7 +639,10 @@ function App() {
       onProgress: (p) => setSyncState({ running: true, ...p }),
     });
     setSyncState(null);
-    if (result?.failed?.length) noteEvent('uploadFail', result.failed.length);
+    if (result?.failed?.length) {
+      noteEvent('uploadFail', result.failed.length);
+      for (const f of result.failed.slice(0, 5)) noteProblem('sync', problemCode({ message: f?.reason }));   // status number only, never the clip name
+    }
     await refreshPending();
     if (result.alreadyRunning) return;
     if (result.synced > 0) setLibraryRefreshToken(t => t + 1);
@@ -1026,9 +1041,14 @@ function App() {
               <About version={CURRENT_VERSION} accessToken={accessToken} />
             </div>
           )}
+          {isOwner && visitedViews.has('dashboard') && (
+            <div style={{ display: view === 'dashboard' ? 'block' : 'none' }}>
+              <Dashboard accessToken={accessToken} />
+            </div>
+          )}
           {visitedViews.has('debug') && (
             <div style={{ display: view === 'debug' ? 'block' : 'none' }}>
-              <Debug accessToken={accessToken} />
+              <Debug accessToken={accessToken} version={CURRENT_VERSION} />
             </div>
           )}
           {visitedViews.has('randomizer') && (

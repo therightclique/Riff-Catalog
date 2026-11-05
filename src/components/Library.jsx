@@ -7,6 +7,7 @@ import { getPending, pendingToBlob } from './OfflineStore';
 import MetadataEditor from './MetadataEditor';
 import { analyzeAudio, ANALYZER_VERSION } from './AudioAnalyzer';
 import FilterBar from './FilterBar';
+import { noteEvent } from './UsageCounters';
 import { keyMatches } from './KeyUtils';
 
 const SORT_OPTIONS = [
@@ -357,6 +358,7 @@ function Library({
       setAudioUrls(prev => ({ ...prev, [clip.id]: url }));
     }
     if (audioRef.current) audioRef.current.pause();
+    noteEvent('clipPlay');
     const audio = new Audio(url);
     audio.playbackRate = playbackSpeed;
     audioRef.current = audio;
@@ -896,7 +898,7 @@ function Library({
           {sortedClips.length}{sortedClips.length !== clips.length ? ` of ${clips.length}` : ''} clip{clips.length === 1 ? '' : 's'}
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}
+          <select value={sortBy} onChange={e => { noteEvent('libSort'); setSortBy(e.target.value); }}
             style={{ padding: '4px 8px', fontSize: '12px', borderRadius: '6px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>
             {SORT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
@@ -935,7 +937,7 @@ function Library({
         </div>
       )}
 
-      <FilterBar filters={filters} onChange={setFilters} availableTags={availableTags} />
+      <FilterBar filters={filters} onChange={(f) => { noteEvent('libFilter'); setFilters(f); }} availableTags={availableTags} />
 
       {clips.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px' }}>

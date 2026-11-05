@@ -15,9 +15,9 @@ import { listPendingSummaries } from './OfflineStore';
 import { getJamBeats, getPrefs } from './SettingsService';
 import { getTheme } from './Appearance';
 import { NOTE_ROLE_COLORS, DEFAULT_NOTE_ROLE_COLORS } from './theme';
-import { loadCounters, saveCounters, noteTabView, noteRecording, noteEvent, installErrorCapture, installActiveTimer, flushActive } from './UsageCounters';
+import { loadCounters, saveCounters, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, recentProblems, installErrorCapture, installActiveTimer, flushActive } from './UsageCounters';
 
-export { noteTabView, noteRecording, noteEvent, installErrorCapture, installActiveTimer };
+export { noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, recentProblems, installErrorCapture, installActiveTimer };
 
 const ENDPOINT = '/.netlify/functions/log-usage';
 const MIN_GAP_MS = 15 * 60 * 1000;   // reopening within 15 minutes counts as the same visit
@@ -67,7 +67,11 @@ async function deviceDetails() {
   } catch { /* not offered */ }
   const major = (v) => String(v || '').split('.')[0];
   let m;
-  if ((m = /OS (\d+)[_.](\d+)/.exec(ua)) && /iPhone|iPad|iPod/.test(ua)) out.os = `iOS ${m[1]}.${m[2]}`;
+  if ((m = /OS (\d+)[_.](\d+)/.exec(ua)) && /iPhone|iPad|iPod/.test(ua)) {
+    // The OS number inside the user agent is frozen by Apple; Safari's own version number matches the real iOS version.
+    const sv = /Version\/(\d+)\.(\d+)/.exec(ua);
+    out.os = sv && Number(sv[1]) >= Number(m[1]) ? `iOS ${sv[1]}.${sv[2]}` : `iOS ${m[1]}.${m[2]}`;
+  }
   else if (/Android/.test(ua)) out.os = `Android ${major(hi?.platformVersion) || (/Android (\d+)/.exec(ua) || [])[1] || ''}`.trim();
   else if (/Windows/.test(ua)) out.os = hi?.platformVersion ? (Number(major(hi.platformVersion)) >= 13 ? 'Windows 11' : 'Windows 10') : 'Windows 10/11';
   else if (/Macintosh/.test(ua)) out.os = hi?.platformVersion ? `macOS ${major(hi.platformVersion)}` : 'macOS';
@@ -119,9 +123,31 @@ function settingsChoices() {
     accidentals: prefs.accidentals === 'flats' ? 'Flats' : 'Sharps',
     strum: Number.isFinite(prefs.strum) ? Math.round(prefs.strum * 100) / 100 : null,
     customColors: custom === null ? null : custom,
+    colors: { root: NOTE_ROLE_COLORS.root, third: NOTE_ROLE_COLORS.third, fifth: NOTE_ROLE_COLORS.fifth, other: NOTE_ROLE_COLORS.other },
     timeZone: tz,
     language: navigator.language || '',
   };
+}
+
+// How much storage this app uses on the device, in whole megabytes (the app's own data only).
+async function storageUsedMB() {
+  try {
+    const e = await navigator.storage?.estimate?.();
+    return e && Number.isFinite(e.usage) ? Math.round(e.usage / 1048576) : null;
+  } catch { return null; }
+}
+
+// The Debug screen's "Send diagnostic report": device facts plus the short problem codes shown there.
+// Never console text. The person presses the button; nothing is sent otherwise.
+export async function sendDiagnostic(accessToken, version, note) {
+  const details = await deviceDetails();
+  const pending = await pendingCount();
+  const lines = recentProblems().map(p => `${new Date(p.t).toISOString().slice(5, 16).replace('T', ' ')} ${p.area} ${p.code}${p.view ? ' > ' + p.view : ''}${p.n > 1 ? ' x' + p.n : ''}`);
+  const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+    kind: 'diagnostic', accessToken, version, note: String(note || '').slice(0, 500), device: deviceKind(), installed: isInstalled(), online: navigator.onLine,
+    ...details, pendingClips: pending, storageMB: await storageUsedMB(), problems: lines,
+  }) });
+  return res.ok;
 }
 
 // Sends one report. Never throws and never blocks the app; if anything fails
@@ -134,16 +160,23 @@ export async function reportUsage(accessToken, version) {
     before.lastReport = Date.now();   // claim the slot first so two quick calls can't both send
     save(before);
 
+    const listStart = Date.now();
+    let driveListMs = null;
     const [clips, ideas] = await Promise.all([
-      fetchClips(accessToken).then(f => (Array.isArray(f) ? f.length : null)).catch(() => null),
+      fetchClips(accessToken).then(f => { driveListMs = Date.now() - listStart; return Array.isArray(f) ? f.length : null; }).catch(() => null),
       listTextFiles(accessToken, 'Randomizer').then(f => (Array.isArray(f) ? f.length : null)).catch(() => null),
     ]);
 
     flushActive();
     const sent = load();   // counts as of this moment; whatever arrives while the request is out stays pending
     const pending = await pendingCount();
+    const unsentMilestones = Object.fromEntries(Object.entries(sent.milestones || {}).filter(([k]) => !(sent.msSent || {})[k]));
     const body = {
       accessToken,
+      driveListMs,
+      storageMB: await storageUsedMB(),
+      milestones: unsentMilestones,
+      problems: (sent.problems || []).slice(0, 20),
       pendingClips: pending,
       library: libraryHealth(),
       choices: settingsChoices(),
@@ -155,7 +188,7 @@ export async function reportUsage(accessToken, version) {
       clipCount: clips,
       ideaCount: ideas,
       beatCount: beatCount(),
-      delta: { tabs: sent.tabs, events: sent.events, activeSec: Math.round(sent.activeSec || 0), recCount: sent.recCount, recSeconds: Math.round(sent.recSeconds) },
+      delta: { tabs: sent.tabs, events: sent.events, activeSec: Math.round(sent.activeSec || 0), upload: { count: sent.upload?.count || 0, sec: Math.round(sent.upload?.sec || 0) }, recCount: sent.recCount, recSeconds: Math.round(sent.recSeconds) },
     };
     const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) {
@@ -163,7 +196,12 @@ export async function reportUsage(accessToken, version) {
       return false;
     }
     // Success: take off exactly what was sent.
+    try { const j = await res.json(); localStorage.setItem('rc_owner', j?.owner === true ? '1' : ''); } catch { /* flag unchanged */ }
     const now = load();
+    for (const k of Object.keys(unsentMilestones)) now.msSent[k] = true;
+    const sentKeys = new Set((body.problems || []).map(x => `${x.t}|${x.area}|${x.code}`));
+    now.problems = (now.problems || []).filter(x => !sentKeys.has(`${x.t}|${x.area}|${x.code}`));
+    now.upload = { count: Math.max(0, (now.upload?.count || 0) - (sent.upload?.count || 0)), sec: Math.max(0, (now.upload?.sec || 0) - Math.round(sent.upload?.sec || 0)) };
     for (const [k, v] of Object.entries(sent.tabs)) {
       now.tabs[k] = Math.max(0, (now.tabs[k] || 0) - v);
       if (!now.tabs[k]) delete now.tabs[k];

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createDrumMachine, makeMetronomeBeat } from './DrumMachine';
 import { TapTempoButton } from './TapTempo';
+import { noteEvent, noteProblem } from './UsageCounters';
 
 // Record-tab metronome: an audible count-in, then a silent pulse (circles only)
 // while recording, so no click ever reaches the microphone.
@@ -257,6 +258,8 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
     } catch (err) {
       endMetronome();
       setPhase('idle');
+      noteEvent(err?.name === 'NotAllowedError' || err?.name === 'SecurityError' ? 'micDenied' : 'micError');
+      noteProblem('mic', /^[A-Za-z]{3,30}$/.test(String(err?.name || '')) ? err.name : 'Error');
       alert('Microphone access denied or unavailable.');
       console.error(err);
     }

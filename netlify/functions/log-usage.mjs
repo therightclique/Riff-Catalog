@@ -35,12 +35,36 @@ const COLS = [
   'Jam plays', 'Practice picks', 'Key Finder lookups', 'Wheel spins', 'Surprise me uses', 'Ideas saved (saves)', 'Multi-key ideas saved',
   'Theme', 'Note names', 'Custom note colors', 'Strum speed', 'Time zone', 'Language',
   'Clips with key', 'Clips with tempo', 'Clips with tags',
+  'Root note color', '3rd note color', '5th note color', 'Other note color',
+  // first-use milestones (set once, never overwritten)
+  'First recording (PT)', 'First Drive save (PT)', 'First Library open (PT)', 'First Jam play (PT)', 'First Key Finder use (PT)',
+  'First Practice use (PT)', 'First Randomizer use (PT)', 'First idea saved (PT)', 'First feedback sent (PT)',
+  // speed and reliability
+  'Drive list ms (last)', 'Avg upload (sec)', 'Uploads timed', 'Upload seconds total', 'Drive reconnects needed', 'Mic denied', 'Mic errors (other)', 'Audio blocked',
+  // library tool use
+  'Library filter uses', 'Library sort changes', 'Clip plays',
+  // when and how long people record (the user's own clock)
+  'Recorded: morning', 'Recorded: afternoon', 'Recorded: evening', 'Recorded: night', 'Recorded: weekday', 'Recorded: weekend',
+  'Takes under 30s', 'Takes 30s-2min', 'Takes 2-5min', 'Takes over 5min',
+  // install and update health
+  'Sessions installed', 'Sessions in browser', 'Previous version', 'Version updated (PT)', 'Device storage used (MB)',
 ];
+const MILESTONES = {
+  recording: 'First recording (PT)', driveSave: 'First Drive save (PT)', library: 'First Library open (PT)', jam: 'First Jam play (PT)',
+  keyfinder: 'First Key Finder use (PT)', practice: 'First Practice use (PT)', randomizer: 'First Randomizer use (PT)',
+  idea: 'First idea saved (PT)', feedback: 'First feedback sent (PT)',
+};
+const AREAS = ['upload', 'sync', 'settings', 'mic', 'audio', 'analysis', 'app', 'drive', 'library', 'recorder'];
 // Counted events the app may send, and the column each one adds to.
 const EVENT_COLS = {
   uploadFail: 'Upload failures', settingsFail: 'Settings save failures', errors: 'App errors',
   jamPlay: 'Jam plays', practicePick: 'Practice picks', keyLookup: 'Key Finder lookups', spin: 'Wheel spins',
   surprise: 'Surprise me uses', idea: 'Ideas saved (saves)', ideaMultiKey: 'Multi-key ideas saved',
+  reauth: 'Drive reconnects needed', micDenied: 'Mic denied', micError: 'Mic errors (other)', audioFail: 'Audio blocked',
+  libFilter: 'Library filter uses', libSort: 'Library sort changes', clipPlay: 'Clip plays',
+  recMorning: 'Recorded: morning', recAfternoon: 'Recorded: afternoon', recEvening: 'Recorded: evening', recNight: 'Recorded: night',
+  recWeekday: 'Recorded: weekday', recWeekend: 'Recorded: weekend',
+  recShort: 'Takes under 30s', recMedium: 'Takes 30s-2min', recLong: 'Takes 2-5min', recVeryLong: 'Takes over 5min',
 };
 const THEMES = ['light', 'dark', 'match device'];
 const IDX = Object.fromEntries(COLS.map((name, i) => [name, i]));
@@ -97,8 +121,30 @@ async function verifyUser(accessToken) {
 
 // Short free-text facts about the device. Anything odd is dropped rather than stored.
 const shortText = (v, re) => (typeof v === 'string' && v.trim() && re.test(v.trim()) ? v.trim() : null);
+const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 const TZ_RE = /^[A-Za-z_\/+\-0-9]{1,40}$/, LANG_RE = /^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8}){0,2}$/, ERR_RE = /^[A-Za-z]{3,30}$/;
 const OS_RE = /^[\w .\-+()]{1,30}$/, MODEL_RE = /^[\w .\-+()\/,]{1,80}$/, SCREEN_RE = /^\d{2,5}x\d{2,5}@\d{1,2}(\.\d{1,2})?$/, BROWSER_RE = /^[\w .\-+()]{1,30}$/;
+
+const goodDate = (v) => {
+  const t = typeof v === 'string' ? Date.parse(v) : NaN;
+  return Number.isFinite(t) && t > Date.parse('2024-01-01') && t < Date.now() + 86400000 ? new Date(t) : null;
+};
+function cleanMilestones(m) {
+  const out = {};
+  if (m && typeof m === 'object') for (const k of Object.keys(MILESTONES)) { const d = goodDate(m[k]); if (d) out[k] = d; }
+  return out;
+}
+const CODE_RE = /^[A-Za-z0-9 :._\-]{1,40}$/;
+export function cleanProblems(list) {
+  const out = [];
+  for (const x of Array.isArray(list) ? list.slice(0, 20) : []) {
+    if (!x || typeof x !== 'object') continue;
+    const d = goodDate(x.t);
+    if (!d || !AREAS.includes(x.area) || typeof x.code !== 'string' || !CODE_RE.test(x.code)) continue;
+    out.push({ d, area: x.area, code: x.code, view: TABS.some(([k]) => k === x.view) ? x.view : '', n: count(x.n, 999) || 1 });
+  }
+  return out;
+}
 
 // ── Clean up what the app sent ──────────────────────────────────────────
 
@@ -131,12 +177,19 @@ export function cleanPayload(body) {
     theme: THEMES.includes(body?.choices?.theme) ? body.choices.theme : null,
     accidentals: ['Sharps', 'Flats'].includes(body?.choices?.accidentals) ? body.choices.accidentals : null,
     strum: Number.isFinite(body?.choices?.strum) && body.choices.strum >= 0 && body.choices.strum <= 10 ? Math.round(body.choices.strum * 100) / 100 : null,
+    colors: Object.fromEntries(['root', 'third', 'fifth', 'other'].map(k => [k, shortText(body?.choices?.colors?.[k], HEX_RE)?.toUpperCase() || null])),
     customColors: typeof body?.choices?.customColors === 'boolean' ? body.choices.customColors : null,
     timeZone: shortText(body?.choices?.timeZone, TZ_RE),
     language: shortText(body?.choices?.language, LANG_RE),
     lastError: shortText(body?.lastError, ERR_RE),
     events: Object.fromEntries(Object.keys(EVENT_COLS).map(k => [k, count(delta.events?.[k], 100000) || 0]).filter(([, n]) => n)),
     activeSec: count(delta.activeSec, 1e6) || 0,
+    milestones: cleanMilestones(body?.milestones),
+    driveListMs: count(body?.driveListMs, 600000),
+    storageMB: count(body?.storageMB, 1e7),
+    uploadCount: count(delta.upload?.count, 100000) || 0,
+    uploadSec: count(delta.upload?.sec, 1e7) || 0,
+    problems: cleanProblems(body?.problems),
     recCount: count(delta.recCount, 100000) || 0,
     recSeconds: count(delta.recSeconds, 1e7) || 0,
   };
@@ -153,6 +206,8 @@ export function buildRow(existing, email, p, where) {
   const prevDay = String(row[IDX['Last login (PT)']] || '').slice(0, 10);
   const today = stamp.slice(0, 10);
   row[IDX['Days active']] = (num(row[IDX['Days active']]) || (prevDay ? 1 : 0)) + (prevDay !== today ? 1 : 0);
+  const oldVersion = String(row[IDX['App version']] || '');
+  Object.defineProperty(row, '_newDay', { value: prevDay !== today, enumerable: false });
   row[IDX['Email']] = email;
   if (!row[IDX['First login (PT)']]) row[IDX['First login (PT)']] = stamp;
   row[IDX['Last login (PT)']] = stamp;
@@ -174,6 +229,9 @@ export function buildRow(existing, email, p, where) {
   if (p.lastError) row[IDX['Last error type']] = p.lastError;
   if (p.theme) row[IDX['Theme']] = p.theme;
   if (p.accidentals) row[IDX['Note names']] = p.accidentals;
+  for (const [k, label] of [['root', 'Root note color'], ['third', '3rd note color'], ['fifth', '5th note color'], ['other', 'Other note color']]) {
+    if (p.colors[k]) row[IDX[label]] = p.colors[k];
+  }
   if (p.customColors !== null) row[IDX['Custom note colors']] = p.customColors ? 'Yes' : 'No';
   if (p.strum !== null) row[IDX['Strum speed']] = p.strum;
   if (p.timeZone) row[IDX['Time zone']] = p.timeZone;
@@ -185,6 +243,22 @@ export function buildRow(existing, email, p, where) {
     const total = num(row[IDX[col]]) + (p.events[k] || 0);
     row[IDX[col]] = total || '';
   }
+  // Milestones: the first time only, never overwritten.
+  for (const [k, label] of Object.entries(MILESTONES)) {
+    if (p.milestones[k] && !row[IDX[label]]) row[IDX[label]] = ptNow(p.milestones[k]);
+  }
+  if (p.driveListMs !== null) row[IDX['Drive list ms (last)']] = p.driveListMs;
+  if (p.storageMB !== null) row[IDX['Device storage used (MB)']] = p.storageMB;
+  if (p.uploadCount) {
+    const n = num(row[IDX['Uploads timed']]) + p.uploadCount, sec = num(row[IDX['Upload seconds total']]) + p.uploadSec;
+    row[IDX['Uploads timed']] = n; row[IDX['Upload seconds total']] = sec; row[IDX['Avg upload (sec)']] = Math.round((sec / n) * 10) / 10;
+  }
+  if (p.installed !== null) {
+    const col = IDX[p.installed ? 'Sessions installed' : 'Sessions in browser'];
+    row[col] = num(row[col]) + 1;
+  }
+  // Update health: when the app version changes, remember the one before and when.
+  if (p.version && oldVersion && oldVersion !== p.version) { row[IDX['Previous version']] = oldVersion; row[IDX['Version updated (PT)']] = stamp; }
   // Active minutes: running total of time with the app on screen.
   if (p.activeSec) row[IDX['Active minutes']] = Math.round((num(row[IDX['Active minutes']]) + p.activeSec / 60) * 10) / 10;
 
@@ -229,17 +303,43 @@ async function getSheetInfo(token, sheetId) {
   return sheetInfo;
 }
 
-let feedbackTitle = null;
-async function getFeedbackTitle(token, sheetId) {
-  if (feedbackTitle) return feedbackTitle;
-  const info = await getSheetInfo(token, sheetId);
-  const found = info.tabs.find(t => String(t.title).trim().toLowerCase() === 'feedback');
-  if (found) { feedbackTitle = found.title; return feedbackTitle; }
-  await sheetsFetch(token, `${SHEETS}/${encodeURIComponent(sheetId)}:batchUpdate`, {
-    method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Feedback' } } }] }),
+// Extra tabs (Feedback, Errors, History, Diagnostics) are found by name and created if missing.
+// Each tab's header row is written once per warm server instance, so new columns appear on their own.
+const tabTitles = {};
+const tabHeaderDone = {};
+// Looks a tab up by name; if it isn't in the remembered list (another server instance may have just made it), asks Google once more.
+async function findTab(token, sheetId, name) {
+  const match = (info) => info.tabs.find(t => String(t.title).trim().toLowerCase() === name.toLowerCase());
+  let found = match(await getSheetInfo(token, sheetId));
+  if (!found) { sheetInfo = null; found = match(await getSheetInfo(token, sheetId)); }
+  return found || null;
+}
+async function getTab(token, sheetId, name, header) {
+  if (!tabTitles[name]) {
+    const found = await findTab(token, sheetId, name);
+    if (found) tabTitles[name] = found.title;
+    else {
+      await sheetsFetch(token, `${SHEETS}/${encodeURIComponent(sheetId)}:batchUpdate`, {
+        method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title: name } } }] }),
+      });
+      tabTitles[name] = name;
+    }
+  }
+  const title = tabTitles[name];
+  if (!tabHeaderDone[name]) {
+    await sheetsFetch(token, rangeUrl(sheetId, title, `A1:${colLetter(header.length - 1)}1`, '?valueInputOption=RAW'), {
+      method: 'PUT', body: JSON.stringify({ values: [header] }),
+    });
+    tabHeaderDone[name] = true;
+  }
+  return title;
+}
+async function appendRows(token, sheetId, name, header, rows) {
+  if (!rows.length) return;
+  const title = await getTab(token, sheetId, name, header);
+  await sheetsFetch(token, rangeUrl(sheetId, title, 'A1', ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'), {
+    method: 'POST', body: JSON.stringify({ values: rows }),
   });
-  feedbackTitle = 'Feedback';
-  return feedbackTitle;
 }
 
 const rangeUrl = (sheetId, title, a1, suffix = '') => `${SHEETS}/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(`'${title}'!${a1}`)}${suffix}`;
@@ -260,6 +360,24 @@ async function ensureHeader(token, sheetId, title, firstCell) {
   });
 }
 
+const HISTORY_COLS = ['Date (PT)', 'Email', 'Clip library size', 'Song ideas saved', 'Custom drum beats', 'Sessions', 'Active minutes', 'Days active', 'Clips with key', 'Clips with tempo', 'Clips with tags', 'App version'];
+const ERROR_COLS = ['Date (PT)', 'Email', 'App version', 'Device', 'OS version', 'Area', 'Code', 'Screen', 'Times'];
+
+// Once per person per day, one line of history; plus any problems the app logged. Neither can fail the main report.
+async function afterStatsWrite(token, sheetId, email, row, p, where) {
+  try {
+    if (row._newDay) {
+      const g = (n) => row[IDX[n]] ?? '';
+      await appendRows(token, sheetId, 'History', HISTORY_COLS, [[ptNow(), email, g('Clip library size'), g('Song ideas saved'), g('Custom drum beats'), g('Sessions'), g('Active minutes'), g('Days active'), g('Clips with key'), g('Clips with tempo'), g('Clips with tags'), g('App version')]]);
+    }
+  } catch (e) { console.error('history append failed:', e.message); }
+  try {
+    if (p.problems.length) {
+      await appendRows(token, sheetId, 'Errors', ERROR_COLS, p.problems.map(x => [ptNow(x.d), email, p.version || row[IDX['App version']] || '', p.device || row[IDX['Device']] || '', p.os || row[IDX['OS version']] || '', x.area, x.code, x.view, x.n]));
+    }
+  } catch (e) { console.error('error log append failed:', e.message); }
+}
+
 export async function upsertUser({ token, sheetId, email, payload, where }) {
   const { title, gid } = await getSheetInfo(token, sheetId);
   let emails = await emailRows(token, sheetId, title);
@@ -273,6 +391,7 @@ export async function upsertUser({ token, sheetId, email, payload, where }) {
     await sheetsFetch(token, rangeUrl(sheetId, title, `A${rowNum}:${LAST_COL}${rowNum}`, '?valueInputOption=RAW'), {
       method: 'PUT', body: JSON.stringify({ values: [row] }),
     });
+    await afterStatsWrite(token, sheetId, email, row, payload, where);
     return { row: rowNum, created: false };
   }
 
@@ -287,6 +406,7 @@ export async function upsertUser({ token, sheetId, email, payload, where }) {
   // devices) could each add a row. Check once and remove any extras so the
   // email stays on exactly one line.
   await removeDuplicates(token, sheetId, title, gid, email);
+  await afterStatsWrite(token, sheetId, email, row, payload, where);
   return { row: rowNum, created: true };
 }
 
@@ -306,32 +426,59 @@ async function removeDuplicates(token, sheetId, title, gid, email) {
 
 // ── Feedback (one new row per submission; nothing is ever updated or removed) ──
 
-const FEEDBACK_COLS = ['Date (PT)', 'Email', 'Rating', 'Feedback', 'Country', 'Region', 'App version'];
-let feedbackHeaderDone = false;
+const FEEDBACK_COLS = ['Date (PT)', 'Email', 'Rating', 'Feedback', 'Country', 'Region', 'App version', 'Liked', 'Disliked', 'Feature ideas'];
+const DIAG_COLS = ['Date (PT)', 'Email', 'Note', 'App version', 'Device', 'OS version', 'Browser', 'Screen', 'Installed app', 'Online', 'Offline clips waiting', 'Device storage used (MB)', 'Country', 'Region', 'Recent problems'];
+
+const cleanText = (v, max) => (typeof v === 'string' ? v.replace(/\r\n?/g, '\n').trim().slice(0, max) : '');
 
 export function cleanFeedback(body) {
   const r = Number(body?.rating);
   const rating = Number.isFinite(r) && r >= 0.5 && r <= 5 && Math.round(r * 2) === r * 2 ? r : null;
-  const text = typeof body?.text === 'string' ? body.text.replace(/\r\n?/g, '\n').trim().slice(0, 2000) : '';
   const version = typeof body?.version === 'string' && /^[\w.\- ]{1,24}$/.test(body.version) ? body.version : '';
-  return { rating, text, version };
+  return { rating, text: cleanText(body?.text, 2000), liked: cleanText(body?.liked, 1000), disliked: cleanText(body?.disliked, 1000), ideas: cleanText(body?.ideas, 1000), version };
 }
 
 export async function addFeedback({ token, sheetId, email, fb, where }) {
-  const title = await getFeedbackTitle(token, sheetId);
-  if (!feedbackHeaderDone) {
-    const first = await sheetsFetch(token, rangeUrl(sheetId, title, 'A1:G1'));
-    if (String(first.values?.[0]?.[0] || '') !== FEEDBACK_COLS[0]) {
-      await sheetsFetch(token, rangeUrl(sheetId, title, 'A1:G1', '?valueInputOption=RAW'), {
-        method: 'PUT', body: JSON.stringify({ values: [FEEDBACK_COLS] }),
-      });
-    }
-    feedbackHeaderDone = true;
-  }
-  const row = [ptNow(), email, fb.rating, fb.text, where.country, where.region, fb.version];
-  await sheetsFetch(token, rangeUrl(sheetId, title, 'A1', ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'), {
-    method: 'POST', body: JSON.stringify({ values: [row] }),
-  });
+  await appendRows(token, sheetId, 'Feedback', FEEDBACK_COLS, [[ptNow(), email, fb.rating, fb.text, where.country, where.region, fb.version, fb.liked, fb.disliked, fb.ideas]]);
+}
+
+// A report the person chose to send from the Debug screen: device facts plus our own short problem codes. No console text.
+const PROBLEM_LINE_RE = /^[A-Za-z0-9 :._@>\-]{1,70}$/;
+export function cleanDiagnostic(body) {
+  const lines = (Array.isArray(body?.problems) ? body.problems.slice(0, 50) : []).filter(l => typeof l === 'string' && PROBLEM_LINE_RE.test(l));
+  return {
+    note: cleanText(body?.note, 500),
+    version: typeof body?.version === 'string' && /^[\w.\- ]{1,24}$/.test(body.version) ? body.version : '',
+    device: DEVICES.includes(body?.device) ? body.device : '',
+    os: shortText(body?.os, OS_RE) || '', browser: shortText(body?.browser, BROWSER_RE) || '', screen: shortText(body?.screen, SCREEN_RE) || '',
+    installed: typeof body?.installed === 'boolean' ? (body.installed ? 'Yes' : 'No') : '',
+    online: typeof body?.online === 'boolean' ? (body.online ? 'Yes' : 'No') : '',
+    pending: count(body?.pendingClips, 100000), storageMB: count(body?.storageMB, 1e7),
+    lines,
+  };
+}
+export async function addDiagnostic({ token, sheetId, email, d, where }) {
+  await appendRows(token, sheetId, 'Diagnostics', DIAG_COLS, [[ptNow(), email, d.note, d.version, d.device, d.os, d.browser, d.screen, d.installed, d.online, d.pending ?? '', d.storageMB ?? '', where.country, where.region, d.lines.join('\n')]]);
+}
+
+// ── Owner dashboard: only the owner's email(s), set in OWNER_EMAIL, may read the sheets back ──
+
+const isOwner = (email) => String(process.env.OWNER_EMAIL || '').toLowerCase().split(/[,\s;]+/).filter(Boolean).includes(email);
+
+async function readTab(token, sheetId, name, maxRows) {
+  const found = name === 'Stats' ? { title: (await getSheetInfo(token, sheetId)).title } : await findTab(token, sheetId, name);
+  if (!found) return [];
+  const body = await sheetsFetch(token, rangeUrl(sheetId, found.title, 'A1:CZ20000'));
+  const rows = body.values || [];
+  if (maxRows && rows.length > maxRows + 1) return [rows[0], ...rows.slice(-maxRows)];
+  return rows;
+}
+export async function dashboardData({ token, sheetId }) {
+  const [stats, feedback, errors, history, diagnostics] = await Promise.all([
+    readTab(token, sheetId, 'Stats'), readTab(token, sheetId, 'Feedback', 500), readTab(token, sheetId, 'Errors', 500),
+    readTab(token, sheetId, 'History', 20000), readTab(token, sheetId, 'Diagnostics', 100),
+  ]);
+  return { stats, feedback, errors, history, diagnostics, generated: ptNow() };
 }
 
 // ── The function ────────────────────────────────────────────────────────
@@ -351,7 +498,7 @@ export default async (req, context) => {
   let body;
   try {
     const text = await req.text();
-    if (text.length > 20000) return reply(413, { ok: false, error: 'too large' });
+    if (text.length > 40000) return reply(413, { ok: false, error: 'too large' });
     body = JSON.parse(text);
   } catch { return reply(400, { ok: false, error: 'bad request' }); }
   if (typeof body?.accessToken !== 'string' || body.accessToken.length < 20 || body.accessToken.length > 4096) {
@@ -369,6 +516,14 @@ export default async (req, context) => {
       region: geo.subdivision?.name || geo.subdivision?.code || '',
     };
     const token = await serviceToken(creds);
+    if (body.kind === 'dashboard') {
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      return reply(200, { ok: true, ...(await dashboardData({ token, sheetId })) });
+    }
+    if (body.kind === 'diagnostic') {
+      await addDiagnostic({ token, sheetId, email, d: cleanDiagnostic(body), where });
+      return reply(200, { ok: true });
+    }
     if (body.kind === 'feedback') {
       const fb = cleanFeedback(body);
       if (fb.rating === null) return reply(400, { ok: false, error: 'rating needed' });
@@ -376,7 +531,7 @@ export default async (req, context) => {
       return reply(200, { ok: true });
     }
     const result = await upsertUser({ token, sheetId, email, payload: cleanPayload(body), where });
-    return reply(200, { ok: true, created: result.created });
+    return reply(200, { ok: true, created: result.created, owner: isOwner(email) });
   } catch (err) {
     console.error('log-usage failed:', err.message);
     return reply(500, { ok: false, error: 'could not record' });

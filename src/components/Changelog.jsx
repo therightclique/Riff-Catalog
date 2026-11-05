@@ -2,6 +2,53 @@ import { useState } from 'react';
 
 const CHANGELOG = [
   {
+    date: '2026-11-05',
+    displayDate: 'November 5, 2026',
+    version: '2.2',
+    entries: [
+      {
+        title: 'About, privacy and feedback',
+        items: [
+          'New About section in the menu, with Privacy Policy, User Agreement and Feedback tabs, all in plain English',
+          'Feedback: rate the app from 0.5 to 5 stars (half stars allowed), then tell us what you find useful, what you dislike, and any feature ideas, plus an optional note. Each submission is saved as its own entry. It isn\u2019t for technical support',
+          'The Privacy Policy lists exactly what the app collects, and was updated for everything below. Your recordings, lyrics, clip names, song ideas and beats are never collected. They stay in your own Google Drive',
+        ],
+      },
+      {
+        title: 'Usage numbers (counts only)',
+        items: [
+          'Each person has exactly one line in the usage sheet, updated whenever you open the app: email, visits, country/region, device and system version, browser, installed or browser use, app version, time open, and counts of how often you use each section and feature',
+          'Your look-and-feel choices are included, including the colors you chose for the Root, 3rd, 5th and Other notes (as hex codes)',
+          'Firsts: the date you first made a recording, saved to Drive, opened the Library, used Jam, Key Finder, Practice or the Randomizer, saved an idea, and sent feedback',
+          'A daily history line (once per day you use the app) so trends can be seen over time',
+          'Speed and reliability: average upload time, how long Drive takes to list your clips, and counts of upload, save, sign-in, microphone and sound problems',
+          'Library tool use (filters, sorting, clip plays), when you record (time of day, weekday or weekend) and how long your takes are, in broad groups',
+          'Storage used on the device, installed-app versus browser visits, and the previous app version after an update',
+          'Better device detection: iPhone and Android model and system version are shown more accurately (iPhone model is still an estimate)',
+        ],
+      },
+      {
+        title: 'Debug: problem log and diagnostic report',
+        items: [
+          'The app keeps a short log of problems as simple codes (what area, what kind of error), never clip names or message text',
+          'Debug has a new Send diagnostic report button. It only sends when you tap it, with an optional note from you. It shows the recent problem codes before you send',
+        ],
+      },
+      {
+        title: 'Dashboard (owner only)',
+        items: [
+          'A private Dashboard page that turns all the numbers above into charts and tables: people, activity, where new people get to, what gets used, devices, recording habits, speed, problems, feedback and diagnostic reports. It only appears for the app\u2019s owner',
+        ],
+      },
+      {
+        title: 'Jam: saved beats sync',
+        items: [
+          'Saved beats now sync through Google Drive, so they\u2019re on every device you sign in on. Beats you saved before this update move over automatically the first time you open the app',
+        ],
+      },
+    ],
+  },
+  {
     date: '2026-10-29',
     displayDate: 'October 29, 2026',
     version: '2.1',
@@ -14,17 +61,6 @@ const CHANGELOG = [
           'A red \u25CF Record button is always in the header, so you can get back to recording in one tap when inspiration strikes',
           'The header shows the name of the section you\u2019re in, with a back button to return to where you were',
           'Everything at the top of the screen sits a little lower, so it no longer blurs into the edge of the phone and the buttons there are easier to hit',
-        ],
-      },
-      {
-        title: 'About, privacy and usage numbers',
-        items: [
-          'New About section in the menu, with Privacy Policy, User Agreement and Feedback tabs, all in plain English',
-          'Feedback: rate the app from 0.5 to 5 stars (half stars allowed) and, if you like, write a note. Each submission is saved as its own entry. It isn\u2019t for technical support',
-          'The Privacy Policy lists exactly what the app collects: your email, first and last visit, visit count, the IP address and country/region of your latest visit, device type, installed or browser, app version, and simple counts (recordings, song ideas, saved beats, average recording length, and how often you open each section)',
-          'Your recordings, lyrics, clip names, song ideas and beats are never collected. They stay in your own Google Drive, and the app can only see files it created itself',
-          'Each person has exactly one line in the usage sheet. Opening the app again updates that line instead of adding a new one',
-          'The usage summary also includes your operating system version, device model (an estimate on iPhone), screen size, browser, time zone and language, plus feature-use counts, time with the app open, upload and save failures, and your look-and-feel choices. Still only counts and settings, never your recordings or writing. The Privacy Policy lists all of it',
         ],
       },
       {
@@ -52,7 +88,6 @@ const CHANGELOG = [
       {
         title: 'Jam: play along to drums',
         items: [
-          'Saved beats now sync through Google Drive, so they\u2019re on every device you sign in on. Beats you saved before this update move over automatically the first time you open the app',
           'New Jam section. Choose from 12 looping drum beats, with a simple fill every 4th bar',
           'Play and stop with one big button; dots show the beat and bar markers show where you are in the 4-bar loop',
           'Set the tempo with the slider or the \u22125 / \u22121 / +1 / +5 buttons, and change it while the beat is playing. Each beat shows the range of tempos it sounds best at',

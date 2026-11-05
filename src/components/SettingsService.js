@@ -14,7 +14,7 @@ import { NOTE_ROLE_COLORS, DEFAULT_NOTE_ROLE_COLORS, applyNoteRoleColors } from 
 import { applyAccidentals } from './Notation';
 import { setStrumScale } from './AudioEngine';
 import { getOrCreateFolder, FOLDER_NAME } from './DriveUploader';
-import { noteEvent } from './UsageCounters';
+import { noteEvent, noteProblem, problemCode } from './UsageCounters';
 
 const LS_KEY = 'rc_settings';
 const FILE_NAME = 'riffcatalog-settings.json';
@@ -292,6 +292,7 @@ async function pushNow() {
   } catch (err) {
     console.warn('[settings] could not save to Drive — kept on this device:', err);
     noteEvent('settingsFail');
+    noteProblem('settings', problemCode(err));
     setStatus('device-only');
   } finally {
     pushing = false;

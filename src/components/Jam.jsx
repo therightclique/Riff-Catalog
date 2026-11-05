@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BEATS, getBeat, createDrumMachine, makeCustomBeat, makeMetronomeBeat } from './DrumMachine';
 import { TapTempoButton } from './TapTempo';
 import { getAudioContext, installAudioUnlock } from './AudioEngine';
-import { noteEvent } from './UsageCounters';
+import { noteEvent, noteProblem } from './UsageCounters';
 import { getJamBeats, subscribeJamBeats, saveJamBeat, deleteJamBeat } from './SettingsService';
 
 const MIN_BPM = 40, MAX_BPM = 220;
@@ -118,7 +118,7 @@ export default function Jam() {
   const ensureMachine = () => {
     if (machine.current) return machine.current;
     const ctx = getAudioContext();
-    if (!ctx) { setNoAudio(true); return null; }
+    if (!ctx) { setNoAudio(true); noteEvent('audioFail'); noteProblem('audio', 'NoAudioContext'); return null; }
     machine.current = createDrumMachine(ctx);
     machine.current.setBpm(bpm);
     return machine.current;
@@ -142,9 +142,9 @@ export default function Jam() {
       return;
     }
     const ctx = getAudioContext();
-    if (!ctx) { setNoAudio(true); return; }
+    if (!ctx) { setNoAudio(true); noteEvent('audioFail'); noteProblem('audio', 'NoAudioContext'); return; }
     if (ctx.state === 'running') begin();
-    else ctx.resume().then(begin).catch(() => setNoAudio(true));
+    else ctx.resume().then(begin).catch(() => { setNoAudio(true); noteEvent('audioFail'); noteProblem('audio', 'ResumeFailed'); });
   };
 
   const changeBpm = (v) => {
