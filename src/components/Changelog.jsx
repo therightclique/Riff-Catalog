@@ -10,10 +10,19 @@ const CHANGELOG = [
         title: 'New menu',
         items: [
           'The tab bar is replaced by a \u2630 menu button at the top left. Tap it to jump to any section; the list scrolls, so it can keep growing',
-          'Sections in the menu: Record, Library, Key Finder, Practice, Jam, Randomizer, Changelog, Debug and Settings',
+          'Sections in the menu: Record, Library, Key Finder, Practice, Jam, Randomizer, Changelog, Debug, Settings and About',
           'A red \u25CF Record button is always in the header, so you can get back to recording in one tap when inspiration strikes',
           'The header shows the name of the section you\u2019re in, with a back button to return to where you were',
           'Everything at the top of the screen sits a little lower, so it no longer blurs into the edge of the phone and the buttons there are easier to hit',
+        ],
+      },
+      {
+        title: 'About, privacy and usage numbers',
+        items: [
+          'New About section in the menu, with a Privacy Policy tab and a User Agreement tab, both in plain English',
+          'The Privacy Policy lists exactly what the app collects: your email, first and last visit, visit count, the IP address and country/region of your latest visit, device type, installed or browser, app version, and simple counts (recordings, song ideas, saved beats, average recording length, and how often you open each section)',
+          'Your recordings, lyrics, clip names, song ideas and beats are never collected. They stay in your own Google Drive, and the app can only see files it created itself',
+          'Each person has exactly one line in the usage sheet. Opening the app again updates that line instead of adding a new one',
         ],
       },
       {

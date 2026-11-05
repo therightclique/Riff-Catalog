@@ -14,6 +14,8 @@ import Debug from './components/Debug';
 import Randomizer from './components/Randomizer';
 import Settings from './components/Settings';
 import Jam from './components/Jam';
+import About from './components/About';
+import { reportUsage, noteTabView, noteRecording } from './components/UsageLog';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
 import { keyLabel, subscribeAccidentals } from './components/Notation';
@@ -102,7 +104,7 @@ function App() {
   // against the real tab list so a stale or hand-edited URL can't leave
   // the app on a blank view, then stripped from the address so a later
   // manual reload starts normally.
-  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings', 'jam'];
+  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings', 'jam', 'about'];
   const [view, setView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -178,6 +180,7 @@ function App() {
     { id: 'changelog', label: 'Changelog', icon: '📝' },
     { id: 'debug', label: 'Debug', icon: '🛠' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
+    { id: 'about', label: 'About', icon: 'ℹ️' },
   ];
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -199,6 +202,15 @@ function App() {
       window.removeEventListener('online', resync);
     };
   }, [accessToken]);
+  // Usage summary (counts only, one row per email on the server). Once per
+  // page load when signed in; UsageLog throttles and never blocks the UI.
+  const usageReported = useRef(false);
+  useEffect(() => {
+    if (!accessToken || !user || usageReported.current) return;
+    usageReported.current = true;
+    noteTabView(view);
+    reportUsage(accessToken, CURRENT_VERSION);
+  }, [accessToken, user]);
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
@@ -209,6 +221,7 @@ function App() {
   const goToView = (newView) => {
     setMenuOpen(false);
     if (newView === view) return;
+    noteTabView(newView);
     setViewHistory(prev => [...prev, view]);
     setVisitedViews(prev => (prev.has(newView) ? prev : new Set(prev).add(newView)));
     setView(newView);
@@ -391,7 +404,9 @@ function App() {
       analyzerVersion: analysis?.analyzerVersion || null,
     };
 
+    const takeSeconds = capturedPcm?.pcm && capturedPcm?.sampleRate ? capturedPcm.pcm.length / capturedPcm.sampleRate : 0;
     const finishReview = (saved) => {
+      noteRecording(takeSeconds);
       setLastUpload(saved);
       setLibraryRefreshToken(t => t + 1);
       setPendingRecording(null);
@@ -1000,6 +1015,11 @@ function App() {
             <div style={{ display: view === 'settings' ? 'block' : 'none' }}>
               <Settings user={user} signedIn={!!accessToken} online={isOnline} pendingCount={pendingClips.length}
                 onSync={() => handleSync()} onSignOut={handleLogout} version={CURRENT_VERSION} updated={LAST_UPDATED} />
+            </div>
+          )}
+          {visitedViews.has('about') && (
+            <div style={{ display: view === 'about' ? 'block' : 'none' }}>
+              <About version={CURRENT_VERSION} />
             </div>
           )}
           {visitedViews.has('debug') && (
