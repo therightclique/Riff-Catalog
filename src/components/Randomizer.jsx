@@ -713,7 +713,7 @@ export default function Randomizer({ accessToken }) {
             {spinning ? '🎡 Spinning…' : momentumActive ? '🎡 Coasting…' : dragging ? '🎡 Drag to pick…' : '🎡 Spin'}
           </button>
           <button onClick={handleAdd} disabled={result === null || busy} style={spinBtnStyle(result === null || busy)}>
-            ➕ Add to idea
+            <span style={{ color: 'var(--rc-blue-ink)', fontWeight: '800', fontSize: '18px', lineHeight: 1, marginRight: '4px', verticalAlign: '-1px' }}>+</span> Add to idea
           </button>
           <button onClick={handleSurprise} disabled={busy} style={spinBtnStyle(busy)}>
             {surprising ? '✨ Building…' : '✨ Surprise me'}

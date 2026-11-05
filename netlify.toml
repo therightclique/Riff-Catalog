@@ -1,0 +1,3 @@
+# Tells Netlify where the serverless functions live so "netlify deploy" ships them.
+[functions]
+  directory = "netlify/functions"
