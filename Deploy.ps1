@@ -32,6 +32,8 @@ catch {
 try {
     Set-Location "C:\Users\justi\riff-catalog"
 
+    $pushFailed = $false
+
     Write-Host ""
     Write-Host "=== Building ===" -ForegroundColor Cyan
     npm run build
@@ -52,7 +54,14 @@ try {
     Write-Host ""
     Write-Host "=== Pushing to GitHub ===" -ForegroundColor Cyan
     git push
-    if ($LASTEXITCODE -ne 0) { throw "git push failed (exit code $LASTEXITCODE)." }
+    if ($LASTEXITCODE -ne 0) {
+        # A GitHub problem must not hold up the Netlify deploy: the site is
+        # built from the local dist folder, not from GitHub. The commit stays
+        # on this computer and goes up with the next successful push.
+        $pushFailed = $true
+        Write-Host ""
+        Write-Host "WARNING: git push failed (exit code $LASTEXITCODE). Continuing to Netlify anyway; GitHub will catch up on the next successful push." -ForegroundColor Yellow
+    }
 
     Write-Host ""
     Write-Host "=== Deploying to Netlify ===" -ForegroundColor Cyan
@@ -60,7 +69,11 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "netlify deploy failed (exit code $LASTEXITCODE)." }
 
     Write-Host ""
-    Write-Host "Deploy complete" -ForegroundColor Green
+    if ($pushFailed) {
+        Write-Host "Deploy complete (site is live) - BUT the GitHub push FAILED, so GitHub is behind. Run Deploy again later to push." -ForegroundColor Yellow
+    } else {
+        Write-Host "Deploy complete" -ForegroundColor Green
+    }
 }
 catch {
     Write-Host ""
