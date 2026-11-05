@@ -14,6 +14,7 @@ import { NOTE_ROLE_COLORS, DEFAULT_NOTE_ROLE_COLORS, applyNoteRoleColors } from 
 import { applyAccidentals } from './Notation';
 import { setStrumScale } from './AudioEngine';
 import { getOrCreateFolder, FOLDER_NAME } from './DriveUploader';
+import { noteEvent } from './UsageCounters';
 
 const LS_KEY = 'rc_settings';
 const FILE_NAME = 'riffcatalog-settings.json';
@@ -24,6 +25,8 @@ let dirty = false;        // a local change not yet confirmed on Drive
 let token = null;
 let remoteFileId = null;
 let pushTimer = null;
+let beatsDirty = false;   // saved Jam beats changed locally and not yet confirmed on Drive
+let changeSeq = 0;        // bumped on every local change, so a push knows whether more arrived mid-flight
 let pushing = false;
 let status = 'saved';     // 'saved' | 'saving' | 'device-only'
 const statusListeners = new Set();
@@ -57,15 +60,102 @@ function applyPrefs(p) {
   prefListeners.forEach(fn => { try { fn(prefs); } catch { /* ignore */ } });
 }
 
-const snapshot = () => ({
-  version: 1,
-  updatedAt,
-  noteRoleColors: { ...NOTE_ROLE_COLORS },
-  prefs: { ...prefs },
-});
+// ── saved Jam beats ─────────────────────────────────────────────────────
+// Named drum beats live in the same settings file on Drive, so they follow the
+// user to every device. Each beat carries its own updatedAt, and a deleted beat
+// is kept as a small "deleted" marker for 90 days, so two devices merge cleanly
+// instead of one overwriting the other.
+let jamBeats = [];        // [{ id, name, bpm, grid, updatedAt }] or [{ id, deleted: true, updatedAt }]
+const beatListeners = new Set();
+const TOMBSTONE_MS = 90 * 24 * 3600 * 1000;
+
+function cleanBeat(b) {
+  if (!b || typeof b !== 'object') return null;
+  const id = typeof b.id === 'string' && b.id && b.id.length <= 40 ? b.id : null;
+  if (!id) return null;
+  const at = typeof b.updatedAt === 'string' && !Number.isNaN(Date.parse(b.updatedAt)) ? b.updatedAt : new Date(0).toISOString();
+  if (b.deleted === true) return { id, deleted: true, updatedAt: at };
+  const name = typeof b.name === 'string' ? b.name.trim().slice(0, 40) : '';
+  if (!name) return null;
+  const bpm = Number.isFinite(Number(b.bpm)) ? Math.min(400, Math.max(20, Math.round(Number(b.bpm)))) : 100;
+  const grid = {};
+  if (b.grid && typeof b.grid === 'object') {
+    for (const [k, v] of Object.entries(b.grid)) {
+      if (/^[a-z]{1,8}$/i.test(k) && typeof v === 'string' && /^[x.]{16}$/.test(v)) grid[k] = v;
+    }
+  }
+  return { id, name, bpm, grid, updatedAt: at };
+}
+
+function pruneBeats() {
+  const cutoff = Date.now() - TOMBSTONE_MS;
+  jamBeats = jamBeats.filter(b => !b.deleted || Date.parse(b.updatedAt) > cutoff);
+}
+
+const notifyBeats = () => beatListeners.forEach(fn => { try { fn(); } catch { /* ignore */ } });
+export const getJamBeats = () => jamBeats.filter(b => !b.deleted);
+export function subscribeJamBeats(fn) { beatListeners.add(fn); return () => beatListeners.delete(fn); }
+
+// Merge a beat list from Drive into ours: for each beat the newer copy wins.
+// Flags beatsDirty when we hold something Drive doesn't have yet.
+function mergeBeats(list) {
+  const remote = new Map();
+  for (const x of Array.isArray(list) ? list : []) {
+    const c = cleanBeat(x);
+    if (c) { const p = remote.get(c.id); if (!p || c.updatedAt > p.updatedAt) remote.set(c.id, c); }
+  }
+  const local = new Map(jamBeats.map(b => [b.id, b]));
+  let changed = false;
+  for (const [id, r] of remote) {
+    const l = local.get(id);
+    if (!l || r.updatedAt > l.updatedAt) { local.set(id, r); changed = true; }
+  }
+  for (const [id, l] of local) {
+    const r = remote.get(id);
+    if (!r || l.updatedAt > r.updatedAt) beatsDirty = true;
+  }
+  if (changed) { jamBeats = [...local.values()]; pruneBeats(); saveLocal(); notifyBeats(); }
+  return changed;
+}
+
+function afterBeatChange() {
+  beatsDirty = true;
+  changeSeq++;
+  saveLocal();
+  notifyBeats();
+  setStatus(token && navigator.onLine ? 'saving' : 'device-only');
+  schedulePush();
+}
+
+// Add or replace a beat: { id, name, bpm, grid }.
+export function saveJamBeat(beat) {
+  const c = cleanBeat({ ...beat, updatedAt: new Date().toISOString() });
+  if (!c || c.deleted) return;
+  const i = jamBeats.findIndex(b => b.id === c.id);
+  if (i >= 0) jamBeats[i] = c; else jamBeats.push(c);
+  afterBeatChange();
+}
+
+export function deleteJamBeat(id) {
+  const i = jamBeats.findIndex(b => b.id === id);
+  if (i < 0) return;
+  jamBeats[i] = { id, deleted: true, updatedAt: new Date().toISOString() };
+  afterBeatChange();
+}
+
+const snapshot = () => {
+  pruneBeats();
+  return {
+    version: 1,
+    updatedAt,
+    noteRoleColors: { ...NOTE_ROLE_COLORS },
+    prefs: { ...prefs },
+    jamBeats: jamBeats.map(b => ({ ...b })),
+  };
+};
 
 function saveLocal() {
-  try { localStorage.setItem(LS_KEY, JSON.stringify({ ...snapshot(), dirty })); } catch { /* storage unavailable — Drive copy still works */ }
+  try { localStorage.setItem(LS_KEY, JSON.stringify({ ...snapshot(), dirty, beatsDirty })); } catch { /* storage unavailable — Drive copy still works */ }
 }
 
 // Applied once at import time, i.e. before the first screen is drawn, so
@@ -79,8 +169,30 @@ function saveLocal() {
     applyPrefs(s.prefs);
     updatedAt = s.updatedAt || null;
     dirty = !!s.dirty;
-    if (dirty) status = 'device-only';
+    beatsDirty = !!s.beatsDirty;
+    jamBeats = (Array.isArray(s.jamBeats) ? s.jamBeats : []).map(cleanBeat).filter(Boolean);
+    if (dirty || beatsDirty) status = 'device-only';
   } catch { /* corrupt entry — fall back to defaults */ }
+})();
+
+// One-time move of beats saved before beats lived in the settings file (they were
+// kept only on this device). The old copy is left in place as a backup.
+(function migrateDeviceBeats() {
+  try {
+    if (localStorage.getItem('rc_jam_beats_migrated')) return;
+    const list = JSON.parse(localStorage.getItem('rc_jam_beats') || '[]');
+    if (Array.isArray(list)) {
+      const known = new Set(jamBeats.map(b => b.id));
+      const stamp = new Date().toISOString();
+      let added = 0;
+      for (const x of list) {
+        const c = cleanBeat({ ...x, id: String(x?.id || x?.name || ''), updatedAt: stamp });
+        if (c && !c.deleted && !known.has(c.id)) { jamBeats.push(c); known.add(c.id); added++; }
+      }
+      if (added) { beatsDirty = true; status = 'device-only'; saveLocal(); }
+    }
+    localStorage.setItem('rc_jam_beats_migrated', '1');
+  } catch { /* nothing to migrate */ }
 })();
 
 // ── the user's choices ──────────────────────────────────────────────────
@@ -90,6 +202,7 @@ export function changeNoteRoleColors(partial) {
   if (!applyNoteRoleColors({ ...NOTE_ROLE_COLORS, ...partial })) return;
   updatedAt = new Date().toISOString();
   dirty = true;
+  changeSeq++;
   saveLocal();
   setStatus(token && navigator.onLine ? 'saving' : 'device-only');
   schedulePush();
@@ -102,6 +215,7 @@ export function changePrefs(partial) {
   applyPrefs({ ...prefs, ...partial });
   updatedAt = new Date().toISOString();
   dirty = true;
+  changeSeq++;
   saveLocal();
   setStatus(token && navigator.onLine ? 'saving' : 'device-only');
   schedulePush();
@@ -157,27 +271,43 @@ function schedulePush() {
 }
 
 async function pushNow() {
-  if (!dirty) { setStatus('saved'); return; }
+  if (!dirty && !beatsDirty) { setStatus('saved'); return; }
   if (!token || !navigator.onLine) { setStatus('device-only'); return; }
   if (pushing) { schedulePush(); return; }
   pushing = true;
-  const sentAt = updatedAt;
+  const sentSeq = changeSeq;
   try {
+    // Look at Drive first, so this write never drops beats another device saved meanwhile.
+    if (remoteFileId) {
+      try {
+        const remote = await readRemote(remoteFileId);
+        mergeBeats(remote?.jamBeats);
+        if (!dirty && (remote?.updatedAt || '') > (updatedAt || '')) adoptRemoteSettings(remote);
+      } catch { /* the write below reports any real problem */ }
+    }
     await writeRemote();
     // Only mark clean if nothing changed while the request was in flight.
-    if (updatedAt === sentAt) { dirty = false; saveLocal(); setStatus('saved'); }
+    if (changeSeq === sentSeq) { dirty = false; beatsDirty = false; saveLocal(); setStatus('saved'); }
     else schedulePush();
   } catch (err) {
     console.warn('[settings] could not save to Drive — kept on this device:', err);
+    noteEvent('settingsFail');
     setStatus('device-only');
   } finally {
     pushing = false;
   }
 }
 
+function adoptRemoteSettings(remote) {
+  applyNoteRoleColors(remote.noteRoleColors);
+  if (remote.prefs) applyPrefs(remote.prefs);
+  updatedAt = remote.updatedAt || null;
+  saveLocal();
+}
+
 // Call whenever a Drive token is available (sign-in, reconnect, app returns
 // to the foreground, connection comes back). Adopts newer settings from
-// Drive, or pushes newer/unsaved local ones.
+// Drive, merges saved beats, or pushes newer/unsaved local ones.
 export async function syncSettings(newToken) {
   if (newToken) token = newToken;
   if (!token || !navigator.onLine) return;
@@ -186,24 +316,20 @@ export async function syncSettings(newToken) {
     if (remoteFileId) {
       const remote = await readRemote(remoteFileId);
       const remoteTime = remote?.updatedAt || '';
+      mergeBeats(remote?.jamBeats);
       if (!dirty && remoteTime > (updatedAt || '')) {
-        applyNoteRoleColors(remote.noteRoleColors);
-        if (remote.prefs) applyPrefs(remote.prefs);
-        updatedAt = remoteTime;
-        saveLocal();
-        setStatus('saved');
-        return;
+        adoptRemoteSettings(remote);
+      } else if (!dirty && remoteTime < (updatedAt || '')) {
+        dirty = true;   // this device's settings are newer than Drive's
       }
-      if (!dirty && remoteTime === (updatedAt || '')) { setStatus('saved'); return; }
-      // Local is newer (or has unsaved changes): fall through and push.
-      if (!dirty && updatedAt) dirty = true;
-    } else if (updatedAt) {
-      dirty = true; // a choice exists locally but Drive has no copy yet
+    } else {
+      if (updatedAt) dirty = true;           // a choice exists locally but Drive has no copy yet
+      if (jamBeats.length) beatsDirty = true;
     }
-    if (dirty) { setStatus('saving'); await pushNow(); }
+    if (dirty || beatsDirty) { setStatus('saving'); await pushNow(); }
     else setStatus('saved');
   } catch (err) {
     console.warn('[settings] Drive sync skipped:', err);
-    if (dirty) setStatus('device-only');
+    if (dirty || beatsDirty) setStatus('device-only');
   }
 }

@@ -19,10 +19,12 @@ const CHANGELOG = [
       {
         title: 'About, privacy and usage numbers',
         items: [
-          'New About section in the menu, with a Privacy Policy tab and a User Agreement tab, both in plain English',
+          'New About section in the menu, with Privacy Policy, User Agreement and Feedback tabs, all in plain English',
+          'Feedback: rate the app from 0.5 to 5 stars (half stars allowed) and, if you like, write a note. Each submission is saved as its own entry. It isn\u2019t for technical support',
           'The Privacy Policy lists exactly what the app collects: your email, first and last visit, visit count, the IP address and country/region of your latest visit, device type, installed or browser, app version, and simple counts (recordings, song ideas, saved beats, average recording length, and how often you open each section)',
           'Your recordings, lyrics, clip names, song ideas and beats are never collected. They stay in your own Google Drive, and the app can only see files it created itself',
           'Each person has exactly one line in the usage sheet. Opening the app again updates that line instead of adding a new one',
+          'The usage summary also includes your operating system version, device model (an estimate on iPhone), screen size, browser, time zone and language, plus feature-use counts, time with the app open, upload and save failures, and your look-and-feel choices. Still only counts and settings, never your recordings or writing. The Privacy Policy lists all of it',
         ],
       },
       {
@@ -50,6 +52,7 @@ const CHANGELOG = [
       {
         title: 'Jam: play along to drums',
         items: [
+          'Saved beats now sync through Google Drive, so they\u2019re on every device you sign in on. Beats you saved before this update move over automatically the first time you open the app',
           'New Jam section. Choose from 12 looping drum beats, with a simple fill every 4th bar',
           'Play and stop with one big button; dots show the beat and bar markers show where you are in the 4-bar loop',
           'Set the tempo with the slider or the \u22125 / \u22121 / +1 / +5 buttons, and change it while the beat is playing. Each beat shows the range of tempos it sounds best at',

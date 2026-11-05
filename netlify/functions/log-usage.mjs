@@ -29,7 +29,20 @@ const COLS = [
   'Sessions', 'App version', 'Device', 'Installed app',
   ...TABS.map(([, label]) => `Views: ${label}`),
   'Recordings counted', 'Recording seconds counted',
+  'OS version', 'Device model', 'Screen', 'Browser',
+  'Offline clips waiting', 'Upload failures', 'Settings save failures', 'App errors', 'Last error type',
+  'Active minutes', 'Days active',
+  'Jam plays', 'Practice picks', 'Key Finder lookups', 'Wheel spins', 'Surprise me uses', 'Ideas saved (saves)', 'Multi-key ideas saved',
+  'Theme', 'Note names', 'Custom note colors', 'Strum speed', 'Time zone', 'Language',
+  'Clips with key', 'Clips with tempo', 'Clips with tags',
 ];
+// Counted events the app may send, and the column each one adds to.
+const EVENT_COLS = {
+  uploadFail: 'Upload failures', settingsFail: 'Settings save failures', errors: 'App errors',
+  jamPlay: 'Jam plays', practicePick: 'Practice picks', keyLookup: 'Key Finder lookups', spin: 'Wheel spins',
+  surprise: 'Surprise me uses', idea: 'Ideas saved (saves)', ideaMultiKey: 'Multi-key ideas saved',
+};
+const THEMES = ['light', 'dark', 'match device'];
 const IDX = Object.fromEntries(COLS.map((name, i) => [name, i]));
 const TAB_COL = (id) => IDX[`Views: ${TABS.find(([k]) => k === id)[1]}`];
 
@@ -82,6 +95,11 @@ async function verifyUser(accessToken) {
   return typeof email === 'string' && email.includes('@') ? email.trim().toLowerCase() : null;
 }
 
+// Short free-text facts about the device. Anything odd is dropped rather than stored.
+const shortText = (v, re) => (typeof v === 'string' && v.trim() && re.test(v.trim()) ? v.trim() : null);
+const TZ_RE = /^[A-Za-z_\/+\-0-9]{1,40}$/, LANG_RE = /^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8}){0,2}$/, ERR_RE = /^[A-Za-z]{3,30}$/;
+const OS_RE = /^[\w .\-+()]{1,30}$/, MODEL_RE = /^[\w .\-+()\/,]{1,80}$/, SCREEN_RE = /^\d{2,5}x\d{2,5}@\d{1,2}(\.\d{1,2})?$/, BROWSER_RE = /^[\w .\-+()]{1,30}$/;
+
 // ── Clean up what the app sent ──────────────────────────────────────────
 
 const count = (v, max = 1e6) => (Number.isFinite(v) && v >= 0 ? Math.min(Math.round(v), max) : null);
@@ -101,7 +119,24 @@ export function cleanPayload(body) {
     version,
     device: DEVICES.includes(body?.device) ? body.device : null,
     installed: typeof body?.installed === 'boolean' ? body.installed : null,
+    os: shortText(body?.os, OS_RE),
+    model: shortText(body?.model, MODEL_RE),
+    screen: shortText(body?.screen, SCREEN_RE),
+    browser: shortText(body?.browser, BROWSER_RE),
     tabs,
+    pending: count(body?.pendingClips, 100000),
+    lib: {
+      key: count(body?.library?.withKey, 100000), tempo: count(body?.library?.withTempo, 100000), tags: count(body?.library?.withTags, 100000),
+    },
+    theme: THEMES.includes(body?.choices?.theme) ? body.choices.theme : null,
+    accidentals: ['Sharps', 'Flats'].includes(body?.choices?.accidentals) ? body.choices.accidentals : null,
+    strum: Number.isFinite(body?.choices?.strum) && body.choices.strum >= 0 && body.choices.strum <= 10 ? Math.round(body.choices.strum * 100) / 100 : null,
+    customColors: typeof body?.choices?.customColors === 'boolean' ? body.choices.customColors : null,
+    timeZone: shortText(body?.choices?.timeZone, TZ_RE),
+    language: shortText(body?.choices?.language, LANG_RE),
+    lastError: shortText(body?.lastError, ERR_RE),
+    events: Object.fromEntries(Object.keys(EVENT_COLS).map(k => [k, count(delta.events?.[k], 100000) || 0]).filter(([, n]) => n)),
+    activeSec: count(delta.activeSec, 1e6) || 0,
     recCount: count(delta.recCount, 100000) || 0,
     recSeconds: count(delta.recSeconds, 1e7) || 0,
   };
@@ -115,6 +150,9 @@ const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 export function buildRow(existing, email, p, where) {
   const row = COLS.map((_, i) => (existing && existing[i] !== undefined ? existing[i] : ''));
   const stamp = ptNow();
+  const prevDay = String(row[IDX['Last login (PT)']] || '').slice(0, 10);
+  const today = stamp.slice(0, 10);
+  row[IDX['Days active']] = (num(row[IDX['Days active']]) || (prevDay ? 1 : 0)) + (prevDay !== today ? 1 : 0);
   row[IDX['Email']] = email;
   if (!row[IDX['First login (PT)']]) row[IDX['First login (PT)']] = stamp;
   row[IDX['Last login (PT)']] = stamp;
@@ -128,6 +166,27 @@ export function buildRow(existing, email, p, where) {
   if (p.version) row[IDX['App version']] = p.version;
   if (p.device) row[IDX['Device']] = p.device;
   if (p.installed !== null) row[IDX['Installed app']] = p.installed ? 'Yes' : 'No';
+  if (p.os) row[IDX['OS version']] = p.os;
+  if (p.model) row[IDX['Device model']] = p.model;
+  if (p.screen) row[IDX['Screen']] = p.screen;
+  if (p.browser) row[IDX['Browser']] = p.browser;
+  if (p.pending !== null) row[IDX['Offline clips waiting']] = p.pending;
+  if (p.lastError) row[IDX['Last error type']] = p.lastError;
+  if (p.theme) row[IDX['Theme']] = p.theme;
+  if (p.accidentals) row[IDX['Note names']] = p.accidentals;
+  if (p.customColors !== null) row[IDX['Custom note colors']] = p.customColors ? 'Yes' : 'No';
+  if (p.strum !== null) row[IDX['Strum speed']] = p.strum;
+  if (p.timeZone) row[IDX['Time zone']] = p.timeZone;
+  if (p.language) row[IDX['Language']] = p.language;
+  if (p.lib.key !== null) row[IDX['Clips with key']] = p.lib.key;
+  if (p.lib.tempo !== null) row[IDX['Clips with tempo']] = p.lib.tempo;
+  if (p.lib.tags !== null) row[IDX['Clips with tags']] = p.lib.tags;
+  for (const [k, col] of Object.entries(EVENT_COLS)) {
+    const total = num(row[IDX[col]]) + (p.events[k] || 0);
+    row[IDX[col]] = total || '';
+  }
+  // Active minutes: running total of time with the app on screen.
+  if (p.activeSec) row[IDX['Active minutes']] = Math.round((num(row[IDX['Active minutes']]) + p.activeSec / 60) * 10) / 10;
 
   // Running totals: this device's counts since its last report are added on.
   let best = null;
@@ -158,13 +217,29 @@ async function sheetsFetch(token, url, init = {}) {
   return body;
 }
 
+// The sheet tabs are found by name: "Stats" (one row per person) and "Feedback" (one row per submission).
+// If "Stats" isn't there, the first tab is used so the logger keeps working.
 async function getSheetInfo(token, sheetId) {
   if (sheetInfo && sheetInfo.sheetId === sheetId) return sheetInfo;
   const meta = await sheetsFetch(token, `${SHEETS}/${encodeURIComponent(sheetId)}?fields=sheets.properties(title,sheetId)`);
-  const first = meta.sheets?.[0]?.properties;
-  if (!first) throw new Error('spreadsheet has no tabs');
-  sheetInfo = { sheetId, title: first.title, gid: first.sheetId };
+  const tabs = (meta.sheets || []).map(s => s.properties);
+  const stats = tabs.find(t => String(t.title).trim().toLowerCase() === 'stats') || tabs[0];
+  if (!stats) throw new Error('spreadsheet has no tabs');
+  sheetInfo = { sheetId, title: stats.title, gid: stats.sheetId, tabs };
   return sheetInfo;
+}
+
+let feedbackTitle = null;
+async function getFeedbackTitle(token, sheetId) {
+  if (feedbackTitle) return feedbackTitle;
+  const info = await getSheetInfo(token, sheetId);
+  const found = info.tabs.find(t => String(t.title).trim().toLowerCase() === 'feedback');
+  if (found) { feedbackTitle = found.title; return feedbackTitle; }
+  await sheetsFetch(token, `${SHEETS}/${encodeURIComponent(sheetId)}:batchUpdate`, {
+    method: 'POST', body: JSON.stringify({ requests: [{ addSheet: { properties: { title: 'Feedback' } } }] }),
+  });
+  feedbackTitle = 'Feedback';
+  return feedbackTitle;
 }
 
 const rangeUrl = (sheetId, title, a1, suffix = '') => `${SHEETS}/${encodeURIComponent(sheetId)}/values/${encodeURIComponent(`'${title}'!${a1}`)}${suffix}`;
@@ -176,8 +251,10 @@ async function emailRows(token, sheetId, title) {
   return (body.values || []).map(r => String(r[0] || '').trim().toLowerCase());
 }
 
+let headerWritten = false; // the header row is (re)written once per warm server instance, so newly added columns get their titles
 async function ensureHeader(token, sheetId, title, firstCell) {
-  if (firstCell === 'email') return;
+  if (firstCell === 'email' && headerWritten) return;
+  headerWritten = true;
   await sheetsFetch(token, rangeUrl(sheetId, title, `A1:${LAST_COL}1`, '?valueInputOption=RAW'), {
     method: 'PUT', body: JSON.stringify({ values: [COLS] }),
   });
@@ -227,6 +304,36 @@ async function removeDuplicates(token, sheetId, title, gid, email) {
   });
 }
 
+// ── Feedback (one new row per submission; nothing is ever updated or removed) ──
+
+const FEEDBACK_COLS = ['Date (PT)', 'Email', 'Rating', 'Feedback', 'Country', 'Region', 'App version'];
+let feedbackHeaderDone = false;
+
+export function cleanFeedback(body) {
+  const r = Number(body?.rating);
+  const rating = Number.isFinite(r) && r >= 0.5 && r <= 5 && Math.round(r * 2) === r * 2 ? r : null;
+  const text = typeof body?.text === 'string' ? body.text.replace(/\r\n?/g, '\n').trim().slice(0, 2000) : '';
+  const version = typeof body?.version === 'string' && /^[\w.\- ]{1,24}$/.test(body.version) ? body.version : '';
+  return { rating, text, version };
+}
+
+export async function addFeedback({ token, sheetId, email, fb, where }) {
+  const title = await getFeedbackTitle(token, sheetId);
+  if (!feedbackHeaderDone) {
+    const first = await sheetsFetch(token, rangeUrl(sheetId, title, 'A1:G1'));
+    if (String(first.values?.[0]?.[0] || '') !== FEEDBACK_COLS[0]) {
+      await sheetsFetch(token, rangeUrl(sheetId, title, 'A1:G1', '?valueInputOption=RAW'), {
+        method: 'PUT', body: JSON.stringify({ values: [FEEDBACK_COLS] }),
+      });
+    }
+    feedbackHeaderDone = true;
+  }
+  const row = [ptNow(), email, fb.rating, fb.text, where.country, where.region, fb.version];
+  await sheetsFetch(token, rangeUrl(sheetId, title, 'A1', ':append?valueInputOption=RAW&insertDataOption=INSERT_ROWS'), {
+    method: 'POST', body: JSON.stringify({ values: [row] }),
+  });
+}
+
 // ── The function ────────────────────────────────────────────────────────
 
 const reply = (status, obj) => new Response(JSON.stringify(obj), {
@@ -244,7 +351,7 @@ export default async (req, context) => {
   let body;
   try {
     const text = await req.text();
-    if (text.length > 10000) return reply(413, { ok: false, error: 'too large' });
+    if (text.length > 20000) return reply(413, { ok: false, error: 'too large' });
     body = JSON.parse(text);
   } catch { return reply(400, { ok: false, error: 'bad request' }); }
   if (typeof body?.accessToken !== 'string' || body.accessToken.length < 20 || body.accessToken.length > 4096) {
@@ -262,6 +369,12 @@ export default async (req, context) => {
       region: geo.subdivision?.name || geo.subdivision?.code || '',
     };
     const token = await serviceToken(creds);
+    if (body.kind === 'feedback') {
+      const fb = cleanFeedback(body);
+      if (fb.rating === null) return reply(400, { ok: false, error: 'rating needed' });
+      await addFeedback({ token, sheetId, email, fb, where });
+      return reply(200, { ok: true });
+    }
     const result = await upsertUser({ token, sheetId, email, payload: cleanPayload(body), where });
     return reply(200, { ok: true, created: result.created });
   } catch (err) {

@@ -6,6 +6,7 @@ import { FretboardDiagram, getScaleNotes } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, ZoomHint } from './DiagramDetailView';
 import { noteLabel, noteIn, keyLabel } from './Notation';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, CHORD_QUALITY_STYLES, RELATIVE_KEY_COLOR } from './theme';
+import { noteEvent } from './UsageCounters';
 
 const ALL_KEYS = [
   'A Major', 'A# Major', 'B Major', 'C Major', 'C# Major', 'D Major',
@@ -309,7 +310,7 @@ function KeyFinder({ onFilterByKey }) {
   const handleKeyDropdownChange = (key) => {
     setSelectedKey(key);
     setExpandedMode(null);
-    if (key) setLookupExpanded(false);
+    if (key) { setLookupExpanded(false); noteEvent('keyLookup'); }
   };
 
   const toggleNote = (note) => {
@@ -320,6 +321,7 @@ function KeyFinder({ onFilterByKey }) {
   };
 
   const runLookup = () => {
+    noteEvent('keyLookup');
     if (pickedNotes.length === 0) { setLookupResults([]); return; }
     const pickedSet = new Set(pickedNotes);
 
@@ -458,7 +460,7 @@ function KeyFinder({ onFilterByKey }) {
                 </p>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                   {lookupResults.map(({ key, matchCount, exact }) => (
-                    <button key={key} onClick={() => { setSelectedKey(key); setLookupExpanded(false); }}
+                    <button key={key} onClick={() => { setSelectedKey(key); setLookupExpanded(false); noteEvent('keyLookup'); }}
                       style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                         padding: '10px 14px', borderRadius: '8px', cursor: 'pointer',

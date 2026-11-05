@@ -3,6 +3,7 @@ import { FretboardDiagram } from './FretboardDiagram';
 import { DiagramDetailView, ZoomableFretboard, BigTabDisplay, ZoomHint } from './DiagramDetailView';
 import { NOTE_ROLE_COLORS, NOTE_ROLE_TEXT } from './theme';
 import { keyLabel, noteLabel, textLabel } from './Notation';
+import { noteEvent } from './UsageCounters';
 
 const ALL_KEYS = [
   'A Major','A# Major','B Major','C Major','C# Major','D Major',
@@ -2679,6 +2680,7 @@ export default function Practice() {
 
   const randomItem = () => {
     if (!items.length) return;
+    noteEvent('practicePick');
     setCurrent(items[Math.floor(Math.random() * items.length)]);
     setShowAll(false);
   };

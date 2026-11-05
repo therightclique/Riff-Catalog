@@ -15,7 +15,7 @@ import Randomizer from './components/Randomizer';
 import Settings from './components/Settings';
 import Jam from './components/Jam';
 import About from './components/About';
-import { reportUsage, noteTabView, noteRecording } from './components/UsageLog';
+import { reportUsage, noteTabView, noteRecording, noteEvent, installErrorCapture, installActiveTimer } from './components/UsageLog';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
 import { keyLabel, subscribeAccidentals } from './components/Notation';
@@ -204,6 +204,7 @@ function App() {
   }, [accessToken]);
   // Usage summary (counts only, one row per email on the server). Once per
   // page load when signed in; UsageLog throttles and never blocks the UI.
+  useEffect(() => { installErrorCapture(); installActiveTimer(); }, []);
   const usageReported = useRef(false);
   useEffect(() => {
     if (!accessToken || !user || usageReported.current) return;
@@ -467,8 +468,10 @@ function App() {
           return;
         }
         console.warn('[upload] could not verify upload on Drive — keeping device copy');
+        noteEvent('uploadFail');
       } catch (err) {
         console.error('[upload] Drive upload failed — keeping device copy:', err);
+        noteEvent('uploadFail');
       }
     }
 
@@ -624,6 +627,7 @@ function App() {
       onProgress: (p) => setSyncState({ running: true, ...p }),
     });
     setSyncState(null);
+    if (result?.failed?.length) noteEvent('uploadFail', result.failed.length);
     await refreshPending();
     if (result.alreadyRunning) return;
     if (result.synced > 0) setLibraryRefreshToken(t => t + 1);
@@ -1019,7 +1023,7 @@ function App() {
           )}
           {visitedViews.has('about') && (
             <div style={{ display: view === 'about' ? 'block' : 'none' }}>
-              <About version={CURRENT_VERSION} />
+              <About version={CURRENT_VERSION} accessToken={accessToken} />
             </div>
           )}
           {visitedViews.has('debug') && (

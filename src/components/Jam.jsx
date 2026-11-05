@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { BEATS, getBeat, createDrumMachine, makeCustomBeat, makeMetronomeBeat } from './DrumMachine';
 import { TapTempoButton } from './TapTempo';
 import { getAudioContext, installAudioUnlock } from './AudioEngine';
+import { noteEvent } from './UsageCounters';
+import { getJamBeats, subscribeJamBeats, saveJamBeat, deleteJamBeat } from './SettingsService';
 
 const MIN_BPM = 40, MAX_BPM = 220;
 const clampBpm = (v) => Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(Number(v) || 100)));
@@ -44,8 +46,8 @@ const normGrid = (g) => {
 
 const loadMyBeats = () => {
   try {
-    const list = JSON.parse(localStorage.getItem('rc_jam_beats') || '[]');
-    return (Array.isArray(list) ? list : [])
+    // Saved beats live in the settings file (this device + Google Drive), shared with every device.
+    return getJamBeats()
       .filter(b => b && typeof b.name === 'string' && b.name.trim())
       .map(b => ({ id: String(b.id || b.name), name: b.name.trim(), bpm: clampBpm(b.bpm || 100), grid: normGrid(b.grid) }));
   } catch { return []; }
@@ -88,9 +90,7 @@ export default function Jam() {
   useEffect(() => {
     try { localStorage.setItem('rc_jam', JSON.stringify({ beatId, bpm, mode, metroBeats })); } catch { /* remembering is optional */ }
   }, [beatId, bpm, mode, metroBeats]);
-  useEffect(() => {
-    try { localStorage.setItem('rc_jam_beats', JSON.stringify(myBeats)); } catch { /* remembering is optional */ }
-  }, [myBeats]);
+  useEffect(() => subscribeJamBeats(() => setMyBeats(loadMyBeats())), []);   // a save here, or beats arriving from another device
   useEffect(() => {
     customBeat.current.tracks = grid;                       // heard on the very next step
     try { localStorage.setItem('rc_jam_custom', JSON.stringify(grid)); } catch { /* remembering is optional */ }
@@ -130,6 +130,7 @@ export default function Jam() {
     m.setBpm(bpm);
     m.setBeat(beat);
     m.start();
+    noteEvent('jamPlay');
     lastPos.current = null;
     setPlaying(true);
   };
@@ -187,7 +188,7 @@ export default function Jam() {
   const saveBeat = () => {
     if (!trimmedName || gridEmpty) return;
     const entry = { id: existing ? existing.id : `b${Date.now().toString(36)}`, name: existing ? existing.name : trimmedName, bpm, grid: { ...grid } };
-    setMyBeats(list => existing ? list.map(b => (b.id === existing.id ? entry : b)) : [...list, entry]);
+    saveJamBeat(entry);
     setBeatName(entry.name);
     setSavedMsg(existing ? `Updated \u201C${entry.name}\u201D` : `Saved \u201C${entry.name}\u201D`);
     setTimeout(() => setSavedMsg(''), 2500);
@@ -202,7 +203,7 @@ export default function Jam() {
     setShowLoad(false);
   };
   const deleteBeat = (id) => {
-    setMyBeats(list => list.filter(b => b.id !== id));
+    deleteJamBeat(id);
     setConfirmDel(null);
   };
 
@@ -419,7 +420,7 @@ export default function Jam() {
           {/* Name and save the beat on the grid */}
           <div style={{ marginTop: '16px', display: 'flex', gap: '8px', alignItems: 'center' }}>
             <input value={beatName} onChange={e => setBeatName(e.target.value.slice(0, 40))} placeholder="Name this beat"
-              aria-label="Beat name" onKeyDown={e => { if (e.key === 'Enter') saveBeat(); }}
+              aria-label="Beat name" maxLength={40} onKeyDown={e => { if (e.key === 'Enter') saveBeat(); }}
               style={{ flex: 1, minWidth: 0, padding: '8px 12px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--rc-line)', boxSizing: 'border-box',
                 backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }} />
             <button onClick={saveBeat} disabled={!trimmedName || gridEmpty}

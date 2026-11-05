@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { uploadTextFile, listTextFiles, readTextFile } from './DriveUploader';
 import { noteLabel, noteIn } from './Notation';
 import { getScaleNotes } from './FretboardDiagram';
+import { noteEvent } from './UsageCounters';
 
 // ── Shuffle helpers ──────────────────────────────────────────────────────
 
@@ -130,6 +131,16 @@ function detectKey(text) {
     else if (!mode && (t === 'Major' || t === 'Minor')) mode = t;
   }
   return root ? { root, mode: mode || 'Major' } : null;
+}
+
+// How many different keys an idea names (a count only; the text itself is never sent).
+function distinctKeys(text) {
+  const roots = new Set();
+  for (const raw of (text || '').split(',')) {
+    const t = raw.trim().replace('♭', 'b').replace('♯', '#');
+    if (/^[A-G](#|b)?$/.test(t)) roots.add(FLAT_TO_SHARP[t] || t);
+  }
+  return roots.size;
 }
 
 function chordText(degree, ideaSoFar) {
@@ -349,6 +360,7 @@ export default function Randomizer({ accessToken }) {
     spinTimeout.current = setTimeout(() => {
       setSpinning(false);
       setResult(options[idx]);
+      noteEvent('spin');
     }, SPIN_DURATION_MS);
   };
 
@@ -375,6 +387,7 @@ export default function Randomizer({ accessToken }) {
     snapTimeout.current = setTimeout(() => {
       setSnapping(false);
       setResult(category.options[idx]);
+      noteEvent('spin');
     }, SNAP_DURATION_MS);
 
     return newRotation;
@@ -502,6 +515,7 @@ export default function Randomizer({ accessToken }) {
   // Surprise me: pick every wheel's result at random, no spinning to watch.
   // The chord progression wheel is drawn 3–8 times; the rest once each.
   const runSurprise = async () => {
+    noteEvent('surprise');
     clearPendingTimers();
     stopMomentum();
     setSurprisePrompt(false);
@@ -567,6 +581,8 @@ export default function Randomizer({ accessToken }) {
       setStatus(`Saved: ${fileName}`);
       setSavedSets(null);
       ok = true;
+      noteEvent('idea');
+      if (distinctKeys(accumulated) > 1) noteEvent('ideaMultiKey');   // only a count leaves the device
     } catch (err) {
       setStatus('Save failed: ' + err.message);
     }

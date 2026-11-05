@@ -45,21 +45,32 @@ function PrivacyPolicy() {
       </ul>
 
       <h3 style={h3}>What we do collect</h3>
-      <p style={p}>Each time you open the app while signed in, it sends a small summary made only of counts and dates:</p>
+      <p style={p}>Each time you open the app while signed in, it sends a small summary made only of counts, dates and a few device and settings facts:</p>
       <ul style={ul}>
         <li style={li}>Your email address, so we can tell users apart</li>
-        <li style={li}>The date and time you first opened the app, your most recent visit, and how many visits you've made</li>
+        <li style={li}>The date and time you first opened the app, your most recent visit, how many visits you've made, and how many different days you've used it</li>
         <li style={li}>The IP address from your most recent visit, and the country and region it points to</li>
-        <li style={li}>Your device type (for example iPhone or Windows), whether the app is installed on your home screen or open in a browser, and which version of the app you have</li>
+        <li style={li}>Your device type (for example iPhone or Windows), its operating system version, the device model when your browser shares it (on iPhone it's only an estimate from the screen size), your screen size, your browser and its version, your time zone and language, whether the app is installed on your home screen or open in a browser, and which version of the app you have</li>
         <li style={li}>How many recordings are in your library, how many song ideas you've saved, and how many custom drum beats you've saved</li>
+        <li style={li}>How many of your recordings have a key, a tempo or tags filled in (just the numbers, never the keys, tempos or tags themselves)</li>
         <li style={li}>The average length of the recordings you make in the app (a number of seconds, nothing about what's on them)</li>
-        <li style={li}>How many times you've opened each section of the app</li>
+        <li style={li}>How many times you've opened each section, how many times you've used features such as Jam's Play button, Practice's Random button, Key Finder, the Randomizer wheel and Surprise me, and how many song ideas you've saved (including how many of them use more than one key, which is only a number)</li>
+        <li style={li}>How many minutes the app has been open on your screen</li>
+        <li style={li}>Problems: how many recordings failed to upload, how many saves to Drive failed, how many recordings are waiting on your device, and how many unexpected errors happened, with only the general type of the latest error (for example "TypeError"), never its details</li>
+        <li style={li}>Your look-and-feel choices: light or dark appearance, sharps or flats, whether you've changed the note colors (yes or no, not which colors), and your strum speed</li>
       </ul>
 
       <h3 style={h3}>Why we collect it</h3>
       <p style={p}>
         To see whether the app is working, which features people use, and where to spend time improving it, and to spot
         people who are stuck on an old version. We don't sell this information, show ads, or share it with anyone.
+      </p>
+
+      <h3 style={h3}>If you send feedback</h3>
+      <p style={p}>
+        Feedback is optional and only sent when you press Send on the Feedback tab. We keep your star rating, the message you
+        typed, your email address, the country and region of your connection, the date and the app version. Each submission is
+        kept as its own entry.
       </p>
 
       <h3 style={h3}>Where it's kept</h3>
@@ -73,7 +84,7 @@ function PrivacyPolicy() {
       <ul style={ul}>
         <li style={li}>Sign out in Settings to disconnect Riff Catalog from your Google account on that device.</li>
         <li style={li}>Remove Riff Catalog's access any time at myaccount.google.com/permissions.</li>
-        <li style={li}>Ask Justin, who built Riff Catalog, to see or delete the usage row held about you.</li>
+        <li style={li}>Ask Justin, who built Riff Catalog, to see or delete the usage row and any feedback entries held about you.</li>
         <li style={li}>Your recordings are yours. Delete them from Drive whenever you like.</li>
       </ul>
 
@@ -118,7 +129,7 @@ function UserAgreement() {
 
       <h3 style={h3}>5. Usage numbers</h3>
       <p style={p}>
-        By using the app you agree that it records the simple usage numbers described in the Privacy Policy tab.
+        By using the app you agree that it records the simple usage numbers described in the Privacy Policy tab, and that anything you choose to send as feedback may be read and kept by the app's maker.
       </p>
 
       <h3 style={h3}>6. Stopping</h3>
@@ -133,12 +144,82 @@ function UserAgreement() {
   );
 }
 
+
+const ENDPOINT = '/.netlify/functions/log-usage';
+const STAR_FULL = '#f5b301';
+
+function Stars({ value, onChange, disabled }) {
+  const star = (i) => {
+    const fill = value >= i ? 100 : value >= i - 0.5 ? 50 : 0;
+    return (
+      <span key={i} style={{ position: 'relative', width: '44px', height: '44px', display: 'inline-block', fontSize: '40px', lineHeight: '44px', textAlign: 'center' }}>
+        <span aria-hidden style={{ color: 'var(--rc-line)' }}>{'★'}</span>
+        <span aria-hidden style={{ position: 'absolute', left: 0, top: 0, width: `${fill}%`, overflow: 'hidden', whiteSpace: 'nowrap', color: STAR_FULL, textAlign: 'left', paddingLeft: '2px', boxSizing: 'border-box' }}>{'★'}</span>
+        {[i - 0.5, i].map((v, k) => (
+          <button key={v} type="button" disabled={disabled} onClick={() => onChange(v)} aria-label={`${v} star${v === 1 ? '' : 's'}`}
+            style={{ position: 'absolute', top: 0, height: '100%', width: '50%', left: k === 0 ? 0 : '50%', background: 'none', border: 'none', padding: 0, cursor: disabled ? 'default' : 'pointer', opacity: 0 }} />
+        ))}
+      </span>
+    );
+  };
+  return <div role="group" aria-label="Star rating" style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>{[1, 2, 3, 4, 5].map(star)}</div>;
+}
+
+function Feedback({ version, accessToken }) {
+  const [rating, setRating] = useState(0);
+  const [text, setText] = useState('');
+  const [state, setState] = useState({ kind: 'idle', msg: '' });   // idle | sending | sent | error
+  const sending = state.kind === 'sending';
+
+  const send = async () => {
+    if (!rating || sending) return;
+    if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then try again.' }); return; }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) { setState({ kind: 'error', msg: 'You appear to be offline. Your message is still here. Try again when you’re connected.' }); return; }
+    setState({ kind: 'sending', msg: '' });
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'feedback', accessToken, rating, text: text.trim(), version }) });
+      if (res.ok) { setState({ kind: 'sent', msg: 'Thank you! Your feedback was sent.' }); setRating(0); setText(''); return; }
+      setState({ kind: 'error', msg: res.status === 401 ? 'Your Google connection has expired. Reconnect Drive, then try again.' : 'Couldn’t send right now. Your message is still here. Please try again.' });
+    } catch {
+      setState({ kind: 'error', msg: 'Couldn’t send right now. Your message is still here. Please try again.' });
+    }
+  };
+
+  return (
+    <div style={card}>
+      <h3 style={{ ...h3, marginTop: 0 }}>How are we doing?</h3>
+      <p style={p}>Tap a star to rate Riff Catalog out of 5. Tap the left half of a star for a half star.</p>
+      <Stars value={rating} onChange={(v) => { setRating(v); if (state.kind === 'sent') setState({ kind: 'idle', msg: '' }); }} disabled={sending} />
+      <div style={{ textAlign: 'center', fontSize: '15px', fontWeight: '600', margin: '4px 0 14px', minHeight: '20px', color: rating ? 'var(--rc-ink)' : 'var(--rc-ink2)' }}>
+        {rating ? `${rating} out of 5` : 'No rating yet'}
+      </div>
+
+      <label htmlFor="rc-feedback-text" style={{ display: 'block', fontWeight: '600', marginBottom: '6px' }}>Anything you'd like to tell us? (optional)</label>
+      <textarea id="rc-feedback-text" value={text} onChange={(e) => setText(e.target.value.slice(0, 2000))} disabled={sending} rows={5} maxLength={2000}
+        placeholder="What do you like? What could be better? What would you add?"
+        style={{ width: '100%', boxSizing: 'border-box', padding: '10px', fontSize: '16px', fontFamily: 'inherit', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', resize: 'vertical' }} />
+      <div style={{ ...note, textAlign: 'right', margin: '4px 0 10px' }}>{text.length} / 2000</div>
+
+      <div style={{ ...note, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', margin: '0 0 12px', lineHeight: 1.45 }}>
+        <strong>This form is not for technical support.</strong> Messages here are not answered, so please don't use it to report a problem you need fixed. A support option is coming later. Your email, country and region are sent with your feedback.
+      </div>
+
+      <button onClick={send} disabled={!rating || sending}
+        style={{ width: '100%', padding: '12px', fontSize: '16px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: !rating || sending ? 'default' : 'pointer', backgroundColor: !rating || sending ? 'var(--rc-line)' : '#1a73e8', color: !rating || sending ? 'var(--rc-ink2)' : 'white' }}>
+        {sending ? 'Sending…' : 'Send feedback'}
+      </button>
+      <div role="status" aria-live="polite" style={{ marginTop: '10px', fontSize: '14px', fontWeight: '600', color: state.kind === 'error' ? '#d93025' : '#1e8e3e', minHeight: '20px' }}>{state.msg}</div>
+    </div>
+  );
+}
+
 const TABS = [
   { id: 'privacy', label: 'Privacy Policy', Component: PrivacyPolicy },
   { id: 'agreement', label: 'User Agreement', Component: UserAgreement },
+  { id: 'feedback', label: 'Feedback', Component: Feedback },
 ];
 
-export default function About({ version }) {
+export default function About({ version, accessToken }) {
   const [tab, setTab] = useState('privacy');
   const Active = (TABS.find(t => t.id === tab) || TABS[0]).Component;
   return (
@@ -147,7 +228,7 @@ export default function About({ version }) {
         {TABS.map(t => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
             style={{
-              flex: 1, minWidth: '120px', padding: '10px 12px', fontSize: '14px', fontWeight: '600', borderRadius: '10px', cursor: 'pointer',
+              flex: 1, minWidth: 0, padding: '10px 6px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', cursor: 'pointer',
               border: `2px solid ${tab === t.id ? '#1a73e8' : 'var(--rc-line)'}`,
               backgroundColor: tab === t.id ? 'var(--rc-sel)' : 'var(--rc-surface)',
               color: tab === t.id ? '#1a73e8' : 'var(--rc-ink)',
@@ -156,7 +237,7 @@ export default function About({ version }) {
           </button>
         ))}
       </div>
-      <Active />
+      <Active version={version} accessToken={accessToken} />
       {version && <div style={{ marginTop: '12px', fontSize: '12px', color: 'var(--rc-ink2)' }}>Riff Catalog {version}</div>}
     </div>
   );
