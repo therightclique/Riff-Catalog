@@ -114,7 +114,7 @@ function PrivacyPolicy() {
         Contact support (in the Support section of the menu) sends the message you type, along with your email address (so we can reply to you by email), the country and region of your connection, the date
         and the app version. It is only sent when you press Send to support. If you leave "Include technical details" ticked, it also includes your device, system, browser and screen size, whether you're
         online, how many recordings are waiting on your device, and the list of recent problem codes described above (never the console text, your recordings or anything you've written in the app).
-        Each message is kept as its own entry, and we reply by email.
+        Each message is kept as its own entry, and we reply by email. You can also attach up to three screenshots to a message. A screenshot is only sent if you add one and press Send to support. The app shrinks it on your device first, it is stored with our hosting provider (Netlify) where only the app’s owner can open it, and it is deleted automatically after 60 days. Please don’t include anything private in a screenshot.
       </p>
 
       <h3 style={h3}>If you send a diagnostic report</h3>

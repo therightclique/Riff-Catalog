@@ -153,7 +153,7 @@ export async function sendDiagnostic(accessToken, version, note) {
 
 // Support > Contact support. The person's own words, plus (only if they leave the box ticked) the same short technical
 // details as a diagnostic report. 'sent' | 'queued' (saved on this device, goes out automatically) | 'failed'.
-export async function sendSupport(accessToken, version, message, withDetails) {
+export async function sendSupport(accessToken, version, message, withDetails, images = []) {
   let extra = {};
   if (withDetails) {
     const details = await deviceDetails();
@@ -161,7 +161,7 @@ export async function sendSupport(accessToken, version, message, withDetails) {
     const lines = recentProblems().map(p => `${new Date(p.t).toISOString().slice(5, 16).replace('T', ' ')} ${p.area} ${p.code}${p.view ? ' > ' + p.view : ''}${p.n > 1 ? ' x' + p.n : ''}`);
     extra = { device: deviceKind(), installed: isInstalled(), online: navigator.onLine, ...details, pendingClips: pending, problems: lines };
   }
-  return sendOrQueue('support', { version, message: String(message || '').slice(0, 2000), details: !!withDetails, ...extra }, accessToken);
+  return sendOrQueue('support', { version, message: String(message || '').slice(0, 2000), details: !!withDetails, images: images.slice(0, 3), ...extra }, accessToken);
 }
 
 // Owner only: how many support requests are unread. Returns { unread, newest } or null if it couldn't be checked.

@@ -10,6 +10,7 @@
 // The sign-in token is used for the check and then thrown away; it is never stored.
 
 import { createSign } from 'node:crypto';
+import { DAILY, IMG_KEY_RE, IMAGES_PER_MESSAGE, bumpDaily, dailySweep, tooFast, who } from './lib/limits.mjs';
 
 const CLIENT_ID = '495492558072-8ohvj2v3npv2coeq1alndbh0g0lk95s2.apps.googleusercontent.com';
 const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
@@ -75,7 +76,7 @@ const THEMES = ['light', 'dark', 'match device'];
 const IDX = Object.fromEntries(COLS.map((name, i) => [name, i]));
 const TAB_COL = (id) => IDX[`Views: ${TABS.find(([k]) => k === id)[1]}`];
 
-export const _internals = { COLS, TABS, resetBusy: () => { busyUntil = 0; } };
+export const _internals = { COLS, TABS, resetBusy: () => { busyUntil = 0; lastPing.clear(); } };
 
 // ── Google auth for the spreadsheet (service account) ───────────────────
 
@@ -107,7 +108,7 @@ async function serviceToken(creds) {
 
 // ── Who is calling? ─────────────────────────────────────────────────────
 
-async function verifyUser(accessToken) {
+export async function verifyUser(accessToken) {
   // 1) Was this token issued to Riff Catalog, with Drive access, and still valid?
   const infoRes = await fetch(`https://oauth2.googleapis.com/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
   if (!infoRes.ok) return null;
@@ -296,6 +297,7 @@ let sheetInfo = null; // { title, gid } - looked up once per warm instance
 const RETRY_MS = Number(process.env.SHEETS_RETRY_MS ?? 700);
 const RETRIES = 2;
 let busyUntil = 0;
+const lastPing = new Map();
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
 async function sheetsFetch(token, url, init = {}) {
@@ -508,18 +510,20 @@ export async function addDiagnostic({ token, sheetId, email, d, where }) {
 // ── Support requests: a message the person chose to send from Support > Contact support ──
 // One row each, in the "Support" tab. Status starts as "New" (unread); the owner marks it Read from the dashboard
 // or by typing anything other than New in the Status column. The ID in column A is how a request is found again.
-const SUPPORT_COLS = ['ID', 'Date (PT)', 'Email', 'Status', 'Message', 'App version', 'Device', 'OS version', 'Browser', 'Screen', 'Online', 'Offline clips waiting', 'Recent problems', 'Country', 'Region'];
+const SUPPORT_COLS = ['ID', 'Date (PT)', 'Email', 'Status', 'Message', 'App version', 'Device', 'OS version', 'Browser', 'Screen', 'Online', 'Offline clips waiting', 'Recent problems', 'Country', 'Region', 'Screenshots'];
 const SUPPORT_STATUS_COL = SUPPORT_COLS.indexOf('Status');
 const ID_RE = /^S[0-9a-z]{6,20}$/;
 export function cleanSupport(body) {
   const d = cleanDiagnostic(body);
   const message = cleanText(body?.message, 2000);
   const withDetails = body?.details === true;
-  return withDetails ? { ...d, message, details: true } : { message, details: false, version: d.version, lines: [], device: '', os: '', browser: '', screen: '', online: '', pending: null };
+  // Screenshot keys the app got back from the upload step; anything that doesn't look like one is dropped.
+  const images = [...new Set((Array.isArray(body?.images) ? body.images : []).filter(k => typeof k === 'string' && IMG_KEY_RE.test(k)))].slice(0, IMAGES_PER_MESSAGE);
+  return withDetails ? { ...d, message, details: true, images } : { message, details: false, version: d.version, lines: [], device: '', os: '', browser: '', screen: '', online: '', pending: null, images };
 }
 export async function addSupport({ token, sheetId, email, d, where }) {
   const id = 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  await appendRows(token, sheetId, 'Support', SUPPORT_COLS, [[id, ptNow(), email, 'New', d.message, d.version, d.device, d.os, d.browser, d.screen, d.online, d.pending ?? '', d.lines.join('\n'), where.country, where.region]]);
+  await appendRows(token, sheetId, 'Support', SUPPORT_COLS, [[id, ptNow(), email, 'New', d.message, d.version, d.device, d.os, d.browser, d.screen, d.online, d.pending ?? '', d.lines.join('\n'), where.country, where.region, (d.images || []).join(',')]]);
   return id;
 }
 const isUnread = (status) => { const t = String(status ?? '').trim().toLowerCase(); return t === '' || t === 'new'; };
@@ -551,7 +555,7 @@ export async function markSupportRead({ token, sheetId, ids, all }) {
 
 // ── Owner dashboard: only the owner's email(s), set in OWNER_EMAIL, may read the sheets back ──
 
-const isOwner = (email) => String(process.env.OWNER_EMAIL || '').toLowerCase().split(/[,\s;]+/).filter(Boolean).includes(email);
+export const isOwner = (email) => String(process.env.OWNER_EMAIL || '').toLowerCase().split(/[,\s;]+/).filter(Boolean).includes(email);
 
 async function readTab(token, sheetId, name, maxRows) {
   const found = name === 'Stats' ? { title: (await getSheetInfo(token, sheetId)).title } : await findTab(token, sheetId, name);
@@ -663,6 +667,9 @@ export default async (req, context) => {
     return reply(400, { ok: false, error: 'bad request' });
   }
 
+  // A single network address can't flood the function (each running copy of the server counts for itself).
+  if (tooFast(context?.ip)) return busy(60);
+
   // While Google is refusing requests, routine reports are turned away early (the app keeps its counts and tries
   // again later). Feedback, problem reports and the dashboard still go through.
   if (!body.kind && Date.now() < busyUntil) return busy(Math.ceil((busyUntil - Date.now()) / 1000) + 30);
@@ -670,6 +677,21 @@ export default async (req, context) => {
   try {
     const email = await verifyUser(body.accessToken);
     if (!email) return reply(401, { ok: false, error: 'not verified' });
+
+    // Daily allowances per person for the things that write a new row each time.
+    if (body.kind === 'support' || body.kind === 'feedback' || body.kind === 'diagnostic') {
+      const a = await bumpDaily(`${body.kind}:${who(email)}`, DAILY[body.kind]);
+      if (!a.ok) return reply(422, { ok: false, limit: true, error: 'daily limit' });
+      const sweep = dailySweep();   // once a day: removes old screenshots and counters
+      context?.waitUntil?.(sweep);
+    }
+    // Routine usage reports: at most one every few seconds per person (the app sends far fewer).
+    if (!body.kind) {
+      const now = Date.now(), floor = Number(process.env.PING_FLOOR_MS ?? 10000), last = lastPing.get(email) || 0;
+      if (now - last < floor) return reply(200, { ok: true, skipped: true });
+      lastPing.set(email, now);
+      if (lastPing.size > 5000) lastPing.clear();
+    }
 
     const geo = context?.geo || {};
     const where = {

@@ -73,6 +73,14 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Screenshots in Support',
+        items: [
+          'Contact support now has an Add a screenshot button. You can attach up to 3 pictures. They\u2019re shrunk on your device before sending, only the app\u2019s owner can see them, and they\u2019re deleted after 60 days',
+          'There are now daily limits so nothing can be overused: a few screenshots, support messages, feedback entries and problem reports per person per day. Normal use will never reach them',
+          'Owner: support requests in the Dashboard show a View screenshots button',
+        ],
+      },
+      {
         title: 'Support section',
         items: [
           'The Feedback item in the menu is now Support. It has two buttons at the top: Contact support (ask for help or a question, and get a reply by email) and Give feedback (the star rating and ideas, as before)',

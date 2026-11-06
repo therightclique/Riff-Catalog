@@ -36,11 +36,17 @@ export function noteSendSuccess() { try { localStorage.removeItem(BACKOFF_KEY); 
 // 401/403 mean the sign-in needs refreshing, so the message waits for a fresh one.
 const retryable = (status) => status === 0 || status === 401 || status === 403 || status === 408 || status === 429 || status >= 500;
 
+let lastProblem = '';
+// Why the most recent send was refused: 'limit' means the person has sent the most allowed in a day. Otherwise ''.
+export const lastSendProblem = () => lastProblem;
+
 async function post(kind, payload, accessToken) {
+  lastProblem = '';
   try {
     const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, kind, accessToken }) });
     let retryAfter = 0;
     try { retryAfter = Number(res.headers.get('retry-after')) || 0; } catch { /* no header */ }
+    if (!res.ok) { try { const j = await res.clone().json(); if (j?.limit) lastProblem = 'limit'; } catch { /* no details */ } }
     return { ok: res.ok, status: res.status, retryAfter };
   } catch { return { ok: false, status: 0, retryAfter: 0 }; }
 }

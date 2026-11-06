@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { fetchScreenshot } from './Screenshots';
 
 // Owner-only dashboard. The numbers come from the owner's "Riff Catalog Usage" spreadsheet through
 // the log-usage function, which only answers the email set in the OWNER_EMAIL setting on Netlify.
@@ -88,8 +89,35 @@ const FEATURES = [['Jam plays', 'Jam plays'], ['Practice picks', 'Practice picks
 const isNewStatus = (r) => { const t = String(r['Status'] ?? '').trim().toLowerCase(); return t === '' || t === 'new'; };
 
 // One support request. Owner view shows who sent it and a Mark read button; a person's own view shows just their message.
-function SupportItem({ r, i, owner, onPick, onRead, busy }) {
+// The screenshots attached to a support request. The owner taps to load them (nothing is fetched until then);
+// a person looking at their own request just sees how many they attached.
+function Screenshots({ keys, accessToken, owner }) {
+  const [st, setSt] = useState({ kind: 'idle', urls: [] });
+  const urlsRef = useRef([]);
+  useEffect(() => () => { urlsRef.current.forEach(u => u && URL.revokeObjectURL(u)); }, []);
+  if (!keys.length) return null;
+  if (!owner) return <div style={sub}>{'\u{1F4CE}'} {keys.length} screenshot{keys.length === 1 ? '' : 's'} attached</div>;
+  const load = async () => {
+    setSt({ kind: 'loading', urls: [] });
+    const urls = await Promise.all(keys.map(k => fetchScreenshot(k, accessToken)));
+    urlsRef.current = urls;
+    setSt({ kind: 'ready', urls });
+  };
+  if (st.kind === 'idle' || st.kind === 'loading') {
+    return <button disabled={st.kind === 'loading'} onClick={load} style={{ marginTop: '4px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>{st.kind === 'loading' ? 'Loading…' : `View ${keys.length} screenshot${keys.length === 1 ? '' : 's'}`}</button>;
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '4px' }}>
+      {st.urls.map((u, i) => u
+        ? <a key={i} href={u} target="_blank" rel="noopener noreferrer"><img src={u} alt={`Screenshot ${i + 1}`} style={{ maxWidth: '100%', maxHeight: '420px', borderRadius: '8px', border: '1px solid var(--rc-line)', display: 'block' }} /></a>
+        : <div key={i} style={sub}>Screenshot {i + 1} is no longer available (pictures are removed after 60 days).</div>)}
+    </div>
+  );
+}
+
+function SupportItem({ r, i, owner, onPick, onRead, busy, accessToken }) {
   const unread = isNewStatus(r);
+  const shotKeys = String(r['Screenshots'] || '').split(',').map(x => x.trim()).filter(Boolean);
   return (
     <div style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -103,6 +131,7 @@ function SupportItem({ r, i, owner, onPick, onRead, busy }) {
       </div>
       <div style={{ whiteSpace: 'pre-wrap', margin: '3px 0' }}>{r['Message']}</div>
       {String(r['Recent problems'] || '').trim() && <div style={{ fontFamily: '"Courier New", monospace', fontSize: '11px', whiteSpace: 'pre-wrap' }}>{r['Recent problems']}</div>}
+      <Screenshots keys={shotKeys} accessToken={accessToken} owner={owner} />
       {owner && unread && <button disabled={busy} onClick={() => onRead([String(r['ID'])], false)} style={{ marginTop: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Mark read</button>}
     </div>
   );
@@ -317,7 +346,7 @@ function OwnerView({ data, version, accessToken }) {
             {m.support.length > 0 && <div style={{ ...sub, marginBottom: '8px' }}>Reply by email to the address shown. Unread first.</div>}
             {readErr && <div role="alert" style={{ fontSize: '13px', color: '#d93025', fontWeight: '600', marginBottom: '8px' }}>{readErr}</div>}
             {[...m.unreadSupport, ...m.support.filter(r => !isNewStatus(r))].slice(0, 25).map((r, i) => (
-              <SupportItem key={String(r['ID']) || i} r={r} i={i} owner onPick={setPicked} onRead={markRead} busy={readBusy} />
+              <SupportItem key={String(r['ID']) || i} r={r} i={i} owner onPick={setPicked} onRead={markRead} busy={readBusy} accessToken={accessToken} />
             ))}
             {links.Support && <div style={{ marginTop: '10px', fontSize: '13px' }}><a href={links.Support} target="_blank" rel="noopener noreferrer" style={{ color: BLUE }}>Open Support tab {'\u2197'}</a></div>}
           </div>

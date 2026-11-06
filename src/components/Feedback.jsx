@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useRef, useState, useEffect } from 'react';
 import { noteMilestone, sendSupport, recentProblems } from './UsageLog';
-import { sendOrQueue } from './UsageOutbox';
+import { sendOrQueue, lastSendProblem } from './UsageOutbox';
+import { MAX_SHOTS, REASON_TEXT, shrinkImage, uploadScreenshot } from './Screenshots';
 
 // Support section (menu item). Two tabs: Contact support (a message to the app's owner, answered by email) and Give feedback
 // (a star rating and ideas, not answered individually).
@@ -50,7 +51,7 @@ function FeedbackForm({ version, accessToken }) {
         setState({ kind: 'sent', msg: out === 'sent' ? 'Thank you! Your feedback was sent.' : 'Thank you! Your feedback is saved on this device and will be sent automatically as soon as the server is reachable.' });
         noteMilestone('feedback'); setRating(0); setText(''); setLiked(''); setDisliked(''); setIdeas(''); return;
       }
-      setState({ kind: 'error', msg: 'Couldn’t send. If your Google connection has expired, reconnect Drive and try again. Your message is still here.' });
+      setState({ kind: 'error', msg: lastSendProblem() === 'limit' ? 'You\u2019ve sent the most feedback allowed in one day. Please try again tomorrow. Your message is still here.' : 'Couldn’t send. If your Google connection has expired, reconnect Drive and try again. Your message is still here.' });
     } catch {
       setState({ kind: 'error', msg: 'Couldn’t send right now. Your message is still here. Please try again.' });
     }
@@ -99,18 +100,54 @@ function ContactSupport({ version, accessToken, email }) {
   const [state, setState] = useState({ kind: 'idle', msg: '' });   // idle | sending | sent | error
   const sending = state.kind === 'sending';
   const ready = what.trim().length >= 3;
+  // Screenshots: { id, url (preview), blob (shrunk JPEG), key (once uploaded) }
+  const [shots, setShots] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const fileRef = useRef(null);
+  const shotsRef = useRef(shots);
+  useEffect(() => { shotsRef.current = shots; }, [shots]);
+  useEffect(() => () => { shotsRef.current.forEach(x => URL.revokeObjectURL(x.url)); }, []);
+
+  const addFiles = async (fileList) => {
+    const files = [...(fileList || [])];
+    const room = MAX_SHOTS - shots.length;
+    if (!files.length || room <= 0) return;
+    setAdding(true);
+    let failed = 0;
+    const made = [];
+    for (const f of files) {
+      if (made.length >= room) break;   // a file that can't be used doesn't take up a place
+      try { const blob = await shrinkImage(f); made.push({ id: `${Date.now()}${Math.random().toString(36).slice(2, 6)}`, blob, url: URL.createObjectURL(blob), key: null }); }
+      catch { failed++; }
+    }
+    if (made.length) setShots(prev => [...prev, ...made].slice(0, MAX_SHOTS));
+    setAdding(false);
+    setState(failed ? { kind: 'error', msg: failed === 1 ? 'That file couldn\u2019t be used as a screenshot. Pictures only, please.' : `${failed} files couldn\u2019t be used as screenshots. Pictures only, please.` } : { kind: 'idle', msg: '' });
+    if (fileRef.current) fileRef.current.value = '';
+  };
+  const removeShot = (id) => setShots(prev => { const gone = prev.find(x => x.id === id); if (gone) URL.revokeObjectURL(gone.url); return prev.filter(x => x.id !== id); });
 
   const send = async () => {
     if (!ready || sending) return;
     if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then try again.' }); return; }
     setState({ kind: 'sending', msg: '' });
     try {
-      const out = await sendSupport(accessToken, version, what.trim(), details);
+      // Pictures go up first, one at a time; one that is already up is not sent again if the person tries a second time.
+      const keys = [];
+      for (const sh of shots) {
+        if (sh.key) { keys.push(sh.key); continue; }
+        const up = await uploadScreenshot(sh.blob, accessToken);
+        if (!up.ok) { setState({ kind: 'error', msg: `${REASON_TEXT[up.reason] || REASON_TEXT.failed} Your message is still here.` }); return; }
+        keys.push(up.key);
+        setShots(prev => prev.map(x => (x.id === sh.id ? { ...x, key: up.key } : x)));
+      }
+      const out = await sendSupport(accessToken, version, what.trim(), details, keys);
       if (out !== 'failed') {
         setState({ kind: 'sent', msg: out === 'sent' ? 'Thank you! Your message was sent.' + (email ? ` You\u2019ll get a reply by email at ${email}.` : '') : 'Thank you! Your message is saved on this device and will be sent automatically as soon as the server is reachable.' });
+        shots.forEach(x => URL.revokeObjectURL(x.url)); setShots([]);
         setWhat(''); return;
       }
-      setState({ kind: 'error', msg: 'Couldn\u2019t send. If your Google connection has expired, reconnect Drive and try again. Your message is still here.' });
+      setState({ kind: 'error', msg: lastSendProblem() === 'limit' ? 'You\u2019ve sent the most messages allowed in one day. Please try again tomorrow. Your message is still here.' : 'Couldn\u2019t send. If your Google connection has expired, reconnect Drive and try again. Your message is still here.' });
     } catch { setState({ kind: 'error', msg: 'Couldn\u2019t send right now. Your message is still here. Please try again.' }); }
   };
 
@@ -122,6 +159,24 @@ function ContactSupport({ version, accessToken, email }) {
       <textarea id="rc-support-msg" value={what} onChange={(e) => { setWhat(e.target.value.slice(0, 2000)); if (state.kind === 'sent') setState({ kind: 'idle', msg: '' }); }} disabled={sending} rows={5} maxLength={2000}
         placeholder="For example: I tapped Save on a recording and it never finished."
         style={{ width: '100%', boxSizing: 'border-box', padding: '10px', fontSize: '16px', fontFamily: 'inherit', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', resize: 'vertical', marginBottom: '12px' }} />
+
+      <div style={{ marginBottom: '12px' }}>
+        <input ref={fileRef} id="rc-support-shot" type="file" accept="image/*" multiple hidden onChange={(e) => addFiles(e.target.files)} />
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={sending || adding || shots.length >= MAX_SHOTS}
+            style={{ padding: '9px 14px', fontSize: '14px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', cursor: sending || adding || shots.length >= MAX_SHOTS ? 'default' : 'pointer', opacity: shots.length >= MAX_SHOTS ? 0.6 : 1 }}>
+            {adding ? 'Preparing…' : 'Add a screenshot'} <span style={{ fontWeight: '400', color: 'var(--rc-ink2)' }}>(optional)</span>
+          </button>
+          {shots.map((x, i) => (
+            <span key={x.id} style={{ position: 'relative', display: 'inline-block' }}>
+              <img src={x.url} alt={`Screenshot ${i + 1}`} style={{ width: '64px', height: '64px', objectFit: 'cover', borderRadius: '8px', border: '1px solid var(--rc-line)', display: 'block' }} />
+              {!sending && <button type="button" onClick={() => removeShot(x.id)} aria-label={`Remove screenshot ${i + 1}`}
+                style={{ position: 'absolute', top: '-8px', right: '-8px', width: '24px', height: '24px', borderRadius: '50%', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-card)', color: 'var(--rc-ink)', cursor: 'pointer', fontSize: '14px', lineHeight: 1, padding: 0 }}>{'\u00D7'}</button>}
+            </span>
+          ))}
+        </div>
+        <div style={{ ...note, margin: '6px 0 0' }}>Up to {MAX_SHOTS} pictures. They&rsquo;re shrunk before sending and only the app&rsquo;s owner can see them. Please don&rsquo;t include anything private.</div>
+      </div>
 
       <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '10px', cursor: 'pointer' }}>
         <input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} disabled={sending} style={{ width: '20px', height: '20px', marginTop: '1px', flex: '0 0 auto' }} />
