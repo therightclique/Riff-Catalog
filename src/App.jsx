@@ -17,6 +17,7 @@ import About from './components/About';
 import Dashboard from './components/Dashboard';
 import Feedback from './components/Feedback';
 import ReviewPlayer from './components/ReviewPlayer';
+import ShareButton from './components/ShareButton';
 import UpdateBanner from './components/UpdateBanner';
 import { SignInBanner, SignInGate } from './components/SignIn';
 import { reportUsage, fetchSupportUnread, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
@@ -1071,6 +1072,7 @@ function App() {
 
                   {/* Listen to the take before saving or discarding it */}
                   <ReviewPlayer blob={pendingRecording.blob} disabled={uploading} />
+                  <ShareButton getBlob={async () => pendingRecording.blob} name={clipName.trim()} disabled={uploading} />
 
                   {/* Duplicate warning */}
                   {duplicateWarning && (

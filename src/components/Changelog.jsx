@@ -80,6 +80,13 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Share / Export',
+        items: [
+          'New \u201CShare / Export\u201D button on the \u201CRecording complete\u201D screen. Send the take to another app (Messages, email, Files, Dropbox, OneDrive and more) or save it as an audio file, without saving to Google Drive first',
+          'Every clip in your Library has a share button (\ud83d\udce4) too, including clips still waiting on your device. If your device has no share menu, the clip is downloaded as an audio file instead',
+        ],
+      },
+      {
         title: 'Saving clips is more dependable',
         items: [
           'Fixed: saving a recording could get stuck on \u201CChecking\u2026\u201D forever. This affected the last few updates. It is fixed',

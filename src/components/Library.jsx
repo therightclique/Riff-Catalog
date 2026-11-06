@@ -4,6 +4,7 @@ import { fetchClips, getAudioUrl, trashFile, renameFile } from './DriveLibrary';
 import { loadMetadata, loadAllMetadata, listSidecars, saveMetadata } from './MetadataService';
 import { listTextFiles, readTextFile } from './DriveUploader';
 import { getPending, pendingToBlob } from './OfflineStore';
+import ShareButton from './ShareButton';
 import MetadataEditor from './MetadataEditor';
 import { analyzeAudio, ANALYZER_VERSION } from './AudioAnalyzer';
 import FilterBar from './FilterBar';
@@ -403,6 +404,20 @@ function Library({
     a.href = url;
     a.download = clip.name;
     a.click();
+  };
+
+  // Audio for Share / Export: Drive clips are fetched when asked for; clips still on this device come from local storage.
+  const getClipBlob = async (clip) => {
+    if (clip.local) {
+      const rec = await getPending(clip.id);
+      return rec ? pendingToBlob(rec) : null;
+    }
+    let url = audioUrls[clip.id];
+    if (!url) {
+      url = await getAudioUrl(accessToken, clip.id);
+      setAudioUrls(prev => ({ ...prev, [clip.id]: url }));
+    }
+    return (await fetch(url)).blob();
   };
 
   const handleExpand = async (clip) => {
@@ -860,6 +875,7 @@ function Library({
                   <div style={{ fontSize: '11px', color: 'var(--rc-orange2-ink)' }}>Audio is already on Drive — finishing up</div>
                 )}
               </div>
+              <ShareButton compact name={rec.name} getBlob={() => getClipBlob({ id: rec.id, local: true })} />
               <button
                 onClick={() => onSyncPending?.([rec.id])}
                 disabled={disabled}
@@ -1128,6 +1144,7 @@ function Library({
               )}
             </div>
             <button onClick={(e) => { e.stopPropagation(); startRename(clip); }} style={renameBtnStyle} title="Rename">✏️</button>
+            <ShareButton compact name={clip.name} getBlob={() => getClipBlob(clip)} />
             <button onClick={() => handleExpand(clip)} style={{ ...renameBtnStyle, fontSize: '16px' }}>
               {expandedId === clip.id ? '▲' : '▼'}
             </button>
