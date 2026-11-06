@@ -510,7 +510,12 @@ export async function addDiagnostic({ token, sheetId, email, d, where }) {
 // ── Support requests: a message the person chose to send from Support > Contact support ──
 // One row each, in the "Support" tab. Status starts as "New" (unread); the owner marks it Read from the dashboard
 // or by typing anything other than New in the Status column. The ID in column A is how a request is found again.
-const SUPPORT_COLS = ['ID', 'Date (PT)', 'Email', 'Status', 'Message', 'App version', 'Device', 'OS version', 'Browser', 'Screen', 'Online', 'Offline clips waiting', 'Recent problems', 'Country', 'Region', 'Screenshots'];
+const SUPPORT_COLS = ['ID', 'Date (PT)', 'Email', 'Status', 'Message', 'App version', 'Device', 'OS version', 'Browser', 'Screen', 'Online', 'Offline clips waiting', 'Recent problems', 'Country', 'Region', 'Screenshots', 'Tags', 'Archived'];
+// Tags the owner can put on a request (people see them on their own Dashboard but can't change them). Stored in the Tags
+// column as a comma-separated list. "Archived" is "Yes" or empty; archiving only hides a request from the dashboard's main list.
+export const SUPPORT_TAGS = ['Bug', 'Feature request', 'Question', 'In progress', 'On hold', 'Needs more info', 'Resolved', 'Do not fix', 'Duplicate'];
+const SUPPORT_TAGS_COL = SUPPORT_COLS.indexOf('Tags');
+const SUPPORT_ARCHIVED_COL = SUPPORT_COLS.indexOf('Archived');
 const SUPPORT_STATUS_COL = SUPPORT_COLS.indexOf('Status');
 const ID_RE = /^S[0-9a-z]{6,20}$/;
 export function cleanSupport(body) {
@@ -523,7 +528,7 @@ export function cleanSupport(body) {
 }
 export async function addSupport({ token, sheetId, email, d, where }) {
   const id = 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-  await appendRows(token, sheetId, 'Support', SUPPORT_COLS, [[id, ptNow(), email, 'New', d.message, d.version, d.device, d.os, d.browser, d.screen, d.online, d.pending ?? '', d.lines.join('\n'), where.country, where.region, (d.images || []).join(',')]]);
+  await appendRows(token, sheetId, 'Support', SUPPORT_COLS, [[id, ptNow(), email, 'New', d.message, d.version, d.device, d.os, d.browser, d.screen, d.online, d.pending ?? '', d.lines.join('\n'), where.country, where.region, (d.images || []).join(','), '', '']]);
   return id;
 }
 const isUnread = (status) => { const t = String(status ?? '').trim().toLowerCase(); return t === '' || t === 'new'; };
@@ -551,6 +556,60 @@ export async function markSupportRead({ token, sheetId, ids, all }) {
     await sheetsFetch(token, rangeUrl(sheetId, found.title, `D${n}`, '?valueInputOption=RAW'), { method: 'PUT', body: JSON.stringify({ values: [['Read']] }) });
   }
   return hits.length;
+}
+
+// Keeps only tags from the allowed list (any spelling of case), once each, in the list's own order.
+export function cleanTags(list) {
+  const want = new Set((Array.isArray(list) ? list : []).filter(x => typeof x === 'string').map(x => x.trim().toLowerCase()));
+  return SUPPORT_TAGS.filter(t => want.has(t.toLowerCase()));
+}
+const isArchived = (v) => String(v ?? '').trim().toLowerCase() === 'yes';
+
+// The owner changes a request's tags and/or archives it. Only the fields given are changed. Archiving also marks an
+// unread request Read, so it never leaves a "new" count behind. Returns what the row now holds, or null if no such request.
+export async function updateSupport({ token, sheetId, id, tags, archived }) {
+  const rid = String(id || '').trim();
+  if (!ID_RE.test(rid)) return null;
+  const title = await getTab(token, sheetId, 'Support', SUPPORT_COLS);   // makes sure the Tags and Archived headings exist
+  const body = await sheetsFetch(token, rangeUrl(sheetId, title, 'A2:R20000'));
+  const rows = body.values || [];
+  const at = rows.findIndex(r => String(r[0] || '').trim() === rid);
+  if (at < 0) return null;
+  const n = at + 2, row = rows[at];
+  const out = { id: rid, tags: String(row[SUPPORT_TAGS_COL] || ''), archived: isArchived(row[SUPPORT_ARCHIVED_COL]), status: String(row[SUPPORT_STATUS_COL] || '') };
+  const put = (col, value) => sheetsFetch(token, rangeUrl(sheetId, title, `${colLetter(col)}${n}`, '?valueInputOption=RAW'), { method: 'PUT', body: JSON.stringify({ values: [[value]] }) });
+  if (Array.isArray(tags)) { out.tags = cleanTags(tags).join(','); await put(SUPPORT_TAGS_COL, out.tags); }
+  if (typeof archived === 'boolean') {
+    out.archived = archived; await put(SUPPORT_ARCHIVED_COL, archived ? 'Yes' : '');
+    if (archived && isUnread(out.status)) { out.status = 'Read'; await put(SUPPORT_STATUS_COL, 'Read'); }
+  }
+  return out;
+}
+
+// Every support request ever sent (archived or not), oldest first, for the owner's "View all support requests" page.
+// The page searches and filters these in the browser as the owner types, so they are sent in one go. Newest 5000 at most.
+export const SUPPORT_ALL_MAX = 5000;
+const SUPPORT_ALL_COLS = ['ID', 'Date (PT)', 'Email', 'Status', 'Message', 'App version', 'Device', 'OS version', 'Country', 'Region', 'Recent problems', 'Screenshots', 'Tags', 'Archived'];
+export async function supportAll({ token, sheetId }) {
+  const found = await findTab(token, sheetId, 'Support');
+  if (!found) return { columns: SUPPORT_ALL_COLS, rows: [], total: 0 };
+  const body = await sheetsFetch(token, rangeUrl(sheetId, found.title, 'A1:R20000'));
+  const all = body.values || [];
+  const head = (all[0] || []).map(h => String(h || '').trim());
+  const idx = SUPPORT_ALL_COLS.map(c => head.indexOf(c));
+  const data = all.slice(1).filter(r => Array.isArray(r) && String(r[0] || '').trim());
+  const rows = data.slice(-SUPPORT_ALL_MAX).map(r => idx.map(i => (i >= 0 ? String(r[i] ?? '') : '')));
+  return { columns: SUPPORT_ALL_COLS, rows, total: data.length };
+}
+
+// Dashboard main list: the header plus the newest `max` requests that aren't archived.
+export function activeSupport(rows, max = 200) {
+  if (!Array.isArray(rows) || rows.length === 0) return [];
+  const head = rows[0] || [];
+  const col = head.findIndex(h => String(h || '').trim() === 'Archived');
+  const body = rows.slice(1).filter(r => Array.isArray(r) && String(r[0] || '').trim());
+  const open = col < 0 ? body : body.filter(r => !isArchived(r[col]));
+  return [head, ...open.slice(-max)];
 }
 
 // ── Owner dashboard: only the owner's email(s), set in OWNER_EMAIL, may read the sheets back ──
@@ -600,10 +659,15 @@ export async function personData({ token, sheetId, target }) {
 export async function dashboardData({ token, sheetId }) {
   const [people, feedback, errors, history, diagnostics, support] = await Promise.all([
     sortedPeople(token, sheetId), readTab(token, sheetId, 'Feedback', 500), readTab(token, sheetId, 'Errors', 500),
-    readTab(token, sheetId, 'History', 5000), readTab(token, sheetId, 'Diagnostics', 100), readTab(token, sheetId, 'Support', 200),
+    readTab(token, sheetId, 'History', 5000), readTab(token, sheetId, 'Diagnostics', 100), readTab(token, sheetId, 'Support', SUPPORT_ALL_MAX),
   ]);
   const stats = [people.head, ...people.body.slice(0, STATS_WINDOW)];
-  const totals = { people: people.body.length, window: Math.min(people.body.length, STATS_WINDOW) };
+  const supCol = (support[0] || []).findIndex(h => String(h || '').trim() === 'Archived');
+  const supBody = support.slice(1).filter(r => Array.isArray(r) && String(r[0] || '').trim());
+  const totals = {
+    people: people.body.length, window: Math.min(people.body.length, STATS_WINDOW),
+    supportAll: supBody.length, supportArchived: supCol < 0 ? 0 : supBody.filter(r => isArchived(r[supCol])).length,
+  };
   // Links to the spreadsheet and its tabs, for the owner's "Needs attention" list.
   const info = await getSheetInfo(token, sheetId);
   const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/edit`;
@@ -612,7 +676,7 @@ export async function dashboardData({ token, sheetId }) {
     const t = name === 'Stats' ? { sheetId: info.gid } : info.tabs.find(x => String(x.title).trim().toLowerCase() === name.toLowerCase());
     if (t && Number.isInteger(t.sheetId)) sheetLinks[name] = `${base}#gid=${t.sheetId}`;
   }
-  return { stats, totals, feedback, errors, history, diagnostics, support, sheetLinks, generated: ptNow() };
+  return { stats, totals, feedback, errors, history, diagnostics, support: activeSupport(support), sheetLinks, generated: ptNow() };
 }
 
 // ── A person's own numbers: only rows whose Email is the verified caller's email, filtered here before anything is sent ──
@@ -718,6 +782,16 @@ export default async (req, context) => {
       if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
       const marked = await markSupportRead({ token, sheetId, ids: body.ids, all: body.all });
       return reply(200, { ok: true, marked, ...(await supportUnread({ token, sheetId })) });
+    }
+    if (body.kind === 'supportupdate') {   // owner only: tag and/or archive one request
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      const done = await updateSupport({ token, sheetId, id: body.id, tags: body.tags, archived: body.archived });
+      if (!done) return reply(404, { ok: false, error: 'no such request' });
+      return reply(200, { ok: true, ...done, ...(await supportUnread({ token, sheetId })) });
+    }
+    if (body.kind === 'supportall') {   // owner only: every request, for the "View all support requests" page
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      return reply(200, { ok: true, ...(await supportAll({ token, sheetId })) });
     }
     if (body.kind === 'people') {
       if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });

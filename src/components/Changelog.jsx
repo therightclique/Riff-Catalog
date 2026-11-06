@@ -7,6 +7,15 @@ const CHANGELOG = [
     version: '2.2',
     entries: [
       {
+        title: 'Support requests: tags, archive and search',
+        items: [
+          'Owner Dashboard: each support request can now be tagged (Bug, Feature request, Question, In progress, On hold, Needs more info, Resolved, Do not fix, Duplicate) and archived. Archived requests no longer show on the Dashboard\u2019s main list',
+          'The tag filter at the top of the Support requests list shows only requests with the tags you pick',
+          'New \u201CView all support requests\u201D page lists every request, archived or not. Search as you type (two or more letters) by email address, words in the message or tag, and narrow by Today, Last 7 days, Last month, Last 90 days or Last year',
+          'Everyone: your own support requests on your Dashboard now show any tags the owner added, so you can see where a request stands. Only the owner can change tags, and you can now show all of your requests, not just the latest 10',
+        ],
+      },
+      {
         title: 'More drum beats in Jam',
         items: [
           'Ten new beats: skate punk, fast punk, hardcore gallop, D-beat, thrash metal and blast beat, plus beats in other time signatures: a rock waltz in 3/4, a 6/8 ballad, 7/8 (2-2-3) and 5/4 (3+2). Each beat now shows its own time signature',

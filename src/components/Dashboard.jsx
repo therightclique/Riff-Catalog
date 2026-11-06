@@ -115,13 +115,35 @@ function Screenshots({ keys, accessToken, owner }) {
   );
 }
 
-function SupportItem({ r, i, owner, onPick, onRead, busy, accessToken }) {
+// The tags the owner can put on a support request. The same list is checked again on the server.
+const SUPPORT_TAGS = ['Bug', 'Feature request', 'Question', 'In progress', 'On hold', 'Needs more info', 'Resolved', 'Do not fix', 'Duplicate'];
+const TAG_DOT = { 'Bug': '#d93025', 'Feature request': '#1a73e8', 'Question': '#8e24aa', 'In progress': '#f9ab00', 'On hold': '#e8710a', 'Needs more info': '#12a4af', 'Resolved': '#1e8e3e', 'Do not fix': '#80868b', 'Duplicate': '#80868b' };
+const tagsOf = (r) => String(r['Tags'] || '').split(',').map(x => x.trim()).filter(x => SUPPORT_TAGS.includes(x));
+const isArchivedRow = (r) => String(r['Archived'] || '').trim().toLowerCase() === 'yes';
+const withTags = (r, list) => ({ ...r, Tags: SUPPORT_TAGS.filter(t => list.includes(t)).join(',') });
+const smallBtn = { padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' };
+
+// A tag is always a word with a small colored dot, so it never depends on color alone.
+function TagChip({ tag, on, onClick, count, pressed }) {
+  const inner = (<><span aria-hidden="true" style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: TAG_DOT[tag] || '#80868b', flex: '0 0 auto' }} />{tag}{count !== undefined && <span style={{ color: 'var(--rc-ink2)', fontWeight: '500' }}>{count}</span>}</>);
+  const base = { display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '3px 9px', fontSize: '12px', fontWeight: '600', borderRadius: '999px', border: `1px solid ${on ? 'var(--rc-ink)' : 'var(--rc-line)'}`, backgroundColor: on ? 'var(--rc-surface)' : 'transparent', color: 'var(--rc-ink)', lineHeight: 1.4 };
+  if (!onClick) return <span style={base}>{inner}</span>;
+  return <button type="button" onClick={onClick} aria-pressed={pressed ?? on} style={{ ...base, cursor: 'pointer', fontFamily: 'inherit', padding: '5px 10px' }}>{inner}</button>;
+}
+
+// One support request. The owner sees who sent it, can tag and archive it, and mark it read. A person's own view shows
+// their message and the tags the owner gave it, but can't change them.
+function SupportItem({ r, i, owner, onPick, onRead, busy, accessToken, onTags, onArchive, searchHit }) {
   const unread = isNewStatus(r);
   const shotKeys = String(r['Screenshots'] || '').split(',').map(x => x.trim()).filter(Boolean);
+  const [editing, setEditing] = useState(false);
+  const tags = tagsOf(r);
+  const archived = isArchivedRow(r);
   return (
     <div style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
         {owner && unread && <span style={{ backgroundColor: '#d93025', color: 'white', fontSize: '11px', fontWeight: '700', padding: '1px 7px', borderRadius: '9px' }}>NEW</span>}
+        {owner && archived && <span style={{ border: '1px solid var(--rc-line)', fontSize: '11px', fontWeight: '700', padding: '1px 7px', borderRadius: '9px', color: 'var(--rc-ink2)' }}>ARCHIVED</span>}
         {!owner && <span style={{ ...sub, fontWeight: '600' }}>{unread ? 'Waiting' : String(r['Status'] || 'Read')}</span>}
         <span style={sub}>
           {String(r['Date (PT)']).slice(0, 16)}
@@ -129,11 +151,154 @@ function SupportItem({ r, i, owner, onPick, onRead, busy, accessToken }) {
           {r['App version'] ? ` · v${r['App version']}` : ''}{r['Device'] ? ` · ${r['Device']} ${r['OS version'] || ''}` : ''}{owner && r['Country'] ? ` · ${r['Country']} ${r['Region'] || ''}` : ''}
         </span>
       </div>
+      {tags.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '5px 0 2px' }} aria-label={owner ? 'Tags' : 'Tags added by the app’s owner'}>
+          {tags.map(t => <TagChip key={t} tag={t} />)}
+        </div>
+      )}
       <div style={{ whiteSpace: 'pre-wrap', margin: '3px 0' }}>{r['Message']}</div>
       {String(r['Recent problems'] || '').trim() && <div style={{ fontFamily: '"Courier New", monospace', fontSize: '11px', whiteSpace: 'pre-wrap' }}>{r['Recent problems']}</div>}
       <Screenshots keys={shotKeys} accessToken={accessToken} owner={owner} />
-      {owner && unread && <button disabled={busy} onClick={() => onRead([String(r['ID'])], false)} style={{ marginTop: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Mark read</button>}
+      {owner && editing && onTags && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', margin: '8px 0 2px' }} role="group" aria-label="Choose tags">
+          {SUPPORT_TAGS.map(t => <TagChip key={t} tag={t} on={tags.includes(t)} onClick={() => onTags(String(r['ID']), tags.includes(t) ? tags.filter(x => x !== t) : [...tags, t])} />)}
+        </div>
+      )}
+      {owner && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginTop: '6px' }}>
+          {unread && onRead && <button disabled={busy} onClick={() => onRead([String(r['ID'])], false)} style={smallBtn}>Mark read</button>}
+          {onTags && <button type="button" onClick={() => setEditing(v => !v)} aria-expanded={editing} style={smallBtn}>{editing ? 'Done tagging' : (tags.length ? 'Edit tags' : 'Add tags')}</button>}
+          {onArchive && <button type="button" onClick={() => onArchive(String(r['ID']), !archived)} style={smallBtn}>{archived ? 'Unarchive' : 'Archive'}</button>}
+        </div>
+      )}
     </div>
+  );
+}
+
+// Tag filter row: tap tags to show only requests carrying any of them. Counts are for the requests being filtered.
+function TagFilter({ rows, picked, setPicked }) {
+  const counts = useMemo(() => {
+    const c = new Map(); let untagged = 0;
+    for (const r of rows) { const t = tagsOf(r); if (!t.length) untagged++; t.forEach(x => c.set(x, (c.get(x) || 0) + 1)); }
+    return { c, untagged };
+  }, [rows]);
+  const toggle = (k) => setPicked(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
+  const shown = SUPPORT_TAGS.filter(t => counts.c.get(t) || picked.has(t));
+  if (!shown.length && !picked.size) return null;   // nothing is tagged yet, so there is nothing to filter by
+  return (
+    <div style={{ margin: '0 0 10px' }}>
+      <div style={{ ...sub, marginBottom: '5px' }}>Filter by tag{picked.size ? ' (showing requests with any picked tag)' : ''}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+        <button type="button" onClick={() => setPicked(new Set())} aria-pressed={picked.size === 0} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: '600', borderRadius: '999px', border: `1px solid ${picked.size === 0 ? 'var(--rc-ink)' : 'var(--rc-line)'}`, backgroundColor: picked.size === 0 ? 'var(--rc-surface)' : 'transparent', color: 'var(--rc-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>All</button>
+        {shown.map(t => <TagChip key={t} tag={t} on={picked.has(t)} count={counts.c.get(t) || 0} onClick={() => toggle(t)} />)}
+        {(counts.untagged > 0 || picked.has('__none')) && (
+          <button type="button" onClick={() => toggle('__none')} aria-pressed={picked.has('__none')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: '600', borderRadius: '999px', border: `1px solid ${picked.has('__none') ? 'var(--rc-ink)' : 'var(--rc-line)'}`, backgroundColor: picked.has('__none') ? 'var(--rc-surface)' : 'transparent', color: 'var(--rc-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>Untagged <span style={{ color: 'var(--rc-ink2)', fontWeight: '500' }}>{counts.untagged}</span></button>
+        )}
+      </div>
+    </div>
+  );
+}
+const passesTags = (r, picked) => {
+  if (!picked.size) return true;
+  const t = tagsOf(r);
+  if (!t.length) return picked.has('__none');
+  return t.some(x => picked.has(x));
+};
+
+// "View all support requests": every request ever sent, archived or not. Searching and the period filter work in the
+// browser on the loaded list, so results update with every letter typed.
+const PERIODS = [['all', 'All time'], ['today', 'Today'], ['7', 'Last 7 days'], ['30', 'Last month'], ['90', 'Last 90 days'], ['365', 'Last year']];
+const SEARCH_MIN = 2;
+export function periodStartMs(period, nowMs) {
+  if (period === 'today') return ptMs(`${new Date(nowMs).toISOString().slice(0, 10)} 00:00:00`);
+  const days = Number(period);
+  return Number.isFinite(days) && days > 0 ? nowMs - days * 86400000 : -Infinity;
+}
+export function matchesSearch(r, q) {
+  const needle = String(q || '').trim().toLowerCase();
+  if (needle.length < SEARCH_MIN) return true;
+  const hay = [r['Email'], r['Message'], r['ID'], r['Tags'], r['Status'], r['Device'], r['OS version'], r['App version'], r['Country'], r['Region'], r['Recent problems']].join('\n').toLowerCase();
+  return hay.includes(needle);
+}
+function SupportArchive({ accessToken, over, onTags, onArchive, onRead, readIds, readAll, busy, onPick, onBack }) {
+  const [st, setSt] = useState({ kind: 'loading', rows: [], total: 0 });
+  const [q, setQ] = useState('');
+  const [period, setPeriod] = useState('all');
+  const [picked, setPicked] = useState(() => new Set());
+  const [newestFirst, setNewestFirst] = useState(true);
+  const [limit, setLimit] = useState(50);
+  const [tryN, setTryN] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setSt(prev => ({ ...prev, kind: 'loading' }));
+    (async () => {
+      try {
+        const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'supportall', accessToken }) });
+        if (!live) return;
+        if (!res.ok) { setSt({ kind: res.status === 503 ? 'busy' : 'error', rows: [], total: 0 }); return; }
+        const j = await res.json();
+        const rows = (j.rows || []).map(r => Object.fromEntries(j.columns.map((c, k) => [c, r[k] ?? ''])))
+          .map((r, k) => [r, k]).sort((a, b) => String(a[0]['Date (PT)']).localeCompare(String(b[0]['Date (PT)'])) || a[1] - b[1]).map(x => x[0]);   // oldest first, by the date sent
+        if (live) setSt({ kind: 'ready', rows, total: j.total ?? rows.length });
+      } catch { if (live) setSt({ kind: 'error', rows: [], total: 0 }); }
+    })();
+    return () => { live = false; };
+  }, [accessToken, tryN]);
+  // Changes made on this page or on the main page apply on top of what was loaded.
+  const rows = useMemo(() => st.rows.map(r => {
+    const o = over[String(r['ID'])];
+    let x = r;
+    if (o && o.tags !== undefined) x = { ...x, Tags: o.tags };
+    if (o && o.archived !== undefined) x = { ...x, Archived: o.archived ? 'Yes' : '' };
+    if (isNewStatus(x) && (readAll || readIds.has(String(r['ID'])) || (o && o.archived))) x = { ...x, Status: 'Read' };
+    return x;
+  }), [st.rows, over, readIds, readAll]);
+  const original = useMemo(() => new Map(st.rows.map(r => [String(r['ID']), r])), [st.rows]);
+  const nowMs = ptNowMs();
+  const inPeriod = useMemo(() => { const from = periodStartMs(period, nowMs); return rows.filter(r => { const t = ptMs(r['Date (PT)']); return from === -Infinity || (Number.isFinite(t) && t >= from); }); }, [rows, period, nowMs]);
+  const searched = useMemo(() => inPeriod.filter(r => matchesSearch(r, q)), [inPeriod, q]);
+  const list = useMemo(() => { const f = searched.filter(r => passesTags(r, picked)); return newestFirst ? [...f].reverse() : f; }, [searched, picked, newestFirst]);
+  const searching = q.trim().length >= SEARCH_MIN;
+  useEffect(() => { setLimit(50); }, [q, period, picked, newestFirst]);
+  const field = { padding: '9px 10px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', fontFamily: 'inherit', boxSizing: 'border-box' };
+  return (
+    <>
+      <button onClick={onBack} style={{ padding: '8px 14px', marginBottom: '12px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>{'←'} Back to dashboard</button>
+      <div style={card}>
+        <h3 style={h}>All support requests{st.kind === 'ready' ? ` (${rows.length}${st.total > rows.length ? ` of ${st.total}` : ''})` : ''}</h3>
+        <div style={{ ...sub, marginBottom: '10px' }}>Everything ever sent, archived or not. Reply by email to the address shown.</div>
+        <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search email, message or tag" aria-label="Search support requests" autoComplete="off" spellCheck={false} style={{ ...field, width: '100%', marginBottom: '4px' }} />
+        <div style={{ ...sub, minHeight: '16px', marginBottom: '8px' }} aria-live="polite">{q.trim().length === 1 ? `Type at least ${SEARCH_MIN} letters to search.` : (searching ? 'Searching all requests as you type.' : '')}</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+          <label style={{ ...sub, display: 'flex', alignItems: 'center', gap: '6px' }}>Sent
+            <select value={period} onChange={e => setPeriod(e.target.value)} aria-label="When the request was sent" style={field}>{PERIODS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}</select>
+          </label>
+          <label style={{ ...sub, display: 'flex', alignItems: 'center', gap: '6px' }}>Order
+            <select value={newestFirst ? 'new' : 'old'} onChange={e => setNewestFirst(e.target.value === 'new')} aria-label="Order" style={field}>
+              <option value="new">Newest first</option><option value="old">Oldest first (order sent)</option>
+            </select>
+          </label>
+        </div>
+        <TagFilter rows={searched} picked={picked} setPicked={setPicked} />
+        {st.kind === 'loading' && <div style={sub}>Loading every support request{'…'}</div>}
+        {(st.kind === 'error' || st.kind === 'busy') && (
+          <div role="alert" style={{ fontSize: '13px', color: '#d93025', fontWeight: '600' }}>
+            {st.kind === 'busy' ? 'The spreadsheet is busy right now.' : 'Couldn’t load the support requests.'} <button onClick={() => setTryN(n => n + 1)} style={{ ...smallBtn, marginLeft: '6px' }}>Try again</button>
+          </div>
+        )}
+        {st.kind === 'ready' && (
+          <>
+            <div style={{ ...sub, marginBottom: '8px' }} aria-live="polite">{list.length === rows.length ? `Showing all ${list.length}` : `${list.length} of ${rows.length} match`}</div>
+            {rows.length === 0 && <div style={sub}>None yet.</div>}
+            {rows.length > 0 && list.length === 0 && <div style={sub}>No requests match. Try a different search, period or tag.</div>}
+            {list.slice(0, limit).map((r, i) => (
+              <SupportItem key={String(r['ID'])} r={r} i={i} owner onPick={onPick} onRead={onRead} busy={busy} accessToken={accessToken} onTags={(id, t) => onTags(id, t, original.get(id))} onArchive={(id, a) => onArchive(id, a, original.get(id))} />
+            ))}
+            {list.length > limit && <button onClick={() => setLimit(n => n + 50)} style={{ ...smallBtn, marginTop: '12px' }}>Show 50 more ({list.length - limit} left)</button>}
+          </>
+        )}
+      </div>
+    </>
   );
 }
 
@@ -213,6 +378,33 @@ function OwnerView({ data, version, accessToken }) {
   const [readAll, setReadAll] = useState(false);
   const [readBusy, setReadBusy] = useState(false);
   const [readErr, setReadErr] = useState('');
+  const [over, setOver] = useState({});   // tag / archive changes made during this visit, shown at once and saved in the background
+  const [tagPick, setTagPick] = useState(() => new Set());
+  const [archiveOpen, setArchiveOpen] = useState(false);
+  const saveChain = useRef(Promise.resolve());
+  const changeSupport = (id, patch, baseRow) => {
+    const before = over[id];
+    // Remember whether the request was archived when this visit began, and its row if it came from the "all requests" page.
+    const base = before ? before.base : (baseRow ? isArchivedRow(baseRow) : false);
+    const row = before?.row || baseRow;
+    setOver(prev => ({ ...prev, [id]: { ...prev[id], ...patch, base, row } }));
+    if (patch.archived) setReadIds(prev => new Set([...prev, id]));
+    setReadErr('');
+    const body = { kind: 'supportupdate', accessToken, id, ...(patch.tags !== undefined ? { tags: patch.tags.split(',').filter(Boolean) } : {}), ...(patch.archived !== undefined ? { archived: patch.archived } : {}) };
+    saveChain.current = saveChain.current.then(async () => {
+      try {
+        const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+        if (!res.ok) throw new Error('save');
+        const j = await res.json();
+        try { window.dispatchEvent(new CustomEvent('rc-support-unread', { detail: { unread: j.unread } })); } catch { /* ignore */ }
+      } catch {
+        setOver(prev => { const n = { ...prev }; if (before) n[id] = before; else delete n[id]; return n; });
+        setReadErr('Couldn\u2019t save that change, so it was undone. Try again in a minute.');
+      }
+    });
+  };
+  const setTags = (id, list, baseRow) => changeSupport(id, { tags: SUPPORT_TAGS.filter(t => list.includes(t)).join(',') }, baseRow);
+  const setArchived = (id, archived, baseRow) => changeSupport(id, { archived }, baseRow);
   const markRead = async (ids, all) => {
     setReadBusy(true); setReadErr('');
     try {
@@ -286,7 +478,13 @@ function OwnerView({ data, version, accessToken }) {
     const back1 = elig1.filter(u => usedDays.get(String(u['Email']).toLowerCase())?.has(firstOf(u) + 1)).length;
     const back7 = elig7.filter(u => { const d = usedDays.get(String(u['Email']).toLowerCase()) || new Set(); for (let i = 1; i <= 7; i++) if (d.has(firstOf(u) + i)) return true; return false; }).length;
     const retention = { newByWeek, back1, elig1: elig1.length, back7, elig7: elig7.length };
-    const support = toObjects(data.support).reverse().map(r => (readAll || readIds.has(String(r['ID']))) && isNewStatus(r) ? { ...r, Status: 'Read' } : r);
+    // A request un-archived on the "all requests" page comes back into the main list straight away.
+    const have = new Set(toObjects(data.support).map(r => String(r['ID'])));
+    const revived = Object.values(over).filter(o => o.archived === false && o.row && !have.has(String(o.row['ID']))).map(o => o.row);
+    const support = [...toObjects(data.support), ...revived].sort((a, b) => String(a['Date (PT)']).localeCompare(String(b['Date (PT)']))).reverse()
+      .map(r => { const o = over[String(r['ID'])]; return o ? { ...r, ...(o.tags !== undefined ? { Tags: o.tags } : {}), ...(o.archived !== undefined ? { Archived: o.archived ? 'Yes' : '' } : {}) } : r; })
+      .filter(r => !isArchivedRow(r))
+      .map(r => (readAll || readIds.has(String(r['ID']))) && isNewStatus(r) ? { ...r, Status: 'Read' } : r);
     const unreadSupport = support.filter(isNewStatus);
     const alerts = [];
     if (unreadSupport.length) alerts.push({ tab: 'Support', text: `${unreadSupport.length} unread support ${unreadSupport.length === 1 ? 'request' : 'requests'}` });
@@ -312,7 +510,15 @@ function OwnerView({ data, version, accessToken }) {
       lengths: [['Under 30 sec', 'Takes under 30s'], ['30 sec - 2 min', 'Takes 30s-2min'], ['2 - 5 min', 'Takes 2-5min'], ['Over 5 min', 'Takes over 5min']].map(([label, k]) => ({ label, value: sumCol(users, k) })),
       installed: [{ label: 'Installed app', value: sumCol(users, 'Sessions installed') }, { label: 'In a browser', value: sumCol(users, 'Sessions in browser') }],
     };
-  }, [data, version, readIds, readAll]);
+  }, [data, version, readIds, readAll, over]);
+  const visibleSupport = m ? [...m.unreadSupport, ...m.support.filter(r => !isNewStatus(r))].filter(r => passesTags(r, tagPick)) : [];
+  // Totals from the server, adjusted for archive changes made during this visit.
+  const serverArchived = (data && data.totals && data.totals.supportArchived) || 0;
+  const archivedCount = Math.max(0, serverArchived + Object.values(over).reduce((n, o) => (o.archived === undefined ? n : n + (o.archived ? 1 : 0) - (o.base ? 1 : 0)), 0));
+  const totalSupport = (data && data.totals && data.totals.supportAll) || (m ? m.support.length : 0);
+  if (archiveOpen && !picked) {
+    return <SupportArchive accessToken={accessToken} over={over} onTags={setTags} onArchive={setArchived} onRead={markRead} readIds={readIds} readAll={readAll} busy={readBusy} onPick={setPicked} onBack={() => setArchiveOpen(false)} />;
+  }
   if (picked) {
     return (
       <>
@@ -342,12 +548,19 @@ function OwnerView({ data, version, accessToken }) {
               <h3 style={{ ...h, margin: 0 }}>Support requests{m.unreadSupport.length ? ` (${m.unreadSupport.length} unread)` : ''}</h3>
               {m.unreadSupport.length > 1 && <button disabled={readBusy} onClick={() => markRead([], true)} style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Mark all read</button>}
             </div>
-            {m.support.length === 0 && <div style={sub}>None yet. People send these from Support in the menu. Reply to them by email.</div>}
-            {m.support.length > 0 && <div style={{ ...sub, marginBottom: '8px' }}>Reply by email to the address shown. Unread first.</div>}
+            {m.support.length === 0 && <div style={sub}>{archivedCount > 0 ? 'No open support requests. Archived ones are under View all support requests.' : 'None yet. People send these from Support in the menu. Reply to them by email.'}</div>}
+            {m.support.length > 0 && <div style={{ ...sub, marginBottom: '8px' }}>Reply by email to the address shown. Unread first. Archive a request to hide it here.</div>}
+            {m.support.length > 0 && <TagFilter rows={m.support} picked={tagPick} setPicked={setTagPick} />}
             {readErr && <div role="alert" style={{ fontSize: '13px', color: '#d93025', fontWeight: '600', marginBottom: '8px' }}>{readErr}</div>}
-            {[...m.unreadSupport, ...m.support.filter(r => !isNewStatus(r))].slice(0, 25).map((r, i) => (
-              <SupportItem key={String(r['ID']) || i} r={r} i={i} owner onPick={setPicked} onRead={markRead} busy={readBusy} accessToken={accessToken} />
+            {visibleSupport.length === 0 && m.support.length > 0 && <div style={sub}>No open requests have that tag.</div>}
+            {visibleSupport.slice(0, 25).map((r, i) => (
+              <SupportItem key={String(r['ID']) || i} r={r} i={i} owner onPick={setPicked} onRead={markRead} busy={readBusy} accessToken={accessToken} onTags={setTags} onArchive={setArchived} />
             ))}
+            {visibleSupport.length > 25 && <div style={{ ...sub, marginTop: '10px' }}>Showing the newest 25 of {visibleSupport.length}. The rest are under View all support requests.</div>}
+            <div style={{ marginTop: '10px', fontSize: '13px' }}>
+              <button type="button" onClick={() => setArchiveOpen(true)} style={{ background: 'none', border: 'none', padding: 0, color: BLUE, cursor: 'pointer', fontSize: '13px', fontWeight: '600', textDecoration: 'underline' }}>View all support requests</button>
+              <span style={sub}> {'\u00B7'} {totalSupport} in total{archivedCount ? `, ${archivedCount} archived` : ''}</span>
+            </div>
             {links.Support && <div style={{ marginTop: '10px', fontSize: '13px' }}><a href={links.Support} target="_blank" rel="noopener noreferrer" style={{ color: BLUE }}>Open Support tab {'\u2197'}</a></div>}
           </div>
 
@@ -530,6 +743,7 @@ async function saveMyData(data) {
 
 // Only ever fed the signed-in person's own rows (the server filters before sending).
 function MyView({ data, who }) {
+  const [showAllSupport, setShowAllSupport] = useState(false);
   const m = useMemo(() => {
     const u = toObjects(data.stats)[0] || null;
     const days = new Set(toObjects(data.history).map(r => String(r['Date (PT)']).slice(0, 10)));
@@ -646,7 +860,9 @@ function MyView({ data, who }) {
       <div style={card}>
         <h3 style={h}>{who ? `Support requests they sent (${m.support.length})` : `Support requests you sent (${m.support.length})`}</h3>
         {m.support.length === 0 && <div style={sub}>None yet. Use Support in the menu to ask for help.</div>}
-        {m.support.slice(0, 10).map((r, i) => <SupportItem key={String(r['ID']) || i} r={r} i={i} />)}
+        {m.support.slice(0, showAllSupport ? m.support.length : 10).map((r, i) => <SupportItem key={String(r['ID']) || i} r={r} i={i} />)}
+        {m.support.length > 10 && !showAllSupport && <button onClick={() => setShowAllSupport(true)} style={{ ...smallBtn, marginTop: '10px' }}>Show all {m.support.length}</button>}
+        {!who && m.support.some(r => tagsOf(r).length > 0) && <div style={{ ...sub, marginTop: '10px' }}>Tags are added by the app{'\u2019'}s owner to show where your request stands.</div>}
       </div>
 
       <div style={card}>
