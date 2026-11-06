@@ -65,6 +65,14 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Look around without signing in',
+        items: [
+          'You can now explore the app without an account. Key Finder, Practice, Jam, the Randomizer, Settings and About all work signed out. Recording, the Library, Dashboard and Support ask you to sign in with Google when you try to use them',
+          'New people land on About first, which now has an About tab explaining what Riff Catalog is, in front of Privacy, Agreement, Changelog and Debug',
+          'A public home page now exists for visitors who haven\u2019t opened the app yet',
+        ],
+      },
+      {
         title: 'Support section',
         items: [
           'The Feedback item in the menu is now Support. It has two buttons at the top: Contact support (ask for help or a question, and get a reply by email) and Give feedback (the star rating and ideas, as before)',

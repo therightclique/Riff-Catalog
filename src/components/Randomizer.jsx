@@ -566,7 +566,7 @@ export default function Randomizer({ accessToken }) {
   // ── Drive save/load ──────────────────────────────────────────────────
 
   const handleSave = async () => {
-    if (!accessToken) { setStatus('Not signed in to Drive.'); return false; }
+    if (!accessToken) { setStatus('Sign in with Google (the button at the top of the screen) to save ideas.'); return false; }
     if (!accumulated.trim()) { setStatus('Nothing to save yet.'); return false; }
     setSaving(true);
     setStatus('Saving…');
@@ -599,7 +599,7 @@ export default function Randomizer({ accessToken }) {
 
   const toggleSavedList = async () => {
     if (savedSets !== null) { setSavedSets(null); return; }
-    if (!accessToken) { setStatus('Not signed in to Drive.'); return; }
+    if (!accessToken) { setStatus('Sign in with Google (the button at the top of the screen) to load your saved ideas.'); return; }
     setLoadingList(true);
     try {
       const files = await listTextFiles(accessToken, 'Randomizer');

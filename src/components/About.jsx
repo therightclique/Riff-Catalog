@@ -3,7 +3,7 @@ import Changelog from './Changelog';
 import { noteTabView } from './UsageLog';
 import Debug from './Debug';
 
-// About section: tabs for the Privacy Policy, User Agreement, Changelog and Debug.
+// About section: tabs for About (what the app is), Privacy Policy, User Agreement, Changelog and Debug.
 // To add another tab later, add an entry to TABS and a component for it.
 // If what the app collects changes, update PrivacyPolicy to match (and UsageLog.js / log-usage.mjs).
 
@@ -15,6 +15,36 @@ const p = { margin: '0 0 10px' };
 const ul = { margin: '0 0 10px', paddingLeft: '20px' };
 const li = { marginBottom: '4px' };
 const note = { fontSize: '12px', color: 'var(--rc-ink2)', margin: '0 0 8px' };
+
+function AboutHome() {
+  return (
+    <div style={card}>
+      <h3 style={{ ...h3, marginTop: 0, fontSize: '18px' }}>Riff Catalog</h3>
+      <p style={p}>Record your guitar riffs, keep them organized, and practice with them. Free, and no music-theory degree required.</p>
+
+      <h3 style={h3}>What it is for</h3>
+      <p style={p}>Every guitar player has a phone full of half-remembered ideas. Riff Catalog gives them a home. Hit record when an idea shows up, give it a name, and find it again later instead of scrolling through a camera roll.</p>
+
+      <h3 style={h3}>What you can do</h3>
+      <ul style={ul}>
+        <li style={li}><strong>Record</strong> a riff in one tap, even without an internet connection. It uploads when you&rsquo;re back online.</li>
+        <li style={li}><strong>Keep a library</strong> of your recordings with names, tags, keys and tempos, and filter or sort to find the one you want.</li>
+        <li style={li}><strong>Find a key</strong> and see which notes and chords fit, on a fretboard or piano.</li>
+        <li style={li}><strong>Practice</strong> with random picks so you stop playing the same three things.</li>
+        <li style={li}><strong>Jam</strong> along to drum beats you can build and save.</li>
+        <li style={li}><strong>Spark an idea</strong> with the randomizer when you&rsquo;re stuck.</li>
+      </ul>
+      <p style={p}>You can look around the whole app without an account. Signing in with Google is only needed to record, keep a library, and contact support.</p>
+
+      <h3 style={h3}>Your music stays yours</h3>
+      <p style={p}>You sign in with your Google account. Riff Catalog saves your recordings and notes in <strong>your own Google Drive</strong>, and it can only see the files and folders it created itself. It can&rsquo;t look at anything else in your Drive.</p>
+      <p style={p}>We never see or keep your recordings. We only keep simple usage numbers, such as how often each part of the app is used, so we know what to improve. The Privacy tab has the full details.</p>
+
+      <h3 style={h3}>Questions or trouble?</h3>
+      <p style={{ ...p, marginBottom: 0 }}>Choose <strong>Support</strong> from the menu and send us a message. We reply by email.</p>
+    </div>
+  );
+}
 
 function PrivacyPolicy() {
   return (
@@ -170,6 +200,7 @@ function UserAgreement() {
 
 
 const TABS = [
+  { id: 'about', label: 'About', Component: AboutHome },
   { id: 'privacy', label: 'Privacy', Component: PrivacyPolicy },
   { id: 'agreement', label: 'Agreement', Component: UserAgreement },
   { id: 'changelog', label: 'Changelog', Component: Changelog },
@@ -177,7 +208,7 @@ const TABS = [
 ];
 
 export default function About({ version, accessToken, request }) {
-  const [tab, setTab] = useState((request && TABS.some(t => t.id === request.tab)) ? request.tab : 'privacy');
+  const [tab, setTab] = useState((request && TABS.some(t => t.id === request.tab)) ? request.tab : 'about');
   // Another part of the app can ask About to open a particular tab (for example the Changelog link on the home screen).
   useEffect(() => { if (request && TABS.some(t => t.id === request.tab)) setTab(request.tab); }, [request]);
   const Active = (TABS.find(t => t.id === tab) || TABS[0]).Component;
@@ -187,7 +218,7 @@ export default function About({ version, accessToken, request }) {
         {TABS.map(t => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); if (t.id === 'changelog' || t.id === 'debug') noteTabView(t.id); }}
             style={{
-              flex: 1, minWidth: 0, padding: '10px 6px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', cursor: 'pointer',
+              flex: 1, minWidth: 0, padding: '10px 2px', fontSize: '12px', fontWeight: '600', borderRadius: '10px', cursor: 'pointer',
               border: `2px solid ${tab === t.id ? '#1a73e8' : 'var(--rc-line)'}`,
               backgroundColor: tab === t.id ? 'var(--rc-sel)' : 'var(--rc-surface)',
               color: tab === t.id ? '#1a73e8' : 'var(--rc-ink)',

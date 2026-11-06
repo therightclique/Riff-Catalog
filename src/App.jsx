@@ -17,6 +17,7 @@ import About from './components/About';
 import Dashboard from './components/Dashboard';
 import Feedback from './components/Feedback';
 import UpdateBanner from './components/UpdateBanner';
+import { SignInBanner, SignInGate } from './components/SignIn';
 import { reportUsage, fetchSupportUnread, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
@@ -119,12 +120,14 @@ function App() {
         window.history.replaceState(null, '', window.location.pathname);
       }
       if (v === 'changelog' || v === 'debug') return 'about';
-      return VALID_VIEWS.includes(v) ? v : 'record';
+      // Someone who hasn't signed in yet lands on About (what the app is); signed-in people land on Record.
+      return VALID_VIEWS.includes(v) ? v : (user ? 'record' : 'about');
     } catch {
       return 'record';
     }
   });
   const [keyFinderFilter, setKeyFinderFilter] = useState(null);
+  const [signInPrompt, setSignInPrompt] = useState(false);   // signed-out person tapped Record
 
   // Bumped after each successful save so the (always-mounted) Library
   // re-fetches and the new clip appears immediately.
@@ -297,6 +300,29 @@ function App() {
     tokenClient.requestAccessToken({ prompt: '' });
   };
 
+  // Sets up Google sign-in (once) and tells every sign-in button on screen to draw itself.
+  const gsiInited = useRef(false);
+  const initGsi = (showOneTap) => {
+    if (!window.google?.accounts?.id) return;
+    if (!gsiInited.current) {
+      window.google.accounts.id.initialize({
+        client_id: CLIENT_ID,
+        callback: (response) => {
+          const decoded = jwtDecode(response.credential);
+          setUser(decoded);
+          localStorage.setItem('rc_user', JSON.stringify(decoded));
+          driveRequested.current = false;
+          requestDriveAccess();
+        },
+        auto_select: true,
+      });
+      gsiInited.current = true;
+    }
+    window.__rcGsiReady = true;
+    window.dispatchEvent(new Event('rc-gsi-ready'));
+    if (showOneTap) window.google.accounts.id.prompt();
+  };
+
   useEffect(() => {
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
@@ -308,21 +334,7 @@ function App() {
         // only ask Google for a new one if we don't already have one.
         if (!accessToken) requestDriveAccess();
       } else {
-        window.google.accounts.id.initialize({
-          client_id: CLIENT_ID,
-          callback: (response) => {
-            const decoded = jwtDecode(response.credential);
-            setUser(decoded);
-            localStorage.setItem('rc_user', JSON.stringify(decoded));
-            requestDriveAccess();
-          },
-          auto_select: true,
-        });
-        window.google.accounts.id.renderButton(
-          document.getElementById('google-signin-btn'),
-          { theme: 'outline', size: 'large' }
-        );
-        window.google.accounts.id.prompt();
+        initGsi(true);
       }
     };
     document.body.appendChild(script);
@@ -361,6 +373,8 @@ function App() {
     setUser(null);
     setAccessToken(null);
     driveRequested.current = false;
+    initGsi(false);   // so the Sign in button works again straight away
+    setMenuOpen(false); setViewHistory([]); setVisitedViews(prev => new Set(prev).add('about')); setView('about');   // land on About, not a stale signed-in screen
   };
 
   const handleRecordingComplete = async (blob, mimeType, capturedPcm = null) => {
@@ -706,7 +720,7 @@ function App() {
     <div style={{ padding: '44px 16px 20px', fontFamily: 'sans-serif', maxWidth: '600px', width: '100%', margin: '0 auto', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'relative', marginBottom: '16px' }}>
         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
-          {user && (
+          {(
             <button
               onClick={() => setMenuOpen(o => !o)}
               aria-label="Menu"
@@ -742,7 +756,7 @@ function App() {
         <h1 style={{ textAlign: 'center', margin: 0, flex: 1, minWidth: 0, fontSize: '24px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>🎸 Riff Catalog</h1>
         <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
           {/* Always-visible shortcut back to Record, from any section. */}
-          {user && (
+          {(
             <button
               onClick={() => goToView('record')}
               aria-label="Go to Record"
@@ -774,7 +788,7 @@ function App() {
             </svg>
           </button>
         </div>
-        {user && menuOpen && (
+        {menuOpen && (
           <>
             <div onClick={() => setMenuOpen(false)}
               style={{ position: 'fixed', inset: 0, zIndex: 40, backgroundColor: 'rgba(0,0,0,0.35)' }} />
@@ -807,28 +821,18 @@ function App() {
           </>
         )}
       </div>
-      {!user ? (
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '40px' }}>
-          <div id="google-signin-btn"></div>
-        </div>
-      ) : (
+      {(
         <div>
-          <p style={{ color: 'var(--rc-ink2)', textAlign: 'center' }}>
+          {user ? (
+            <p style={{ color: 'var(--rc-ink2)', textAlign: 'center' }}>
             Signed in as {user.name} &nbsp;·&nbsp;
             <span style={{ color: accessToken ? 'green' : 'orange' }}>
               Drive {accessToken ? '✅' : '⏳'}
             </span>
           </p>
+          ) : <SignInBanner onLearnMore={view === 'about' ? undefined : () => goToView('about')} />}
 
-          {isOwner && supportUnread > 0 && !supportDismissed && (
-            <div role="status" style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 16px', padding: '10px 14px', backgroundColor: 'var(--rc-sel)', border: '1px solid #1a73e8', borderRadius: '8px', fontSize: '14px', color: 'var(--rc-ink)' }}>
-              <span style={{ flex: 1 }}>📬 You have <strong>{supportUnread}</strong> unread support {supportUnread === 1 ? 'request' : 'requests'}.</span>
-              <button onClick={() => { goToView('dashboard'); }} style={{ padding: '6px 14px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Open</button>
-              <button onClick={() => setSupportDismissed(true)} aria-label="Hide for now" style={{ padding: '6px 8px', background: 'none', border: 'none', color: 'var(--rc-ink2)', fontSize: '16px', cursor: 'pointer' }}>{'×'}</button>
-            </div>
-          )}
-
-          {!accessToken && isOnline && (
+          {user && !accessToken && isOnline && (
             <button
               onClick={async () => { setReconnecting(true); await reconnectDrive(); setReconnecting(false); }}
               disabled={reconnecting}
@@ -887,7 +891,12 @@ function App() {
           <div style={{ display: view === 'record' ? 'flex' : 'none', flexDirection: 'column', alignItems: 'center' }}>
               {!pendingRecording ? (
                 <>
-                  <Recorder onRecordingComplete={handleRecordingComplete} onRecordingStateChange={setIsRecording} />
+                  <div style={{ position: 'relative' }}>
+                    <Recorder onRecordingComplete={handleRecordingComplete} onRecordingStateChange={setIsRecording} />
+                    {/* Signed out: the recorder can be seen, but tapping it asks for sign-in first (nothing is recorded). */}
+                    {!user && <button aria-label="Sign in to record" onClick={() => setSignInPrompt(true)} style={{ position: 'absolute', inset: 0, zIndex: 5, background: 'transparent', border: 'none', cursor: 'pointer' }} />}
+                  </div>
+                  {!user && signInPrompt && <SignInGate what="record and save your riffs to your Google Drive" />}
                   {lastUpload && (lastUpload.offline ? (
                     <p style={{ color: '#d97706', marginTop: '16px', textAlign: 'center', maxWidth: '400px' }}>
                       📱 Saved on this device: <strong>{lastUpload.name}</strong>
@@ -1034,18 +1043,20 @@ function App() {
               etc.) the first time you actually go there. */}
           {visitedViews.has('library') && (
             <div style={{ display: view === 'library' ? 'block' : 'none' }}>
-              <Library
-                accessToken={accessToken}
-                initialKeyFilter={keyFinderFilter}
-                onFilterConsumed={() => setKeyFinderFilter(null)}
-                refreshToken={libraryRefreshToken}
-                onUnsavedChange={setLibraryHasUnsaved}
-                pendingClips={pendingClips}
-                isOnline={isOnline}
-                syncState={syncState}
-                onSyncPending={handleSync}
-                onDiscardPending={handleDiscardPending}
-              />
+              {user ? (
+                <Library
+                  accessToken={accessToken}
+                  initialKeyFilter={keyFinderFilter}
+                  onFilterConsumed={() => setKeyFinderFilter(null)}
+                  refreshToken={libraryRefreshToken}
+                  onUnsavedChange={setLibraryHasUnsaved}
+                  pendingClips={pendingClips}
+                  isOnline={isOnline}
+                  syncState={syncState}
+                  onSyncPending={handleSync}
+                  onDiscardPending={handleDiscardPending}
+                />
+              ) : <SignInGate what="keep and list your recordings" />}
             </div>
           )}
           {visitedViews.has('keyfinder') && (
@@ -1077,12 +1088,12 @@ function App() {
           )}
           {visitedViews.has('dashboard') && (
             <div style={{ display: view === 'dashboard' ? 'block' : 'none' }}>
-              <Dashboard accessToken={accessToken} isOwner={isOwner} version={CURRENT_VERSION} />
+              {user ? <Dashboard accessToken={accessToken} isOwner={isOwner} version={CURRENT_VERSION} /> : <SignInGate what="show the numbers kept about your account" />}
             </div>
           )}
           {visitedViews.has('feedback') && (
             <div style={{ display: view === 'feedback' ? 'block' : 'none' }}>
-              <Feedback version={CURRENT_VERSION} accessToken={accessToken} email={user?.email} />
+              {user ? <Feedback version={CURRENT_VERSION} accessToken={accessToken} email={user?.email} /> : <SignInGate what="send you a message and know who it is from, so we can reply" />}
             </div>
           )}
           {visitedViews.has('randomizer') && (
