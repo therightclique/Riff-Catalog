@@ -65,6 +65,12 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Dashboard: note colors',
+        items: [
+          'A person\u2019s Dashboard now shows their four note colors (Root, 3rd, 5th, Other) as swatches with their hex codes',
+        ],
+      },
+      {
         title: 'Key Finder wording',
         items: [
           'The last note in the scale buttons now shows \u201C8\u201D with a small \u201C(Octave)\u201D underneath, instead of \u201C8va\u201D',

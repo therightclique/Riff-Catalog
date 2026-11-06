@@ -326,6 +326,8 @@ function OwnerView({ data, version }) {
 const MS_LABELS = [['First recording (PT)', 'Made a recording'], ['First Drive save (PT)', 'Saved to Drive'], ['First Library open (PT)', 'Opened the Library'], ['First Jam play (PT)', 'Played Jam'],
   ['First Key Finder use (PT)', 'Used Key Finder'], ['First Practice use (PT)', 'Used Practice'], ['First Randomizer use (PT)', 'Used the Randomizer'], ['First idea saved (PT)', 'Saved an idea'], ['First feedback sent (PT)', 'Sent feedback']];
 
+const NOTE_COLOR_KEYS = [['Root', 'Root note color'], ['3rd', '3rd note color'], ['5th', '5th note color'], ['Other', 'Other note color']];
+
 function KV({ rows }) {
   return (
     <div style={{ fontSize: '13px', lineHeight: 1.7 }}>
@@ -454,6 +456,26 @@ function MyView({ data, who }) {
         <div style={{ ...sub, margin: '12px 0 6px' }}>Problem log</div>
         <Bars items={m.codes} max={6} empty="No problems logged for you." />
       </div>
+
+      {NOTE_COLOR_KEYS.some(([, col]) => /^#[0-9a-f]{6}$/i.test(String(u[col] || ''))) && (
+        <div style={card}>
+          <h3 style={h}>{who ? 'Their note colors' : 'Your note colors'}</h3>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            {NOTE_COLOR_KEYS.map(([label, col]) => {
+              const hex = String(u[col] || '');
+              const ok = /^#[0-9a-f]{6}$/i.test(hex);
+              return (
+                <div key={col} style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+                  <div aria-label={ok ? `${label} note color ${hex}` : `${label}: not set`} style={{ height: '48px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: ok ? hex : 'transparent' }} />
+                  <div style={{ fontSize: '12px', marginTop: '4px' }}>{label}</div>
+                  <div style={{ fontSize: '11px', color: 'var(--rc-ink2)' }}>{ok ? hex.toUpperCase() : 'not set'}</div>
+                </div>
+              );
+            })}
+          </div>
+          <div style={{ ...sub, marginTop: '8px' }}>{u['Custom note colors'] === 'Yes' ? 'Using custom colors.' : u['Custom note colors'] === 'No' ? 'Using the default colors.' : ''}</div>
+        </div>
+      )}
 
       <div style={card}>
         <h3 style={h}>Your device</h3>
