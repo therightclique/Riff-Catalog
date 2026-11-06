@@ -65,6 +65,17 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Support section',
+        items: [
+          'The Feedback item in the menu is now Support. It has two buttons at the top: Contact support (ask for help or a question, and get a reply by email) and Give feedback (the star rating and ideas, as before)',
+          'Contact support replaces Report a problem. You can leave \u201CInclude technical details\u201D ticked to send the same short technical report along with your message, or untick it to send only your words',
+          'If a message can\u2019t be sent right away, it waits on your device and goes out automatically later',
+          'Your Dashboard shows the support messages you have sent. Download my data includes them',
+          'Owner: a notice appears when the app opens (and when you come back to it) telling you how many support requests are unread, with a badge on Dashboard in the menu. Dashboard has a Support requests list with Mark read and Mark all read, and the spreadsheet has a Support tab',
+          'The Privacy Policy now says how to contact support (instead of \u201CAsk Justin\u201D) and what a support message includes',
+        ],
+      },
+      {
         title: 'Built for more people',
         items: [
           'If your feedback, a problem report or your usage numbers can\u2019t be sent (no connection, or the server is busy), they wait safely on your device and are sent automatically later. Written messages are never lost to a failed send',

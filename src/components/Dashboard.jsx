@@ -85,6 +85,29 @@ const MILESTONES = [['First recording (PT)', 'Made a recording'], ['First Drive 
   ['First Key Finder use (PT)', 'Used Key Finder'], ['First Practice use (PT)', 'Used Practice'], ['First Randomizer use (PT)', 'Used Randomizer'], ['First idea saved (PT)', 'Saved an idea'], ['First feedback sent (PT)', 'Sent feedback']];
 const FEATURES = [['Jam plays', 'Jam plays'], ['Practice picks', 'Practice picks'], ['Key Finder lookups', 'Key Finder lookups'], ['Wheel spins', 'Wheel spins'], ['Surprise me uses', 'Surprise me'], ['Ideas saved (saves)', 'Ideas saved'], ['Library filter uses', 'Library filters'], ['Library sort changes', 'Library sorts'], ['Clip plays', 'Clip plays']];
 
+const isNewStatus = (r) => { const t = String(r['Status'] ?? '').trim().toLowerCase(); return t === '' || t === 'new'; };
+
+// One support request. Owner view shows who sent it and a Mark read button; a person's own view shows just their message.
+function SupportItem({ r, i, owner, onPick, onRead, busy }) {
+  const unread = isNewStatus(r);
+  return (
+    <div style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+        {owner && unread && <span style={{ backgroundColor: '#d93025', color: 'white', fontSize: '11px', fontWeight: '700', padding: '1px 7px', borderRadius: '9px' }}>NEW</span>}
+        {!owner && <span style={{ ...sub, fontWeight: '600' }}>{unread ? 'Waiting' : String(r['Status'] || 'Read')}</span>}
+        <span style={sub}>
+          {String(r['Date (PT)']).slice(0, 16)}
+          {owner && <> · <button onClick={() => onPick(String(r['Email']))} style={{ background: 'none', border: 'none', padding: 0, color: BLUE, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}>{r['Email']}</button></>}
+          {r['App version'] ? ` · v${r['App version']}` : ''}{r['Device'] ? ` · ${r['Device']} ${r['OS version'] || ''}` : ''}{owner && r['Country'] ? ` · ${r['Country']} ${r['Region'] || ''}` : ''}
+        </span>
+      </div>
+      <div style={{ whiteSpace: 'pre-wrap', margin: '3px 0' }}>{r['Message']}</div>
+      {String(r['Recent problems'] || '').trim() && <div style={{ fontFamily: '"Courier New", monospace', fontSize: '11px', whiteSpace: 'pre-wrap' }}>{r['Recent problems']}</div>}
+      {owner && unread && <button disabled={busy} onClick={() => onRead([String(r['ID'])], false)} style={{ marginTop: '6px', padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Mark read</button>}
+    </div>
+  );
+}
+
 // The people shown on one page of the People list come from the server 25 at a time, so the page never loads everyone.
 function PeopleList({ accessToken, total, onPick }) {
   const [page, setPage] = useState(0);
@@ -157,6 +180,20 @@ const CONSOLE_AUDIENCE = 'https://console.cloud.google.com/auth/audience?project
 function OwnerView({ data, version, accessToken }) {
   const [picked, setPicked] = useState(null);   // an email the owner tapped in the People table
   const [one, setOne] = useState({ kind: 'idle', data: null });
+  const [readIds, setReadIds] = useState(() => new Set());   // requests marked read during this visit
+  const [readAll, setReadAll] = useState(false);
+  const [readBusy, setReadBusy] = useState(false);
+  const [readErr, setReadErr] = useState('');
+  const markRead = async (ids, all) => {
+    setReadBusy(true); setReadErr('');
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'supportread', accessToken, ids, all }) });
+      if (!res.ok) { setReadErr('Couldn\u2019t mark that as read. Try again in a minute.'); return; }
+      const j = await res.json();
+      if (all) setReadAll(true); else setReadIds(prev => new Set([...prev, ...ids]));
+      try { window.dispatchEvent(new CustomEvent('rc-support-unread', { detail: { unread: j.unread } })); } catch { /* ignore */ }
+    } catch { setReadErr('Couldn\u2019t mark that as read. Try again in a minute.'); } finally { setReadBusy(false); }
+  };
   useEffect(() => {
     if (!picked) return undefined;
     let live = true;
@@ -187,7 +224,7 @@ function OwnerView({ data, version, accessToken }) {
     const days = new Map();
     for (const r of history) { const d = String(r['Date (PT)']).slice(0, 10); if (!days.has(d)) days.set(d, new Set()); days.get(d).add(String(r['Email']).toLowerCase()); }
     const line = [...days].sort((a, b) => a[0].localeCompare(b[0])).slice(-30).map(([label, set]) => ({ label: label.slice(5), value: set.size }));
-    const tabViews = Object.keys(users[0] || {}).filter(k => k.startsWith('Views: ')).map(k => ({ label: k.slice(7), value: sumCol(users, k) })).filter(x => x.value).sort((a, b) => b.value - a.value);
+    const tabViews = Object.keys(users[0] || {}).filter(k => k.startsWith('Views: ')).map(k => ({ label: k.slice(7) === 'Feedback' ? 'Support' : k.slice(7), value: sumCol(users, k) })).filter(x => x.value).sort((a, b) => b.value - a.value);
     const upSec = sumCol(users, 'Upload seconds total'), upN = sumCol(users, 'Uploads timed');
     const listMs = users.map(u => num(u['Drive list ms (last)'])).filter(Boolean);
     const codes = tally(errors.filter(e => within(e['Date (PT)'], 30)), e => `${e['Area']} · ${e['Code']}`);
@@ -220,7 +257,10 @@ function OwnerView({ data, version, accessToken }) {
     const back1 = elig1.filter(u => usedDays.get(String(u['Email']).toLowerCase())?.has(firstOf(u) + 1)).length;
     const back7 = elig7.filter(u => { const d = usedDays.get(String(u['Email']).toLowerCase()) || new Set(); for (let i = 1; i <= 7; i++) if (d.has(firstOf(u) + i)) return true; return false; }).length;
     const retention = { newByWeek, back1, elig1: elig1.length, back7, elig7: elig7.length };
+    const support = toObjects(data.support).reverse().map(r => (readAll || readIds.has(String(r['ID']))) && isNewStatus(r) ? { ...r, Status: 'Read' } : r);
+    const unreadSupport = support.filter(isNewStatus);
     const alerts = [];
+    if (unreadSupport.length) alerts.push({ tab: 'Support', text: `${unreadSupport.length} unread support ${unreadSupport.length === 1 ? 'request' : 'requests'}` });
     const totalPeople = (data.totals && data.totals.people) || users.length;
     if (totalPeople >= SIGNIN_CAP) alerts.push({ href: CONSOLE_AUDIENCE, hrefText: 'Open Google\u2019s Audience page', text: `${totalPeople} people have signed in, which is at or past the 100-user limit Google lists. It shouldn\u2019t apply to this app\u2019s permission type, but check that new people can still sign in.` });
     else if (totalPeople >= Math.floor(SIGNIN_CAP * 0.8)) alerts.push({ href: CONSOLE_AUDIENCE, hrefText: 'Open Google\u2019s Audience page', text: `${totalPeople} of the 100 sign-ins Google lists as a limit. It shouldn\u2019t apply to this app\u2019s permission type, but check the Audience page before it matters.` });
@@ -230,7 +270,7 @@ function OwnerView({ data, version, accessToken }) {
     if (newFb.length) alerts.push({ tab: 'Feedback', text: `${newFb.length} new feedback ${newFb.length === 1 ? 'entry' : 'entries'} in the last 7 days${lowFb.length ? `, ${lowFb.length} rated 2.5 or lower` : ''}` });
     if (newDiag.length) alerts.push({ tab: 'Diagnostics', text: `${newDiag.length} diagnostic ${newDiag.length === 1 ? 'report' : 'reports'} in the last 7 days` });
     return {
-      alerts, totalPeople, retention, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
+      alerts, support, unreadSupport, totalPeople, retention, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
       avgRating: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null, ratedN: rated.length,
       clips: sumCol(users, 'Clip library size'), sessions: sumCol(users, 'Sessions'), minutes: Math.round(sumCol(users, 'Active minutes')),
       versions: tally(users, u => u['App version']), devices: tally(users, u => u['Device']), os: tally(users, u => u['OS version']), screens: tally(users, u => realPx(u['Screen'])),
@@ -243,7 +283,7 @@ function OwnerView({ data, version, accessToken }) {
       lengths: [['Under 30 sec', 'Takes under 30s'], ['30 sec - 2 min', 'Takes 30s-2min'], ['2 - 5 min', 'Takes 2-5min'], ['Over 5 min', 'Takes over 5min']].map(([label, k]) => ({ label, value: sumCol(users, k) })),
       installed: [{ label: 'Installed app', value: sumCol(users, 'Sessions installed') }, { label: 'In a browser', value: sumCol(users, 'Sessions in browser') }],
     };
-  }, [data, version]);
+  }, [data, version, readIds, readAll]);
   if (picked) {
     return (
       <>
@@ -266,6 +306,20 @@ function OwnerView({ data, version, accessToken }) {
               </div>
             ))}
             {links.Sheet && <div style={{ marginTop: '8px', fontSize: '13px' }}><a href={links.Sheet} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, fontWeight: '600' }}>Open the spreadsheet {'\u2197'}</a></div>}
+          </div>
+
+          <div style={card}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '8px' }}>
+              <h3 style={{ ...h, margin: 0 }}>Support requests{m.unreadSupport.length ? ` (${m.unreadSupport.length} unread)` : ''}</h3>
+              {m.unreadSupport.length > 1 && <button disabled={readBusy} onClick={() => markRead([], true)} style={{ padding: '6px 12px', fontSize: '12px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Mark all read</button>}
+            </div>
+            {m.support.length === 0 && <div style={sub}>None yet. People send these from Support in the menu. Reply to them by email.</div>}
+            {m.support.length > 0 && <div style={{ ...sub, marginBottom: '8px' }}>Reply by email to the address shown. Unread first.</div>}
+            {readErr && <div role="alert" style={{ fontSize: '13px', color: '#d93025', fontWeight: '600', marginBottom: '8px' }}>{readErr}</div>}
+            {[...m.unreadSupport, ...m.support.filter(r => !isNewStatus(r))].slice(0, 25).map((r, i) => (
+              <SupportItem key={String(r['ID']) || i} r={r} i={i} owner onPick={setPicked} onRead={markRead} busy={readBusy} />
+            ))}
+            {links.Support && <div style={{ marginTop: '10px', fontSize: '13px' }}><a href={links.Support} target="_blank" rel="noopener noreferrer" style={{ color: BLUE }}>Open Support tab {'\u2197'}</a></div>}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
@@ -432,6 +486,7 @@ async function saveMyData(data) {
     feedbackSent: toObjects(data.feedback).map(tidy),
     problemLog: toObjects(data.errors).map(tidy),
     diagnosticReportsSent: toObjects(data.diagnostics).map(tidy),
+    supportRequestsSent: toObjects(data.support).map(tidy),
   };
   const file = new File([JSON.stringify(out, null, 2)], 'riff-catalog-my-data.json', { type: 'application/json' });
   try {
@@ -451,7 +506,7 @@ function MyView({ data, who }) {
     const days = new Set(toObjects(data.history).map(r => String(r['Date (PT)']).slice(0, 10)));
     if (u && String(u['Last login (PT)'] || '').trim()) days.add(String(u['Last login (PT)']).slice(0, 10));
     return {
-      u, days, feedback: toObjects(data.feedback).reverse(), errors: toObjects(data.errors).reverse(), diags: toObjects(data.diagnostics).reverse(),
+      support: toObjects(data.support).reverse(), u, days, feedback: toObjects(data.feedback).reverse(), errors: toObjects(data.errors).reverse(), diags: toObjects(data.diagnostics).reverse(),
       tabViews: u ? Object.keys(u).filter(k => k.startsWith('Views: ')).map(k => ({ label: k.slice(7), value: num(u[k]) })).filter(x => x.value).sort((a, b) => b.value - a.value) : [],
       features: u ? FEATURES.map(([k, label]) => ({ label, value: num(u[k]) })).filter(x => x.value).sort((a, b) => b.value - a.value) : [],
       when: u ? [['Morning', 'Recorded: morning'], ['Afternoon', 'Recorded: afternoon'], ['Evening', 'Recorded: evening'], ['Night', 'Recorded: night']].map(([label, k]) => ({ label, value: num(u[k]) })) : [],
@@ -548,7 +603,7 @@ function MyView({ data, who }) {
 
       <div style={card}>
         <h3 style={h}>Feedback you sent ({m.feedback.length})</h3>
-        {m.feedback.length === 0 && <div style={sub}>None yet. The Feedback section in the menu is where to send it.</div>}
+        {m.feedback.length === 0 && <div style={sub}>None yet. The Support section in the menu is where to send it.</div>}
         {m.feedback.slice(0, 10).map((f, i) => (
           <div key={i} style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
             <div><strong>{f['Rating']} / 5</strong> <span style={sub}>· {String(f['Date (PT)']).slice(0, 16)} · v{f['App version']}</span></div>
@@ -560,8 +615,14 @@ function MyView({ data, who }) {
       </div>
 
       <div style={card}>
+        <h3 style={h}>{who ? `Support requests they sent (${m.support.length})` : `Support requests you sent (${m.support.length})`}</h3>
+        {m.support.length === 0 && <div style={sub}>None yet. Use Support in the menu to ask for help.</div>}
+        {m.support.slice(0, 10).map((r, i) => <SupportItem key={String(r['ID']) || i} r={r} i={i} />)}
+      </div>
+
+      <div style={card}>
         <h3 style={h}>Diagnostic reports you sent ({m.diags.length})</h3>
-        {m.diags.length === 0 && <div style={sub}>None yet. You can send one from About › Debug, or Feedback › Report a problem.</div>}
+        {m.diags.length === 0 && <div style={sub}>None yet. You can send one from About › Debug.</div>}
         {m.diags.slice(0, 5).map((d, i) => (
           <div key={i} style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
             <div style={sub}>{String(d['Date (PT)']).slice(0, 16)} · v{d['App version']} · {d['Device']} {d['OS version']}</div>

@@ -17,7 +17,7 @@ import About from './components/About';
 import Dashboard from './components/Dashboard';
 import Feedback from './components/Feedback';
 import UpdateBanner from './components/UpdateBanner';
-import { reportUsage, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
+import { reportUsage, fetchSupportUnread, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
 import { keyLabel, subscribeAccidentals } from './components/Notation';
@@ -187,7 +187,7 @@ function App() {
     { id: 'jam', label: 'Jam', icon: '🥁' },
     { id: 'randomizer', label: 'Randomizer', icon: '🎲' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
-    { id: 'feedback', label: 'Feedback', icon: '💬' },
+    { id: 'feedback', label: 'Support', icon: '💬' },
     { id: 'about', label: 'About', icon: 'ℹ️' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },   // Settings stays last
   ];
@@ -223,6 +223,29 @@ function App() {
       try { setIsOwner(localStorage.getItem('rc_owner') === '1'); } catch { /* ignore */ }
     }).catch(() => {});
   }, [accessToken, user]);
+  // Owner only: tell the owner how many support requests are waiting. Checked when the app opens (even on a quick
+  // reopen) and whenever the app comes back to the front, at most every 5 minutes.
+  const [supportUnread, setSupportUnread] = useState(0);
+  const [supportDismissed, setSupportDismissed] = useState(false);
+  const supportCheckedAt = useRef(0);
+  useEffect(() => {
+    if (!isOwner || !accessToken || !user) return undefined;
+    const check = async () => {
+      if (Date.now() - supportCheckedAt.current < 5 * 60000) return;
+      supportCheckedAt.current = Date.now();
+      const r = await fetchSupportUnread(accessToken);
+      if (r) setSupportUnread(prev => { if (r.unread > prev) setSupportDismissed(false); return r.unread; });
+    };
+    check();
+    const onShow = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => document.removeEventListener('visibilitychange', onShow);
+  }, [isOwner, accessToken, user]);
+  useEffect(() => {
+    const onRead = (e) => { const n = Number(e?.detail?.unread); if (Number.isFinite(n)) setSupportUnread(n); };
+    window.addEventListener('rc-support-unread', onRead);
+    return () => window.removeEventListener('rc-support-unread', onRead);
+  }, []);
   useEffect(() => {
     if (!menuOpen) return;
     const onKey = (e) => { if (e.key === 'Escape') setMenuOpen(false); };
@@ -774,6 +797,9 @@ function App() {
                     }}>
                     <span style={{ width: '22px', textAlign: 'center', color: item.id === 'record' ? '#cc0000' : undefined }}>{item.icon}</span>
                     {item.label}
+                    {item.id === 'dashboard' && isOwner && supportUnread > 0 && (
+                      <span aria-label={`${supportUnread} unread support requests`} style={{ marginLeft: 'auto', minWidth: '22px', padding: '1px 7px', borderRadius: '11px', backgroundColor: '#d93025', color: 'white', fontSize: '12px', fontWeight: '700', textAlign: 'center' }}>{supportUnread}</span>
+                    )}
                   </button>
                 );
               })}
@@ -793,6 +819,14 @@ function App() {
               Drive {accessToken ? '✅' : '⏳'}
             </span>
           </p>
+
+          {isOwner && supportUnread > 0 && !supportDismissed && (
+            <div role="status" style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '0 0 16px', padding: '10px 14px', backgroundColor: 'var(--rc-sel)', border: '1px solid #1a73e8', borderRadius: '8px', fontSize: '14px', color: 'var(--rc-ink)' }}>
+              <span style={{ flex: 1 }}>📬 You have <strong>{supportUnread}</strong> unread support {supportUnread === 1 ? 'request' : 'requests'}.</span>
+              <button onClick={() => { goToView('dashboard'); }} style={{ padding: '6px 14px', backgroundColor: '#1a73e8', color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer' }}>Open</button>
+              <button onClick={() => setSupportDismissed(true)} aria-label="Hide for now" style={{ padding: '6px 8px', background: 'none', border: 'none', color: 'var(--rc-ink2)', fontSize: '16px', cursor: 'pointer' }}>{'×'}</button>
+            </div>
+          )}
 
           {!accessToken && isOnline && (
             <button
@@ -1048,7 +1082,7 @@ function App() {
           )}
           {visitedViews.has('feedback') && (
             <div style={{ display: view === 'feedback' ? 'block' : 'none' }}>
-              <Feedback version={CURRENT_VERSION} accessToken={accessToken} />
+              <Feedback version={CURRENT_VERSION} accessToken={accessToken} email={user?.email} />
             </div>
           )}
           {visitedViews.has('randomizer') && (

@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { noteMilestone, sendDiagnostic, recentProblems } from './UsageLog';
+import { noteMilestone, sendSupport, recentProblems } from './UsageLog';
 import { sendOrQueue } from './UsageOutbox';
 
-// Feedback section (own item in the main menu). Later this becomes Support, with feedback and support together.
+// Support section (menu item). Two tabs: Contact support (a message to the app's owner, answered by email) and Give feedback
+// (a star rating and ideas, not answered individually).
 
 const card = { backgroundColor: 'var(--rc-card)', border: '1px solid var(--rc-line)', borderRadius: '12px', padding: '16px', textAlign: 'left', lineHeight: 1.55, fontSize: '14px', color: 'var(--rc-ink)' };
 const h3 = { fontSize: '15px', margin: '18px 0 6px', color: 'var(--rc-ink)' };
@@ -78,7 +79,7 @@ function FeedbackForm({ version, accessToken }) {
       ))}
 
       <div style={{ ...note, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', margin: '0 0 12px', lineHeight: 1.45 }}>
-        <strong>This form is not for technical support.</strong> Messages here are not answered. If something is broken, use the Report a problem tab. A full support option is coming later. Your email, country and region are sent with your feedback.
+        <strong>Feedback isn&rsquo;t answered one by one.</strong> If you need help or have a question, use the Contact support tab instead. Your email, country and region are sent with your feedback.
       </div>
 
       <button onClick={send} disabled={!rating || sending}
@@ -91,8 +92,9 @@ function FeedbackForm({ version, accessToken }) {
 }
 
 
-function ReportProblem({ version, accessToken }) {
+function ContactSupport({ version, accessToken, email }) {
   const [what, setWhat] = useState('');
+  const [details, setDetails] = useState(true);
   const [problems, setProblems] = useState(() => recentProblems());
   const [state, setState] = useState({ kind: 'idle', msg: '' });   // idle | sending | sent | error
   const sending = state.kind === 'sending';
@@ -103,40 +105,52 @@ function ReportProblem({ version, accessToken }) {
     if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then try again.' }); return; }
     setState({ kind: 'sending', msg: '' });
     try {
-      const out = await sendDiagnostic(accessToken, version, what.trim());
-      if (out !== 'failed') { setState({ kind: 'sent', msg: out === 'sent' ? 'Report sent. Thank you!' : 'Thank you! Your report is saved on this device and will be sent automatically as soon as the server is reachable.' }); setWhat(''); return; }
-      setState({ kind: 'error', msg: 'Couldn’t send right now. Your note is still here. Please try again.' });
-    } catch { setState({ kind: 'error', msg: 'Couldn’t send right now. Your note is still here. Please try again.' }); }
+      const out = await sendSupport(accessToken, version, what.trim(), details);
+      if (out !== 'failed') {
+        setState({ kind: 'sent', msg: out === 'sent' ? 'Thank you! Your message was sent.' + (email ? ` You\u2019ll get a reply by email at ${email}.` : '') : 'Thank you! Your message is saved on this device and will be sent automatically as soon as the server is reachable.' });
+        setWhat(''); return;
+      }
+      setState({ kind: 'error', msg: 'Couldn\u2019t send. If your Google connection has expired, reconnect Drive and try again. Your message is still here.' });
+    } catch { setState({ kind: 'error', msg: 'Couldn\u2019t send right now. Your message is still here. Please try again.' }); }
   };
 
   return (
     <div style={card}>
-      <h3 style={{ ...h3, marginTop: 0 }}>Report a problem</h3>
-      <p style={p}>Tell us what went wrong. Your note is sent with a short technical report so the problem can be tracked down.</p>
-      <label htmlFor="rc-report-note" style={{ display: 'block', fontWeight: '600', marginBottom: '6px' }}>What happened?</label>
-      <textarea id="rc-report-note" value={what} onChange={(e) => { setWhat(e.target.value.slice(0, 500)); if (state.kind === 'sent') setState({ kind: 'idle', msg: '' }); }} disabled={sending} rows={4} maxLength={500}
+      <h3 style={{ ...h3, marginTop: 0 }}>Contact support</h3>
+      <p style={p}>Something not working, or a question about the app? Tell us and we&rsquo;ll reply by email{email ? <> to <strong>{email}</strong></> : ' to the Google account you signed in with'}.</p>
+      <label htmlFor="rc-support-msg" style={{ display: 'block', fontWeight: '600', marginBottom: '6px' }}>How can we help?</label>
+      <textarea id="rc-support-msg" value={what} onChange={(e) => { setWhat(e.target.value.slice(0, 2000)); if (state.kind === 'sent') setState({ kind: 'idle', msg: '' }); }} disabled={sending} rows={5} maxLength={2000}
         placeholder="For example: I tapped Save on a recording and it never finished."
         style={{ width: '100%', boxSizing: 'border-box', padding: '10px', fontSize: '16px', fontFamily: 'inherit', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', resize: 'vertical', marginBottom: '12px' }} />
 
-      <div style={{ fontWeight: '600', marginBottom: '4px' }}>Recent problems on this device ({problems.length})</div>
-      <div style={{ fontFamily: '"Courier New", monospace', fontSize: '11px', lineHeight: 1.5, maxHeight: '110px', overflowY: 'auto', backgroundColor: 'var(--rc-surface)', border: '1px solid var(--rc-line)', borderRadius: '8px', padding: '6px 8px', marginBottom: '12px' }}>
-        {problems.length === 0 ? <span style={{ color: 'var(--rc-ink2)' }}>None. Nothing has gone wrong lately.</span>
-          : problems.slice().reverse().map((q, i) => (
-            <div key={i}>{new Date(q.t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {q.area} · {q.code}{q.view ? ` · ${q.view}` : ''}{q.n > 1 ? ` ×${q.n}` : ''}</div>
-          ))}
-      </div>
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', marginBottom: '10px', cursor: 'pointer' }}>
+        <input type="checkbox" checked={details} onChange={(e) => setDetails(e.target.checked)} disabled={sending} style={{ width: '20px', height: '20px', marginTop: '1px', flex: '0 0 auto' }} />
+        <span><strong>Include technical details</strong> <span style={{ color: 'var(--rc-ink2)' }}>(recommended: helps us find the problem)</span></span>
+      </label>
 
-      <div style={{ ...note, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', margin: '0 0 12px', lineHeight: 1.45 }}>
-        The report includes your app version, device, system, browser and screen size, whether you’re online, how many recordings are waiting on this device, the problem codes above, and your email, country and region. It never includes your recordings, clip names, lyrics or anything you’ve written in the app. Reports are read, but we can’t reply to each one yet.
-      </div>
+      {details && (
+        <>
+          <div style={{ fontWeight: '600', marginBottom: '4px' }}>Recent problems on this device ({problems.length})</div>
+          <div style={{ fontFamily: '"Courier New", monospace', fontSize: '11px', lineHeight: 1.5, maxHeight: '110px', overflowY: 'auto', backgroundColor: 'var(--rc-surface)', border: '1px solid var(--rc-line)', borderRadius: '8px', padding: '6px 8px', marginBottom: '12px' }}>
+            {problems.length === 0 ? <span style={{ color: 'var(--rc-ink2)' }}>None. Nothing has gone wrong lately.</span>
+              : problems.slice().reverse().map((q, i) => (
+                <div key={i}>{new Date(q.t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {q.area} · {q.code}{q.view ? ` · ${q.view}` : ''}{q.n > 1 ? ` ×${q.n}` : ''}</div>
+              ))}
+          </div>
+          <div style={{ ...note, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', margin: '0 0 12px', lineHeight: 1.45 }}>
+            The technical details are your app version, device, system, browser and screen size, whether you&rsquo;re online, how many recordings are waiting on this device and the problem codes above. They never include your recordings, clip names, lyrics or anything you&rsquo;ve written in the app. Your email, country and region are sent with every message.
+          </div>
+        </>
+      )}
+      {!details && <div style={{ ...note, margin: '0 0 12px' }}>Only your message is sent, along with your email, country and region and the app version.</div>}
 
       <div style={{ display: 'flex', gap: '8px' }}>
         <button onClick={send} disabled={!ready || sending}
           style={{ flex: 1, padding: '12px', fontSize: '16px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: !ready || sending ? 'default' : 'pointer', backgroundColor: !ready || sending ? 'var(--rc-line)' : '#1a73e8', color: !ready || sending ? 'var(--rc-ink2)' : 'white' }}>
-          {sending ? 'Sending…' : 'Send report'}
+          {sending ? 'Sending…' : 'Send to support'}
         </button>
-        <button onClick={() => setProblems(recentProblems())}
-          style={{ padding: '12px 14px', fontSize: '14px', borderRadius: '10px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Refresh list</button>
+        {details && <button onClick={() => setProblems(recentProblems())}
+          style={{ padding: '12px 14px', fontSize: '14px', borderRadius: '10px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Refresh list</button>}
       </div>
       <div role="status" aria-live="polite" style={{ marginTop: '10px', fontSize: '14px', fontWeight: '600', color: state.kind === 'error' ? '#d93025' : '#1e8e3e', minHeight: '20px' }}>{state.msg}</div>
     </div>
@@ -144,12 +158,12 @@ function ReportProblem({ version, accessToken }) {
 }
 
 const TABS = [
-  { id: 'feedback', label: 'Feedback', Component: FeedbackForm },
-  { id: 'report', label: 'Report a problem', Component: ReportProblem },
+  { id: 'support', label: 'Contact support', Component: ContactSupport },
+  { id: 'feedback', label: 'Give feedback', Component: FeedbackForm },
 ];
 
-export default function Feedback({ version, accessToken }) {
-  const [tab, setTab] = useState('feedback');
+export default function Feedback({ version, accessToken, email }) {
+  const [tab, setTab] = useState('support');
   const Active = (TABS.find(t => t.id === tab) || TABS[0]).Component;
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto' }}>
@@ -162,7 +176,7 @@ export default function Feedback({ version, accessToken }) {
           </button>
         ))}
       </div>
-      <Active version={version} accessToken={accessToken} />
+      <Active version={version} accessToken={accessToken} email={email} />
     </div>
   );
 }

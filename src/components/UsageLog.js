@@ -151,6 +151,30 @@ export async function sendDiagnostic(accessToken, version, note) {
   }, accessToken);
 }
 
+// Support > Contact support. The person's own words, plus (only if they leave the box ticked) the same short technical
+// details as a diagnostic report. 'sent' | 'queued' (saved on this device, goes out automatically) | 'failed'.
+export async function sendSupport(accessToken, version, message, withDetails) {
+  let extra = {};
+  if (withDetails) {
+    const details = await deviceDetails();
+    const pending = await pendingCount();
+    const lines = recentProblems().map(p => `${new Date(p.t).toISOString().slice(5, 16).replace('T', ' ')} ${p.area} ${p.code}${p.view ? ' > ' + p.view : ''}${p.n > 1 ? ' x' + p.n : ''}`);
+    extra = { device: deviceKind(), installed: isInstalled(), online: navigator.onLine, ...details, pendingClips: pending, problems: lines };
+  }
+  return sendOrQueue('support', { version, message: String(message || '').slice(0, 2000), details: !!withDetails, ...extra }, accessToken);
+}
+
+// Owner only: how many support requests are unread. Returns { unread, newest } or null if it couldn't be checked.
+export async function fetchSupportUnread(accessToken) {
+  try {
+    if (!accessToken) return null;
+    const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'supportcount', accessToken }) });
+    if (!res.ok) return null;
+    const j = await res.json();
+    return Number.isFinite(j.unread) ? { unread: j.unread, newest: j.newest || '' } : null;
+  } catch { return null; }
+}
+
 // Sends one report. Never throws and never blocks the app; if anything fails
 // the counts stay on the device and go out with the next report.
 export async function reportUsage(accessToken, version) {

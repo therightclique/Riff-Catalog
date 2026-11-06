@@ -505,6 +505,50 @@ export async function addDiagnostic({ token, sheetId, email, d, where }) {
   await appendRows(token, sheetId, 'Diagnostics', DIAG_COLS, [[ptNow(), email, d.note, d.version, d.device, d.os, d.browser, d.screen, d.installed, d.online, d.pending ?? '', d.storageMB ?? '', where.country, where.region, d.lines.join('\n')]]);
 }
 
+// ── Support requests: a message the person chose to send from Support > Contact support ──
+// One row each, in the "Support" tab. Status starts as "New" (unread); the owner marks it Read from the dashboard
+// or by typing anything other than New in the Status column. The ID in column A is how a request is found again.
+const SUPPORT_COLS = ['ID', 'Date (PT)', 'Email', 'Status', 'Message', 'App version', 'Device', 'OS version', 'Browser', 'Screen', 'Online', 'Offline clips waiting', 'Recent problems', 'Country', 'Region'];
+const SUPPORT_STATUS_COL = SUPPORT_COLS.indexOf('Status');
+const ID_RE = /^S[0-9a-z]{6,20}$/;
+export function cleanSupport(body) {
+  const d = cleanDiagnostic(body);
+  const message = cleanText(body?.message, 2000);
+  const withDetails = body?.details === true;
+  return withDetails ? { ...d, message, details: true } : { message, details: false, version: d.version, lines: [], device: '', os: '', browser: '', screen: '', online: '', pending: null };
+}
+export async function addSupport({ token, sheetId, email, d, where }) {
+  const id = 'S' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  await appendRows(token, sheetId, 'Support', SUPPORT_COLS, [[id, ptNow(), email, 'New', d.message, d.version, d.device, d.os, d.browser, d.screen, d.online, d.pending ?? '', d.lines.join('\n'), where.country, where.region]]);
+  return id;
+}
+const isUnread = (status) => { const t = String(status ?? '').trim().toLowerCase(); return t === '' || t === 'new'; };
+
+// How many requests are unread, and when the newest arrived. Reads only the columns needed.
+export async function supportUnread({ token, sheetId }) {
+  const found = await findTab(token, sheetId, 'Support');
+  if (!found) return { unread: 0, newest: '' };
+  const body = await sheetsFetch(token, rangeUrl(sheetId, found.title, 'A2:D5000'));
+  const rows = (body.values || []).filter(r => String(r[0] || '').trim());
+  const open = rows.filter(r => isUnread(r[SUPPORT_STATUS_COL]));
+  return { unread: open.length, newest: open.length ? String(open[open.length - 1][1] || '') : '' };
+}
+
+// Marks requests Read. `ids` are request IDs; "all" marks every unread one. Anything else in Status is left alone.
+export async function markSupportRead({ token, sheetId, ids, all }) {
+  const found = await findTab(token, sheetId, 'Support');
+  if (!found) return 0;
+  const body = await sheetsFetch(token, rangeUrl(sheetId, found.title, 'A2:D5000'));
+  const rows = body.values || [];
+  const want = new Set((Array.isArray(ids) ? ids : []).filter(x => typeof x === 'string' && ID_RE.test(x)).slice(0, 100));
+  const hits = [];
+  rows.forEach((r, i) => { if (String(r[0] || '').trim() && isUnread(r[SUPPORT_STATUS_COL]) && (all === true || want.has(String(r[0]).trim()))) hits.push(i + 2); });
+  for (const n of hits) {
+    await sheetsFetch(token, rangeUrl(sheetId, found.title, `D${n}`, '?valueInputOption=RAW'), { method: 'PUT', body: JSON.stringify({ values: [['Read']] }) });
+  }
+  return hits.length;
+}
+
 // ── Owner dashboard: only the owner's email(s), set in OWNER_EMAIL, may read the sheets back ──
 
 const isOwner = (email) => String(process.env.OWNER_EMAIL || '').toLowerCase().split(/[,\s;]+/).filter(Boolean).includes(email);
@@ -550,9 +594,9 @@ export async function personData({ token, sheetId, target }) {
 }
 
 export async function dashboardData({ token, sheetId }) {
-  const [people, feedback, errors, history, diagnostics] = await Promise.all([
+  const [people, feedback, errors, history, diagnostics, support] = await Promise.all([
     sortedPeople(token, sheetId), readTab(token, sheetId, 'Feedback', 500), readTab(token, sheetId, 'Errors', 500),
-    readTab(token, sheetId, 'History', 5000), readTab(token, sheetId, 'Diagnostics', 100),
+    readTab(token, sheetId, 'History', 5000), readTab(token, sheetId, 'Diagnostics', 100), readTab(token, sheetId, 'Support', 200),
   ]);
   const stats = [people.head, ...people.body.slice(0, STATS_WINDOW)];
   const totals = { people: people.body.length, window: Math.min(people.body.length, STATS_WINDOW) };
@@ -560,11 +604,11 @@ export async function dashboardData({ token, sheetId }) {
   const info = await getSheetInfo(token, sheetId);
   const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/edit`;
   const sheetLinks = { Sheet: base };
-  for (const name of ['Stats', 'Feedback', 'Errors', 'History', 'Diagnostics']) {
+  for (const name of ['Stats', 'Feedback', 'Errors', 'History', 'Diagnostics', 'Support']) {
     const t = name === 'Stats' ? { sheetId: info.gid } : info.tabs.find(x => String(x.title).trim().toLowerCase() === name.toLowerCase());
     if (t && Number.isInteger(t.sheetId)) sheetLinks[name] = `${base}#gid=${t.sheetId}`;
   }
-  return { stats, totals, feedback, errors, history, diagnostics, sheetLinks, generated: ptNow() };
+  return { stats, totals, feedback, errors, history, diagnostics, support, sheetLinks, generated: ptNow() };
 }
 
 // ── A person's own numbers: only rows whose Email is the verified caller's email, filtered here before anything is sent ──
@@ -581,13 +625,13 @@ export function onlyMine(rows, email, drop = []) {
   return [keep.map(i => head[i]), ...mine.map(r => keep.map(i => r[i] ?? ''))];
 }
 export async function myData({ token, sheetId, email }) {
-  const [stats, feedback, errors, history, diagnostics] = await Promise.all([
+  const [stats, feedback, errors, history, diagnostics, support] = await Promise.all([
     readTab(token, sheetId, 'Stats'), readTab(token, sheetId, 'Feedback', 2000), readTab(token, sheetId, 'Errors', 2000),
-    readTab(token, sheetId, 'History', 20000), readTab(token, sheetId, 'Diagnostics', 500),
+    readTab(token, sheetId, 'History', 20000), readTab(token, sheetId, 'Diagnostics', 500), readTab(token, sheetId, 'Support', 2000),
   ]);
   return {
     stats: onlyMine(stats, email, ['Last IP']), feedback: onlyMine(feedback, email), errors: onlyMine(errors, email),
-    history: onlyMine(history, email), diagnostics: onlyMine(diagnostics, email), generated: ptNow(),
+    history: onlyMine(history, email), diagnostics: onlyMine(diagnostics, email), support: onlyMine(support, email), generated: ptNow(),
   };
 }
 
@@ -637,6 +681,21 @@ export default async (req, context) => {
     if (body.kind === 'dashboard') {
       if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
       return reply(200, { ok: true, ...(await dashboardData({ token, sheetId })) });
+    }
+    if (body.kind === 'support') {
+      const d = cleanSupport(body);
+      if (d.message.length < 3) return reply(400, { ok: false, error: 'message needed' });
+      await addSupport({ token, sheetId, email, d, where });
+      return reply(200, { ok: true });
+    }
+    if (body.kind === 'supportcount') {   // the owner's "unread requests" check
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      return reply(200, { ok: true, ...(await supportUnread({ token, sheetId })) });
+    }
+    if (body.kind === 'supportread') {
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      const marked = await markSupportRead({ token, sheetId, ids: body.ids, all: body.all });
+      return reply(200, { ok: true, marked, ...(await supportUnread({ token, sheetId })) });
     }
     if (body.kind === 'people') {
       if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
