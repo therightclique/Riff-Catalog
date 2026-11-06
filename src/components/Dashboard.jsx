@@ -20,6 +20,13 @@ const toObjects = (rows) => {
 const ptMs = (s) => { const t = Date.parse(String(s || '').replace(' ', 'T') + 'Z'); return Number.isFinite(t) ? t : NaN; };
 const ptNowMs = () => ptMs(new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/Los_Angeles', dateStyle: 'short', timeStyle: 'medium' }).format(new Date()));
 const tally = (list, fn) => { const m = new Map(); for (const x of list) { const k = fn(x); if (k) m.set(k, (m.get(k) || 0) + 1); } return [...m].map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value); };
+// "402x874@3" (CSS size @ pixel ratio) -> real pixels, e.g. "1206\u00d72622 px". Falls back to the original text.
+const realPx = (v) => {
+  const m = /^(\d{2,5})x(\d{2,5})@(\d+(?:\.\d+)?)$/.exec(String(v || '').trim());
+  if (!m) return String(v || '').trim();
+  const r = Number(m[3]);
+  return `${Math.round(m[1] * r)}\u00d7${Math.round(m[2] * r)} px`;
+};
 const sumCol = (list, col) => list.reduce((a, r) => a + num(r[col]), 0);
 
 function Tile({ label, value, hint }) {
@@ -79,6 +86,7 @@ const MILESTONES = [['First recording (PT)', 'Made a recording'], ['First Drive 
 const FEATURES = [['Jam plays', 'Jam plays'], ['Practice picks', 'Practice picks'], ['Key Finder lookups', 'Key Finder lookups'], ['Wheel spins', 'Wheel spins'], ['Surprise me uses', 'Surprise me'], ['Ideas saved (saves)', 'Ideas saved'], ['Library filter uses', 'Library filters'], ['Library sort changes', 'Library sorts'], ['Clip plays', 'Clip plays']];
 
 function OwnerView({ data, version }) {
+  const links = (data && data.sheetLinks) || {};
   const m = useMemo(() => {
     if (!data) return null;
     const users = toObjects(data.stats);
@@ -110,16 +118,16 @@ function OwnerView({ data, version }) {
     const newDiag = diags.filter(d => within(d['Date (PT)'], 7));
     const names = (list) => list.slice(0, 3).map(u => u['Email']).join(', ') + (list.length > 3 ? ` and ${list.length - 3} more` : '');
     const alerts = [];
-    if (older.length) alerts.push(`${older.length} ${older.length === 1 ? 'person is' : 'people are'} on an older version than ${version}: ${names(older)}`);
-    if (away.length) alerts.push(`${away.length} ${away.length === 1 ? 'person hasn\u2019t' : 'people haven\u2019t'} opened the app in over 14 days: ${names(away)}`);
-    if (errThis >= 3 && errThis > errPrev) alerts.push(`Problems are up: ${errThis} in the last 7 days, ${errPrev} in the 7 days before`);
-    if (newFb.length) alerts.push(`${newFb.length} new feedback ${newFb.length === 1 ? 'entry' : 'entries'} in the last 7 days${lowFb.length ? `, ${lowFb.length} rated 2.5 or lower` : ''}`);
-    if (newDiag.length) alerts.push(`${newDiag.length} diagnostic ${newDiag.length === 1 ? 'report' : 'reports'} in the last 7 days`);
+    if (older.length) alerts.push({ tab: 'Stats', text: `${older.length} ${older.length === 1 ? 'person is' : 'people are'} on an older version than ${version}: ${names(older)}` });
+    if (away.length) alerts.push({ tab: 'Stats', text: `${away.length} ${away.length === 1 ? 'person hasn\u2019t' : 'people haven\u2019t'} opened the app in over 14 days: ${names(away)}` });
+    if (errThis >= 3 && errThis > errPrev) alerts.push({ tab: 'Errors', text: `Problems are up: ${errThis} in the last 7 days, ${errPrev} in the 7 days before` });
+    if (newFb.length) alerts.push({ tab: 'Feedback', text: `${newFb.length} new feedback ${newFb.length === 1 ? 'entry' : 'entries'} in the last 7 days${lowFb.length ? `, ${lowFb.length} rated 2.5 or lower` : ''}` });
+    if (newDiag.length) alerts.push({ tab: 'Diagnostics', text: `${newDiag.length} diagnostic ${newDiag.length === 1 ? 'report' : 'reports'} in the last 7 days` });
     return {
       alerts, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
       avgRating: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null, ratedN: rated.length,
       clips: sumCol(users, 'Clip library size'), sessions: sumCol(users, 'Sessions'), minutes: Math.round(sumCol(users, 'Active minutes')),
-      versions: tally(users, u => u['App version']), devices: tally(users, u => u['Device']), os: tally(users, u => u['OS version']),
+      versions: tally(users, u => u['App version']), devices: tally(users, u => u['Device']), os: tally(users, u => u['OS version']), screens: tally(users, u => realPx(u['Screen'])),
       countries: tally(users, u => u['Country']), topTab: tally(users, u => u['Most used tab']),
       funnel: MILESTONES.map(([k, label]) => ({ label, value: users.filter(u => String(u[k] || '').trim()).length })),
       features: FEATURES.map(([k, label]) => ({ label, value: sumCol(users, k) })).filter(x => x.value).sort((a, b) => b.value - a.value),
@@ -137,9 +145,11 @@ function OwnerView({ data, version }) {
             {m.alerts.length === 0 && <div style={sub}>{'\u2713'} Nothing needs attention right now.</div>}
             {m.alerts.map((a, i) => (
               <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '13px', lineHeight: 1.5, marginBottom: '6px' }}>
-                <span aria-label="Attention" style={{ flex: '0 0 auto', fontWeight: '700' }}>{'\u25B2'}</span><span>{a}</span>
+                <span aria-label="Attention" style={{ flex: '0 0 auto', fontWeight: '700' }}>{'\u25B2'}</span>
+                <span>{a.text}{links[a.tab] && <> <a href={links[a.tab]} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>Open {a.tab} tab {'\u2197'}</a></>}</span>
               </div>
             ))}
+            {links.Sheet && <div style={{ marginTop: '8px', fontSize: '13px' }}><a href={links.Sheet} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, fontWeight: '600' }}>Open the spreadsheet {'\u2197'}</a></div>}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
@@ -177,6 +187,7 @@ function OwnerView({ data, version }) {
             <div style={{ ...sub, marginBottom: '6px' }}>App version</div><Bars items={m.versions} max={6} />
             <div style={{ ...sub, margin: '12px 0 6px' }}>Device</div><Bars items={m.devices} max={6} />
             <div style={{ ...sub, margin: '12px 0 6px' }}>System version</div><Bars items={m.os} max={6} />
+            <div style={{ ...sub, margin: '12px 0 6px' }}>Screen (real pixels)</div><Bars items={m.screens} max={6} />
             <div style={{ ...sub, margin: '12px 0 6px' }}>Country</div><Bars items={m.countries} max={6} />
             <div style={{ ...sub, margin: '12px 0 6px' }}>Visits: installed app or browser</div><Bars items={m.installed} max={2} />
           </div>
@@ -397,7 +408,7 @@ function MyView({ data }) {
 
       <div style={card}>
         <h3 style={h}>Your device</h3>
-        <KV rows={[['Device', u['Device model'] || u['Device']], ['System', u['OS version']], ['Browser', u['Browser']], ['Screen', u['Screen']], ['Installed app', u['Installed app']],
+        <KV rows={[['Device', u['Device model'] || u['Device']], ['System', u['OS version']], ['Browser', u['Browser']], ['Screen', u['Screen'] ? `${realPx(u['Screen'])} (${u['Screen']})` : ''], ['Installed app', u['Installed app']],
           ['App version', u['App version']], ['Previous version', u['Previous version']], ['Time zone', u['Time zone']], ['Language', u['Language']], ['Where (from your connection)', `${u['Country']} ${u['Region']}`.trim()],
           ['Storage used by the app', num(u['Device storage used (MB)']) ? `${u['Device storage used (MB)']} MB` : ''], ['Last visit', u['Last login (PT)']]]} />
       </div>

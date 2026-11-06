@@ -483,7 +483,15 @@ export async function dashboardData({ token, sheetId }) {
     readTab(token, sheetId, 'Stats'), readTab(token, sheetId, 'Feedback', 500), readTab(token, sheetId, 'Errors', 500),
     readTab(token, sheetId, 'History', 20000), readTab(token, sheetId, 'Diagnostics', 100),
   ]);
-  return { stats, feedback, errors, history, diagnostics, generated: ptNow() };
+  // Links to the spreadsheet and its tabs, for the owner's "Needs attention" list.
+  const info = await getSheetInfo(token, sheetId);
+  const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/edit`;
+  const sheetLinks = { Sheet: base };
+  for (const name of ['Stats', 'Feedback', 'Errors', 'History', 'Diagnostics']) {
+    const t = name === 'Stats' ? { sheetId: info.gid } : info.tabs.find(x => String(x.title).trim().toLowerCase() === name.toLowerCase());
+    if (t && Number.isInteger(t.sheetId)) sheetLinks[name] = `${base}#gid=${t.sheetId}`;
+  }
+  return { stats, feedback, errors, history, diagnostics, sheetLinks, generated: ptNow() };
 }
 
 // ── A person's own numbers: only rows whose Email is the verified caller's email, filtered here before anything is sent ──

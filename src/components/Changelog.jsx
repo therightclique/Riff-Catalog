@@ -41,7 +41,7 @@ const CHANGELOG = [
           'New Dashboard section in the menu. Everyone sees their own numbers there: visits, days used, a 30-day calendar, the firsts they\u2019ve reached, what they use, how they record, speed and problems, their device, and the feedback and reports they sent. It never shows anyone else\u2019s numbers',
           'Download my data: save your own numbers, feedback and reports as a file (it never includes recordings, lyrics or clip names)',
           'The app\u2019s owner can switch between Owner: everyone (people, activity, where new people get to, devices, problems, feedback and reports) and My account',
-          'The owner view starts with a Needs attention list: people on an older version, people who haven\u2019t opened the app in two weeks, rising problems, and new feedback or diagnostic reports',
+          'The owner view starts with a Needs attention list: people on an older version, people who haven\u2019t opened the app in two weeks, rising problems, and new feedback or diagnostic reports, each with a link to the right tab of the usage spreadsheet',
         ],
       },
       {
