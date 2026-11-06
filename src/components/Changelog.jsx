@@ -80,6 +80,12 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'User Guide',
+        items: [
+          'New User Guide with pictures of every section, from recording to the Randomizer. Open it with the \u201CUser Guide\u201D button at the top of Support, or from the About tab',
+        ],
+      },
+      {
         title: 'Share / Export',
         items: [
           'New \u201CShare / Export\u201D button on the \u201CRecording complete\u201D screen. Send the take to another app (Messages, email, Files, Dropbox, OneDrive and more) or save it as an audio file, without saving to Google Drive first',

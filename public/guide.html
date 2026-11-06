@@ -1,0 +1,561 @@
+<!doctype html>
+<!--
+  RIFF CATALOG USER GUIDE (public/guide.html, pictures in public/guide/)
+
+  KEEP THIS IN STEP WITH THE APP. Whenever a feature is added, moved, renamed or removed:
+    1. Update the matching section below (and the table of contents if a section is new).
+    2. Replace the picture in public/guide/ if the screen looks different. The pictures are
+       screenshots of the real app filled with sample clips (never real recordings).
+    3. Change the "Last updated" date and the version at the bottom.
+    4. Add a line to the Changelog in the app as usual.
+  Plain language only: no music-school words without a short explanation.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Riff Catalog User Guide</title>
+<meta name="description" content="How every part of Riff Catalog works: recording, the Library, Key Finder, Practice, Jam, the Randomizer, Settings and Support." />
+<style>
+  :root { --bg: #f6f6f6; --card: #ffffff; --ink: #222; --ink2: #5f5f5f; --line: #dcdcdc; --blue: #1a5fd0; --tip: #eef5ff; --tipline: #b5d4f0; --warn: #fff6e5; --warnline: #f0c060; }
+  @media (prefers-color-scheme: dark) { :root { --bg: #111; --card: #1c1c1c; --ink: #ececec; --ink2: #a8a8a8; --line: #333; --blue: #8ab4f8; --tip: #14233a; --tipline: #2d4a73; --warn: #2e2410; --warnline: #6b5420; } }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 720px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 30px; margin: 0 0 4px; }
+  h2 { font-size: 23px; margin: 0 0 10px; scroll-margin-top: 12px; }
+  h3 { font-size: 17px; margin: 22px 0 6px; }
+  p, li { margin: 0 0 10px; }
+  ul, ol { margin: 0 0 12px; padding-left: 22px; }
+  a { color: var(--blue); }
+  .lead { color: var(--ink2); font-size: 18px; margin: 0 0 18px; }
+  .top { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 14px; font-size: 15px; }
+  .btn { display: inline-block; background: #1a73e8; color: #fff !important; text-decoration: none; font-weight: 600; padding: 9px 16px; border-radius: 10px; }
+  nav.toc { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px 18px 6px; margin: 0 0 28px; }
+  nav.toc h2 { font-size: 16px; margin: 0 0 8px; }
+  nav.toc ol { columns: 2; column-gap: 24px; padding-left: 20px; margin: 0 0 8px; }
+  nav.toc li { margin-bottom: 4px; break-inside: avoid; }
+  @media (max-width: 480px) { nav.toc ol { columns: 1; } }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 20px 18px 10px; margin: 0 0 22px; }
+  figure { margin: 14px 0 18px; text-align: center; }
+  figure img { width: 100%; max-width: 300px; height: auto; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,.12); background: #fff; }
+  figcaption { font-size: 13px; color: var(--ink2); margin-top: 6px; }
+  .pair { display: flex; flex-wrap: wrap; gap: 14px; justify-content: center; }
+  .pair figure { flex: 1 1 240px; margin: 14px 0 18px; }
+  .tip, .warn { border-radius: 10px; padding: 10px 14px 2px; margin: 12px 0 14px; font-size: 15px; }
+  .tip { background: var(--tip); border: 1px solid var(--tipline); }
+  .warn { background: var(--warn); border: 1px solid var(--warnline); }
+  dl { margin: 0 0 12px; }
+  dt { font-weight: 700; margin-top: 8px; }
+  dd { margin: 2px 0 8px 0; }
+  kbd { font: inherit; font-weight: 700; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; background: var(--bg); white-space: nowrap; }
+  .small { font-size: 14px; color: var(--ink2); }
+  .to-top { text-align: right; font-size: 14px; margin: 0 0 10px; }
+</style>
+</head>
+<body>
+<main id="top">
+  <div class="top">
+    <a href="/" class="btn">&larr; Open Riff Catalog</a>
+    <span class="small">Last updated November 6, 2026</span>
+  </div>
+
+  <h1>Riff Catalog User Guide</h1>
+  <p class="lead">How every part of the app works, with pictures. No music-theory degree required.</p>
+
+  <p>The pictures in this guide show the real app, filled with made-up sample clips. Your screen will show your own recordings. This guide is written for a phone, and everything works the same way on a tablet or computer.</p>
+
+  <nav class="toc" aria-label="Contents">
+    <h2>What&rsquo;s in this guide</h2>
+    <ol>
+      <li><a href="#start">Getting started</a></li>
+      <li><a href="#record">Record</a></li>
+      <li><a href="#library">Library</a></li>
+      <li><a href="#share">Share / Export</a></li>
+      <li><a href="#keyfinder">Key Finder</a></li>
+      <li><a href="#practice">Practice</a></li>
+      <li><a href="#jam">Jam</a></li>
+      <li><a href="#randomizer">Randomizer</a></li>
+      <li><a href="#dashboard">Dashboard</a></li>
+      <li><a href="#support">Support</a></li>
+      <li><a href="#settings">Settings</a></li>
+      <li><a href="#about">About</a></li>
+      <li><a href="#offline">Working offline</a></li>
+      <li><a href="#help">If something goes wrong</a></li>
+      <li><a href="#words">Plain-English word list</a></li>
+    </ol>
+  </nav>
+
+  <!-- ===================== GETTING STARTED ===================== -->
+  <section id="start">
+    <h2>1. Getting started</h2>
+
+    <h3>You can look around without an account</h3>
+    <p>Key Finder, Practice, Jam, the Randomizer, Settings and About all work without signing in. Recording, the Library, Dashboard and Support ask you to sign in with Google when you try to use them.</p>
+
+    <h3>Signing in</h3>
+    <p>Tap the <strong>Sign in with Google</strong> button at the top of the screen. The app asks for permission to use Google Drive, and that permission is deliberately narrow: <strong>Riff Catalog can only see the files and folders it created itself.</strong> Everything else in your Drive stays invisible to it.</p>
+    <p>Your recordings, song ideas, beats and clip details are saved in a folder called <strong>RiffCatalog</strong> in your own Google Drive, not on our servers. That&rsquo;s why they&rsquo;re yours: you can open that folder in Drive any time.</p>
+
+    <h3>Installing it like an app</h3>
+    <p>Riff Catalog runs in your web browser, but you can put it on your home screen so it opens like any other app, full screen.</p>
+    <ul>
+      <li><strong>iPhone or iPad:</strong> open the app in Safari, tap the Share button, then <strong>Add to Home Screen</strong>.</li>
+      <li><strong>Android:</strong> open it in Chrome, tap the three dots, then <strong>Install app</strong> (or <strong>Add to Home screen</strong>).</li>
+      <li><strong>Windows or Mac:</strong> in Chrome or Edge, click the install icon at the right end of the address bar.</li>
+    </ul>
+
+    <h3>Getting around</h3>
+    <figure>
+      <img src="/guide/menu.webp" alt="The Riff Catalog menu open, listing Record, Library, Key Finder, Practice, Jam, Randomizer, Dashboard, Support, About and Settings" loading="lazy" />
+      <figcaption>The menu. Tap the three lines at the top left.</figcaption>
+    </figure>
+    <ul>
+      <li><strong>Menu (three lines):</strong> opens the list of sections.</li>
+      <li><strong>Back arrow:</strong> goes back to the section you were just in.</li>
+      <li><strong>Red dot:</strong> a shortcut straight to Record from anywhere.</li>
+      <li><strong>Circle arrows:</strong> refreshes the whole app. Use it if something looks stuck or out of date. Recordings waiting on your device are kept.</li>
+    </ul>
+    <p>When a newer version of the app is ready, a banner appears with a <strong>Reload</strong> button. It never reloads by itself, so it can&rsquo;t interrupt a recording.</p>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== RECORD ===================== -->
+  <section id="record">
+    <h2>2. Record</h2>
+    <p>Catch an idea the moment it shows up.</p>
+
+    <div class="pair">
+      <figure>
+        <img src="/guide/record-idle.webp" alt="The Record screen with a big red record button and a Metronome and count-in tick box above it" loading="lazy" />
+        <figcaption>Ready to record.</figcaption>
+      </figure>
+      <figure>
+        <img src="/guide/record-active.webp" alt="Recording in progress: a black sound-level box, a red timer reading 00:02 and a Stop button" loading="lazy" />
+        <figcaption>Recording. The red line moves with the sound.</figcaption>
+      </figure>
+    </div>
+
+    <ol>
+      <li>Tap the big red button. The first time, your phone asks to use the microphone. Say yes.</li>
+      <li>Play. The timer counts up and the black box shows that the app is hearing you.</li>
+      <li>Tap <strong>Stop</strong> when you&rsquo;re done.</li>
+    </ol>
+
+    <h3>Metronome &amp; count-in (optional)</h3>
+    <p>Tick this box to play along with a steady click.</p>
+    <figure>
+      <img src="/guide/record-metronome.webp" alt="The Metronome and count-in options: tempo slider, minus and plus buttons, Tap tempo, beats per bar from 2 to 7, and 1 or 2 bar count-in" loading="lazy" />
+      <figcaption>Metronome &amp; count-in options.</figcaption>
+    </figure>
+    <ul>
+      <li><strong>Tempo (BPM):</strong> how fast the click goes. BPM means &ldquo;beats per minute&rdquo;. Drag the slider, use the <kbd>&minus;5</kbd> <kbd>&minus;1</kbd> <kbd>+1</kbd> <kbd>+5</kbd> buttons, or tap <strong>Tap tempo</strong> along with a song to find its speed.</li>
+      <li><strong>Beats per bar:</strong> how many clicks before the pattern repeats (4 is the usual). The first click of each group is higher.</li>
+      <li><strong>Count-in:</strong> 1 or 2 bars of clicks before recording starts, so you can get ready.</li>
+      <li>You hear the count-in, then the click goes silent and only the lights keep time while you record, so the click doesn&rsquo;t end up in your recording. The tempo is saved with the clip.</li>
+    </ul>
+
+    <h3>After you stop: the &ldquo;Recording complete&rdquo; screen</h3>
+    <figure>
+      <img src="/guide/record-review.webp" alt="The Recording complete screen: tempo, a list of possible keys with percentages, a player to listen back, a Share / Export button, a name box, and Save to Drive and Discard buttons" loading="lazy" />
+      <figcaption>Listen, check the key, name it, save it.</figcaption>
+    </figure>
+    <dl>
+      <dt>BPM</dt>
+      <dd>The speed of what you played, worked out from the recording (or taken from the metronome if you used it).</dd>
+      <dt>Possible keys</dt>
+      <dd>The app listens to your recording and guesses which key it&rsquo;s in. A <strong>key</strong> is the family of notes a riff is built from, such as &ldquo;G Major&rdquo; or &ldquo;E Minor&rdquo;. The percentage says how well each key fits. Tap one to pick it. Tap <strong>Other&hellip;</strong> to choose any key yourself, or <strong>None</strong> if you don&rsquo;t want a key saved.</dd>
+      <dt>The colored note boxes</dt>
+      <dd>The seven notes of the selected key. Red is the <strong>root</strong> (the &ldquo;home&rdquo; note), brown is the <strong>3rd</strong>, yellow is the <strong>5th</strong>, and blue is every other note. You can change these colors in <a href="#settings">Settings</a>.</dd>
+      <dt>Listen before you save</dt>
+      <dd>A normal audio player. Play it back and drag the bar to skip around. Nothing is saved yet, so you can decide whether it&rsquo;s a keeper.</dd>
+      <dt>Share / Export</dt>
+      <dd>Sends the take to another app, or saves it as an audio file, without needing to save it to Drive first. See <a href="#share">Share / Export</a>.</dd>
+      <dt>Name</dt>
+      <dd>Type a name such as &ldquo;verse riff capo 2&rdquo;. It&rsquo;s required.</dd>
+      <dt>Save to Drive / Discard</dt>
+      <dd><strong>Save to Drive</strong> keeps the clip in your Library. <strong>Discard</strong> throws the take away.</dd>
+    </dl>
+    <div class="tip">
+      <p><strong>Same name twice?</strong> If a clip with that name already exists, the app warns you before saving. You can use a suggested new name, upload anyway (both files are kept, nothing is replaced), or go back and edit the name.</p>
+    </div>
+
+    <h3>If the internet is slow or missing</h3>
+    <p>Recordings are always kept safely on your device first. If saving to Drive takes too long, or you&rsquo;re offline, the app tells you the clip is saved on your device and will upload by itself.</p>
+    <div class="pair">
+      <figure>
+        <img src="/guide/record-saved-device.webp" alt="A banner saying 1 recording saved on this device, not on Drive yet, with a Sync now button" loading="lazy" />
+        <figcaption>The banner shows on every screen.</figcaption>
+      </figure>
+      <figure>
+        <img src="/guide/library-device.webp" alt="The Library showing an orange section called On this device, not on Drive yet, with the clip, a share button, a Sync button and a trash can" loading="lazy" />
+        <figcaption>Waiting clips also appear at the top of the Library.</figcaption>
+      </figure>
+    </div>
+    <ul>
+      <li>The app retries on its own: after about 20 seconds, then every few minutes (never less often than every 15 minutes), and again whenever you come back online or return to the app.</li>
+      <li>Tap <strong>Sync now</strong> to try right away.</li>
+      <li>You can play, share, or remove a waiting clip from the orange section in the Library.</li>
+    </ul>
+    <div class="warn">
+      <p><strong>Don&rsquo;t clear your browser&rsquo;s website data</strong> while a clip is waiting. That&rsquo;s where the waiting recording lives, and clearing it would remove the clip before it reaches Drive.</p>
+    </div>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== LIBRARY ===================== -->
+  <section id="library">
+    <h2>3. Library</h2>
+    <p>Every clip you&rsquo;ve saved, with its key, tempo and notes. You need to be signed in.</p>
+
+    <figure>
+      <img src="/guide/library-list.webp" alt="The Library listing clips, each with a play button, a star, name, key, tempo and date, plus pencil, share and arrow buttons" loading="lazy" />
+      <figcaption>The Library.</figcaption>
+    </figure>
+
+    <h3>Playing a clip</h3>
+    <p>Tap the blue <strong>play</strong> button on a clip. Tap it again to pause.</p>
+    <figure>
+      <img src="/guide/library-playing.webp" alt="A clip playing, with speed buttons 0.5x, 0.75x and 1x, back 5 seconds and forward 5 seconds buttons, and a position bar" loading="lazy" />
+      <figcaption>While a clip plays you can slow it down and skip around.</figcaption>
+    </figure>
+    <ul>
+      <li><strong>Speed (0.5&times;, 0.75&times;, 1&times;):</strong> slow a clip down to learn it. The pitch stays the same.</li>
+      <li><strong>5s back / 5s forward:</strong> jump a few seconds to replay a tricky bit.</li>
+      <li><strong>The bar:</strong> drag it to move anywhere in the clip.</li>
+    </ul>
+
+    <h3>The buttons on each clip</h3>
+    <ul>
+      <li><strong>&#9734; star:</strong> mark a favorite. Tap again to un-star. You can show only starred clips with the filter.</li>
+      <li><strong>&#9999;&#65039; pencil:</strong> rename the clip.</li>
+      <li><strong>&#128228; share:</strong> send the audio to another app or save it as a file. See <a href="#share">Share / Export</a>.</li>
+      <li><strong>&#9660; arrow:</strong> open the clip&rsquo;s details (below).</li>
+    </ul>
+
+    <h3>Finding clips</h3>
+    <ul>
+      <li><strong>Sort</strong> (top right): newest first, oldest first, A to Z, by key, or by BPM.</li>
+      <li><strong>Recently Added:</strong> tap to open a short list of your five newest clips.</li>
+      <li><strong>Refresh:</strong> reloads the list from Drive, for example after saving on another device.</li>
+      <li><strong>Export library (CSV):</strong> saves a spreadsheet-style list of your clips with their details (not the audio).</li>
+    </ul>
+    <figure>
+      <img src="/guide/library-filter.webp" alt="The Filter panel open, with choices for key, instrument, tuning, genre, time signature, quality, capo, needs-lyrics-only, starred-only, mood and tags" loading="lazy" />
+      <figcaption>Tap <strong>Filter</strong> to narrow the list.</figcaption>
+    </figure>
+    <p>The filter can narrow your clips by key, instrument, tuning, genre, time signature, quality and capo, or show only clips that need lyrics or are starred. Tap mood or tag buttons to show clips that have them. Choices you pick are combined, so the list shrinks as you add more.</p>
+
+    <h3>A clip&rsquo;s details</h3>
+    <p>Tap the arrow on a clip to open its details. Fill in as much or as little as you like. Press <strong>Save Metadata</strong> at the bottom to keep your changes (&ldquo;metadata&rdquo; just means &ldquo;details about the clip&rdquo;).</p>
+    <div class="pair">
+      <figure>
+        <img src="/guide/library-details-1.webp" alt="The top of a clip's details: a Song idea box with a Load button, the musical key with an Analyze button, and tempo with Tap tempo" loading="lazy" />
+        <figcaption>Song idea, key and tempo.</figcaption>
+      </figure>
+      <figure>
+        <img src="/guide/library-details-2.webp" alt="The rest of a clip's details: instrument, tuning, genre, capo, quality, needs lyrics, mood buttons, tags and notes, then a Save Metadata button" loading="lazy" />
+        <figcaption>Everything else, down to Save Metadata.</figcaption>
+      </figure>
+    </div>
+    <dl>
+      <dt>Song idea</dt>
+      <dd>Attach a song idea from the <a href="#randomizer">Randomizer</a> to the clip. Tap <strong>Load</strong> to pick a saved one, or type your own.</dd>
+      <dt>Musical key and Analyze</dt>
+      <dd>Choose the key from the list, or tap <strong>Analyze</strong> to have the app listen to the clip and suggest one. The notes of the chosen key appear underneath in color.</dd>
+      <dt>Tempo (BPM) and Tap tempo</dt>
+      <dd>Type the speed, or tap <strong>Tap tempo</strong> in time with the clip.</dd>
+      <dt>Time signature, instrument, tuning, genre, capo, quality</dt>
+      <dd>Optional labels so you can filter later. A <strong>capo</strong> is the clamp that raises a guitar&rsquo;s pitch. <strong>Quality</strong> is your own rating of the clip.</dd>
+      <dt>Needs lyrics</dt>
+      <dd>Tick this when a riff still needs words. Those clips show a &ldquo;needs lyrics&rdquo; note in the list.</dd>
+      <dt>Mood and tags</dt>
+      <dd>Tap mood words that fit. For tags, type a word such as &ldquo;verse&rdquo; or &ldquo;bridge&rdquo; and press Enter. Tap the &times; on a tag to remove it.</dd>
+      <dt>Notes / Lyrics</dt>
+      <dd>Anything you like: chords, lyrics, reminders.</dd>
+    </dl>
+
+    <h3>Working on several clips at once</h3>
+    <figure>
+      <img src="/guide/library-select.webp" alt="Several clips ticked, showing 5 selected, an Edit selected button, a download button, a trash can and a clear button" loading="lazy" />
+      <figcaption>Tick boxes to select clips.</figcaption>
+    </figure>
+    <p>Tick the box on each clip, or <strong>Select all</strong>. Then:</p>
+    <ul>
+      <li><strong>Edit selected:</strong> set the same key, tempo, tags and other details on all the ticked clips in one go.</li>
+      <li><strong>Download (arrow down):</strong> saves the ticked clips as audio files.</li>
+      <li><strong>Trash can:</strong> deletes the ticked clips after asking you to confirm. They go to your Google Drive trash, where you can restore them for 30 days.</li>
+      <li><strong>&times;:</strong> clears the selection.</li>
+    </ul>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== SHARE ===================== -->
+  <section id="share">
+    <h2>4. Share / Export</h2>
+    <p>Get a recording out of Riff Catalog and into anything else: a message to a bandmate, an email, your Files app, a notes app, or a cloud service such as Dropbox or OneDrive.</p>
+    <ul>
+      <li><strong>Right after recording:</strong> on the <em>Recording complete</em> screen, tap <strong>&#128228; Share / Export</strong>. You don&rsquo;t have to save to Drive first.</li>
+      <li><strong>Any saved clip:</strong> tap the <strong>&#128228;</strong> button on the clip in the Library. This also works for clips still waiting on your device.</li>
+    </ul>
+    <p>On a phone or tablet this opens the device&rsquo;s own share menu, so you can pick any app on it. On a computer or any device without a share menu, the clip is saved as an audio file in your Downloads folder instead.</p>
+    <div class="tip">
+      <p><strong>iPhone tip:</strong> for a clip stored on Drive, the app has to fetch it first. If the share menu doesn&rsquo;t open the first time, the button changes to <strong>Tap to share</strong>. Tap it once more and the menu opens.</p>
+    </div>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== KEY FINDER ===================== -->
+  <section id="keyfinder">
+    <h2>5. Key Finder</h2>
+    <p>Pick a key and see its notes and chords on a guitar neck or a piano. This works without signing in.</p>
+
+    <figure>
+      <img src="/guide/keyfinder-guitar.webp" alt="Key Finder with G Major selected: the seven chords of the key, a row of colored note buttons, a Play scale button and a guitar neck diagram" loading="lazy" />
+      <figcaption>G Major on the guitar neck.</figcaption>
+    </figure>
+    <ol>
+      <li>Choose <strong>Guitar</strong> or <strong>Piano</strong> at the top.</li>
+      <li>Pick a key from the list (12 major keys and 12 minor keys).</li>
+    </ol>
+    <dl>
+      <dt>The seven chords</dt>
+      <dd>The row of boxes shows the chords that naturally belong to the key. The number is the chord&rsquo;s position in the key (1 is home), and the letter shows its type: <strong>M</strong> major, <strong>m</strong> minor, <strong>dim</strong> diminished (the tense, unresolved sound).</dd>
+      <dt>Find clips</dt>
+      <dd>Under each chord, this button jumps to your <a href="#library">Library</a> filtered to clips in that chord&rsquo;s key.</dd>
+      <dt>Relative minor / major</dt>
+      <dd>The box with the ring and the &harr; arrow is the <strong>relative</strong> key. It uses exactly the same seven notes, just starting from a different one, so the two keys sound closely related. Handy when a riff could be read either way.</dd>
+      <dt>Tap the notes to play them</dt>
+      <dd>Tap any colored note to hear it. <strong>Play scale</strong> plays all the notes of the key in order.</dd>
+      <dt>The guitar neck or piano</dt>
+      <dd>Every note of the key is marked, in the same colors as everywhere else in the app. Tap the picture to zoom in.</dd>
+    </dl>
+    <figure>
+      <img src="/guide/keyfinder-piano.webp" alt="The same key shown on a piano keyboard with the notes colored" loading="lazy" />
+      <figcaption>The same key on the Piano view.</figcaption>
+    </figure>
+
+    <h3>Chord pictures and modes</h3>
+    <figure>
+      <img src="/guide/keyfinder-chords.webp" alt="Chord diagrams for the chords of the key, each with a Play button" loading="lazy" />
+      <figcaption>Chord diagrams. Tap <strong>Play</strong> to hear one.</figcaption>
+    </figure>
+    <p>Below the neck you&rsquo;ll see a picture of each chord, with a <strong>Play</strong> button that strums it. How spread out the strum is depends on the <em>Strum speed</em> in <a href="#settings">Settings</a>. Under the chords, <strong>Modes</strong> are other scales built from the same seven notes, each starting from a different one. Tap a mode to see its notes.</p>
+
+    <h3>Reverse Key Lookup</h3>
+    <p>Know some notes but not the key? Tap <strong>Reverse Key Lookup</strong>, tap the notes you have, then <strong>Find Keys</strong>. The app lists every key that contains all of them, and how many of your notes match. <strong>Clear</strong> starts again.</p>
+    <figure>
+      <img src="/guide/keyfinder-reverse.webp" alt="Reverse Key Lookup with notes C, E and G ticked and a list of matching keys" loading="lazy" />
+      <figcaption>C, E and G are all in these six keys.</figcaption>
+    </figure>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== PRACTICE ===================== -->
+  <section id="practice">
+    <h2>6. Practice</h2>
+    <p>Stop playing the same three things. Practice hands you a random lick (a short phrase) to learn. This works without signing in.</p>
+    <figure>
+      <img src="/guide/practice-setup.webp" alt="Practice choices: type, key, scale, box position and difficulty, with Random and Browse all buttons" loading="lazy" />
+      <figcaption>Choose what you want to practice.</figcaption>
+    </figure>
+    <dl>
+      <dt>Type</dt>
+      <dd><strong>Single-note licks</strong> are one note at a time. <strong>Double stops</strong> are two notes played together. <strong>Chord riffs</strong> are short chord patterns.</dd>
+      <dt>Key</dt>
+      <dd>Leave it on <em>Any key</em> to see each lick in its own scale, or pick a key to have the lick moved into it.</dd>
+      <dt>Scale</dt>
+      <dd>The set of notes the lick is built from, such as Minor Pentatonic or Blues.</dd>
+      <dt>Box position</dt>
+      <dd>Which part of the neck to play in. A &ldquo;box&rdquo; is a standard hand shape for a scale. Choose <em>Free</em> for any position.</dd>
+      <dt>Difficulty</dt>
+      <dd>Beginner, Intermediate or Advanced, or Any.</dd>
+    </dl>
+    <p>Tap <strong>&#127922; Random</strong> for a surprise, or <strong>Browse all</strong> to see every lick that matches your choices.</p>
+    <figure>
+      <img src="/guide/practice-result.webp" alt="A random lick shown as guitar tab: six lines for the six strings with fret numbers, a difficulty tag and a colour key for root, 3rd and 5th" loading="lazy" />
+      <figcaption>A lick shown as tab.</figcaption>
+    </figure>
+    <p><strong>Tab</strong> is a simple way to read guitar music: the six lines are the six strings (thinnest on top) and each number is the fret to press. The colors match the rest of the app, so you can see which notes are the root, 3rd and 5th. Tap a lick to zoom in and see it on a picture of the neck.</p>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== JAM ===================== -->
+  <section id="jam">
+    <h2>7. Jam</h2>
+    <p>Drums and a click to play along with. This works without signing in. There are three tabs.</p>
+
+    <h3>Beats</h3>
+    <figure>
+      <img src="/guide/jam-beats.webp" alt="Jam with the Beats tab open: the beat Basic Rock, the tempo set to 100 BPM, minus and plus buttons, Tap tempo and a Play button" loading="lazy" />
+      <figcaption>Pick a beat and press Play.</figcaption>
+    </figure>
+    <p>Scroll down to <strong>Choose a beat</strong> (Basic Rock, Funk, Blues Shuffle, Reggae, Waltz and more), set the tempo, and tap <strong>Play</strong>. The beat loops, with a drum fill every fourth bar. Under the tempo, a note tells you which speeds suit that beat. <strong>Tap tempo</strong> sets the speed from your taps.</p>
+
+    <h3>Make your own</h3>
+    <figure>
+      <img src="/guide/jam-make.webp" alt="The beat maker: a grid of squares for kick, snare, toms, crash, ride and hi-hats, with Clear all, a name box, Save and Load buttons" loading="lazy" />
+      <figcaption>Tap squares to build a one-bar beat.</figcaption>
+    </figure>
+    <p>The grid is one bar split into 16 steps, with a row for each drum. Tap a square to turn that hit on or off, and you hear changes right away while it plays. Type a name and tap <strong>Save</strong> to keep your beat. It&rsquo;s kept on this device, and when you&rsquo;re signed in it&rsquo;s also saved with your settings in Google Drive so it follows you to your other devices. <strong>Load</strong> brings a saved beat back. <strong>Clear all</strong> empties the grid.</p>
+
+    <h3>Metronome</h3>
+    <figure>
+      <img src="/guide/jam-metronome.webp" alt="The Metronome tab: tempo, minus and plus buttons, Tap tempo, a Play button and beats-per-bar buttons from 2 to 7" loading="lazy" />
+      <figcaption>A steady click with a pulsing light.</figcaption>
+    </figure>
+    <p>A simple click. Choose how many beats per bar (the bright light and higher click mark beat 1). Tap along to a song with <strong>Tap tempo</strong> to find its BPM, then type that into a clip&rsquo;s details in the Library.</p>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== RANDOMIZER ===================== -->
+  <section id="randomizer">
+    <h2>8. Randomizer</h2>
+    <p>Stuck? Let the wheel start a song for you. This works without signing in, though saving ideas needs you to be signed in.</p>
+    <figure>
+      <img src="/guide/randomizer-wheel.webp" alt="The Randomizer wheel showing musical keys, with Spin, Add to idea and Surprise me buttons and a Your song idea box" loading="lazy" />
+      <figcaption>The wheel starts on Musical Key.</figcaption>
+    </figure>
+    <p>There are nine wheels: <strong>Musical Key</strong>, <strong>Major / Minor</strong>, <strong>Style / Genre</strong>, <strong>Theme</strong>, <strong>Mood</strong>, <strong>Time Signature</strong>, <strong>Chord Progression</strong>, <strong>Tempo</strong> and <strong>Tempo Feel</strong>. Use the drop-down or the arrows on each side to change wheels.</p>
+    <ul>
+      <li><strong>Spin:</strong> spin the wheel (or drag it with your finger). It lands on a random pick.</li>
+      <li><strong>Add to idea:</strong> adds the pick to <em>Your song idea</em> below. Then move to the next wheel and spin again.</li>
+      <li><strong>Surprise me:</strong> spins every wheel for you and fills in the whole idea at once.</li>
+      <li><strong>Undo / Clear:</strong> remove the last addition, or empty the idea.</li>
+    </ul>
+    <figure>
+      <img src="/guide/randomizer-idea.webp" alt="A finished song idea such as key, major or minor, genre, theme, mood, time signature, chord progression and tempo, with a name box and Save to Drive button" loading="lazy" />
+      <figcaption>A full idea from Surprise me.</figcaption>
+    </figure>
+    <p>You can also type straight into the idea box. Give it a name and tap <strong>Save to Drive</strong>. <strong>Show saved ideas</strong> lists the ones you&rsquo;ve kept: tap one to load it, or tap <strong>Delete</strong> to remove it (it goes to your Drive trash, where you can restore it for 30 days). A saved idea can be attached to a clip from the clip&rsquo;s details in the Library.</p>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== DASHBOARD ===================== -->
+  <section id="dashboard">
+    <h2>9. Dashboard</h2>
+    <p>Your own numbers, and only yours. You need to be signed in.</p>
+    <figure>
+      <img src="/guide/dashboard.webp" alt="The Dashboard: tiles for visits, days used, clips and minutes open, a 30-day strip of squares showing which days you used the app, and a list of firsts" loading="lazy" />
+      <figcaption>Your Dashboard (sample numbers).</figcaption>
+    </figure>
+    <p>It shows how often you&rsquo;ve opened the app, which days you used it, the sections and features you use most, when you tend to record, and how fast things have been. Further down you can see the feedback and support messages you&rsquo;ve sent, and a <strong>Download my data</strong> button that saves everything the app has kept about you as a file.</p>
+    <p>The numbers are simple counts. Your recordings, lyrics, clip names and song ideas are never part of them. The full list is in the <a href="/privacy.html">Privacy Policy</a>.</p>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== SUPPORT ===================== -->
+  <section id="support">
+    <h2>10. Support</h2>
+    <p>Help, feedback and this guide, all in one place. You need to be signed in. At the very top is the <strong>User Guide</strong> button, which opens this page. Below it are three tabs.</p>
+
+    <h3>Contact support</h3>
+    <figure>
+      <img src="/guide/support-contact.webp" alt="The Contact support tab with a message box, an Add a screenshot button, an Include technical details tick box and a list of recent problems" loading="lazy" />
+      <figcaption>Ask a question or report a problem.</figcaption>
+    </figure>
+    <p>Describe what&rsquo;s wrong or what you&rsquo;d like to know, then tap <strong>Send to support</strong>. We reply by email.</p>
+    <ul>
+      <li><strong>Add a screenshot:</strong> attach up to 3 pictures. They&rsquo;re shrunk before sending and only the app&rsquo;s owner can see them. Please don&rsquo;t include anything private.</li>
+      <li><strong>Include technical details:</strong> adds your app version, device, system, browser and screen size, plus short codes for recent problems. It never includes your recordings, clip names, lyrics or anything you&rsquo;ve written in the app. Leaving this ticked helps us find problems faster.</li>
+    </ul>
+
+    <h3>Give feedback</h3>
+    <figure>
+      <img src="/guide/support-feedback.webp" alt="The Give feedback tab with a five-star rating and boxes for what you find useful, what you dislike and ideas" loading="lazy" />
+      <figcaption>Tell us how the app is doing.</figcaption>
+    </figure>
+    <p>Rate the app from half a star to five (tap the left half of a star for a half), then say what&rsquo;s useful, what&rsquo;s frustrating, and what you&rsquo;d love it to do. All the text boxes are optional. Feedback is read but not answered one by one, so use <em>Contact support</em> if you need a reply.</p>
+
+    <h3>Debug</h3>
+    <p>For when something isn&rsquo;t working. It shows a log of what the app has been doing, and a <strong>Send report</strong> button that sends a short technical report (no recordings or clip names). You can also save the log to your Drive or copy it. You&rsquo;ll rarely need this unless support asks.</p>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== SETTINGS ===================== -->
+  <section id="settings">
+    <h2>11. Settings</h2>
+    <figure>
+      <img src="/guide/settings.webp" alt="Settings: Interval colors for root, 3rd, 5th and other notes, then Note names with Sharps and Flats buttons" loading="lazy" />
+      <figcaption>Settings. Changes apply immediately.</figcaption>
+    </figure>
+    <dl>
+      <dt>Interval colors</dt>
+      <dd>Choose the colors used for the root, 3rd, 5th and other notes. They&rsquo;re used on every guitar neck, keyboard, chord picture, tab and note row in the app. Pick a color from the swatch or type a color code. <strong>Reset to defaults</strong> puts them back.</dd>
+      <dt>Note names</dt>
+      <dd>Show the black keys as sharps (C&sharp;) or flats (D&flat;) everywhere. Your saved clips aren&rsquo;t changed.</dd>
+      <dt>Strum speed</dt>
+      <dd>How spread out the notes of a chord are when you tap Play on a chord in Key Finder. Slower makes each note easier to hear. <strong>Hear it</strong> plays a sample.</dd>
+      <dt>Appearance</dt>
+      <dd>Match your device, or force Light or Dark. This is saved on this device only, so your phone and computer can look different.</dd>
+      <dt>Account &amp; storage</dt>
+      <dd>Shows who&rsquo;s signed in and has the <strong>Sign out</strong> button. It also tells you whether anything is waiting on this device to upload. <strong>Saved clip details</strong> are kept on the device so the Library opens quickly; <strong>Clear</strong> forgets them (they download again next time). Your recordings are never deleted by this.</dd>
+    </dl>
+    <p>When you&rsquo;re signed in, your colors, note names and strum speed are saved to your Google Drive and follow you to your other devices.</p>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== ABOUT ===================== -->
+  <section id="about">
+    <h2>12. About</h2>
+    <figure>
+      <img src="/guide/about.webp" alt="The About screen with tabs for About, Privacy, Agreement and Changelog" loading="lazy" />
+      <figcaption>About, Privacy, Agreement and Changelog.</figcaption>
+    </figure>
+    <ul>
+      <li><strong>About:</strong> what the app is for.</li>
+      <li><strong>Privacy:</strong> exactly what the app can see and what numbers it keeps, in plain English. Also at <a href="/privacy.html">privacy.html</a>.</li>
+      <li><strong>Agreement:</strong> the plain-English rules for using the app. Also at <a href="/terms.html">terms.html</a>.</li>
+      <li><strong>Changelog:</strong> what&rsquo;s new in each update.</li>
+    </ul>
+    <p class="to-top"><a href="#top">&uarr; Back to the top</a></p>
+  </section>
+
+  <!-- ===================== OFFLINE ===================== -->
+  <section id="offline">
+    <h2>13. Working offline</h2>
+    <p>Once you&rsquo;ve opened the installed app online, it can open with no connection. Offline you can still record. The clip is stored on your device and uploads by itself when you&rsquo;re back online (see <a href="#record">Record</a>). Key Finder, Practice, Jam and the Randomizer wheel keep working. Anything that reads from or saves to Google Drive, such as the Library, needs a connection.</p>
+  </section>
+
+  <!-- ===================== HELP ===================== -->
+  <section id="help">
+    <h2>14. If something goes wrong</h2>
+    <dl>
+      <dt>The Library is empty or out of date</dt>
+      <dd>Tap <strong>Refresh</strong> in the Library. Check that the top of the screen says <em>Drive</em> with a green tick. If it shows a clock, tap the orange <strong>Drive disconnected</strong> bar to reconnect.</dd>
+      <dt>Saving says &ldquo;Checking&hellip;&rdquo; for a long time</dt>
+      <dd>It gives up after a short wait, keeps your clip safely on your device and uploads it later by itself. You don&rsquo;t need to do anything. You can tap <strong>Sync now</strong> to try again.</dd>
+      <dt>The screen looks stuck or out of date</dt>
+      <dd>Tap the circle-arrows button at the top right. Waiting recordings are kept.</dd>
+      <dt>The microphone doesn&rsquo;t work</dt>
+      <dd>Check that your browser or phone has permission to use the microphone for Riff Catalog, and that no other app is using it.</dd>
+      <dt>Still stuck?</dt>
+      <dd>Go to Support and send a message, with a screenshot if you can. We reply by email.</dd>
+    </dl>
+  </section>
+
+  <!-- ===================== WORDS ===================== -->
+  <section id="words">
+    <h2>15. Plain-English word list</h2>
+    <dl>
+      <dt>BPM (tempo)</dt><dd>Beats per minute: how fast a song feels. 60 is slow, 120 is a brisk walk, 160 is fast.</dd>
+      <dt>Key</dt><dd>The family of seven notes a riff is built from, named for its home note: G Major, E Minor and so on.</dd>
+      <dt>Major / Minor</dt><dd>Two flavors of key. Major sounds bright and happy. Minor sounds darker and more serious.</dd>
+      <dt>Root, 3rd, 5th</dt><dd>The home note of a key, and the notes two and four steps up from it. Together they make the main chord of the key, so they&rsquo;re colored differently.</dd>
+      <dt>Relative key</dt><dd>The major and minor keys that share the same seven notes (G Major and E Minor, for example).</dd>
+      <dt>Chord</dt><dd>Several notes played together.</dd>
+      <dt>Scale</dt><dd>A set of notes played in order, such as Minor Pentatonic (five notes, the classic rock and blues sound).</dd>
+      <dt>Lick</dt><dd>A short musical phrase you can learn and reuse.</dd>
+      <dt>Tab</dt><dd>A way of writing guitar music using numbers on six lines for the six strings.</dd>
+      <dt>Capo</dt><dd>A clamp across the neck that raises every string&rsquo;s pitch.</dd>
+      <dt>Tuning</dt><dd>How the strings are set. Standard tuning is the normal one.</dd>
+      <dt>Time signature</dt><dd>How beats are grouped. 4/4 is the most common; 3/4 is a waltz.</dd>
+      <dt>Metadata</dt><dd>Details about a clip, such as its key, tempo, tags and notes.</dd>
+    </dl>
+  </section>
+
+  <p class="small" style="text-align:center">Riff Catalog User Guide &middot; last updated November 6, 2026 &middot; <a href="/">Open Riff Catalog</a> &middot; <a href="/privacy.html">Privacy Policy</a> &middot; <a href="/terms.html">Terms of Service</a></p>
+</main>
+</body>
+</html>

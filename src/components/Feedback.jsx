@@ -224,6 +224,12 @@ export default function Feedback({ version, accessToken, email, request }) {
   const Active = (TABS.find(t => t.id === tab) || TABS[0]).Component;
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+      {/* The User Guide is a separate page (public/guide.html). Keep it in step with the app: see the note in that file. */}
+      <a href="/guide.html" target="_blank" rel="noopener"
+        style={{ display: 'block', textAlign: 'center', textDecoration: 'none', padding: '12px 14px', marginBottom: '12px', fontSize: '15px', fontWeight: '600',
+          borderRadius: '10px', border: '2px solid #1a73e8', backgroundColor: 'var(--rc-sel)', color: '#1a73e8' }}>
+        {'\u{1F4D6}'} User Guide <span style={{ fontWeight: '400', fontSize: '13px' }}>&mdash; how every part of the app works</span>
+      </a>
       <div role="tablist" style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
         {TABS.map(t => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); if (t.id === 'debug') noteTabView('debug'); }}

@@ -40,7 +40,7 @@ function AboutHome() {
       <p style={p}>We never see or keep your recordings. We only keep simple usage numbers, such as how often each part of the app is used, so we know what to improve. The Privacy tab has the full details.</p>
 
       <h3 style={h3}>Questions or trouble?</h3>
-      <p style={{ ...p, marginBottom: 0 }}>Choose <strong>Support</strong> from the menu and send us a message. We reply by email.</p>
+      <p style={{ ...p, marginBottom: 0 }}>Read the <a href="/guide.html" target="_blank" rel="noopener">User Guide</a> to see how every part of the app works. If you still need help, choose <strong>Support</strong> from the menu and send us a message. We reply by email.</p>
     </div>
   );
 }
