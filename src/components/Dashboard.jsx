@@ -85,8 +85,92 @@ const MILESTONES = [['First recording (PT)', 'Made a recording'], ['First Drive 
   ['First Key Finder use (PT)', 'Used Key Finder'], ['First Practice use (PT)', 'Used Practice'], ['First Randomizer use (PT)', 'Used Randomizer'], ['First idea saved (PT)', 'Saved an idea'], ['First feedback sent (PT)', 'Sent feedback']];
 const FEATURES = [['Jam plays', 'Jam plays'], ['Practice picks', 'Practice picks'], ['Key Finder lookups', 'Key Finder lookups'], ['Wheel spins', 'Wheel spins'], ['Surprise me uses', 'Surprise me'], ['Ideas saved (saves)', 'Ideas saved'], ['Library filter uses', 'Library filters'], ['Library sort changes', 'Library sorts'], ['Clip plays', 'Clip plays']];
 
-function OwnerView({ data, version }) {
+// The people shown on one page of the People list come from the server 25 at a time, so the page never loads everyone.
+function PeopleList({ accessToken, total, onPick }) {
+  const [page, setPage] = useState(0);
+  const [st, setSt] = useState({ kind: 'loading', msg: '', data: null });
+  useEffect(() => {
+    let live = true;
+    setSt(prev => ({ ...prev, kind: 'loading', msg: '' }));
+    (async () => {
+      try {
+        const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'people', accessToken, page }) });
+        if (!live) return;
+        if (res.status === 503) { setSt(prev => ({ ...prev, kind: 'error', msg: 'The spreadsheet is busy right now. Try again in a minute.' })); return; }
+        if (!res.ok) { setSt(prev => ({ ...prev, kind: 'error', msg: 'Couldn\u2019t load this page of people.' })); return; }
+        const j = await res.json();
+        if (live) setSt({ kind: 'ready', msg: '', data: j });
+      } catch { if (live) setSt(prev => ({ ...prev, kind: 'error', msg: 'Couldn\u2019t load this page of people.' })); }
+    })();
+    return () => { live = false; };
+  }, [accessToken, page, total]);
+  const d = st.data;
+  const shownFrom = d && d.rows.length ? d.page * d.pageSize + 1 : 0;
+  const pgBtn = (label, disabled, to) => (
+    <button onClick={() => setPage(to)} disabled={disabled || st.kind === 'loading'} style={{ padding: '8px 10px', whiteSpace: 'nowrap', flex: '0 0 auto', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1, backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>{label}</button>
+  );
+  return (
+    <div style={card}>
+      <h3 style={h}>People ({total})</h3>
+      <div style={{ ...sub, marginBottom: '6px' }}>Tap an email to see that person’s dashboard</div>
+      {st.kind === 'error' && <div role="alert" style={{ fontSize: '13px', color: '#d93025', fontWeight: '600', marginBottom: '8px' }}>{st.msg}</div>}
+      {d && (
+        <div style={{ overflowX: 'auto', opacity: st.kind === 'loading' ? 0.55 : 1 }}>
+          <table style={{ borderCollapse: 'collapse', fontSize: '12px', width: '100%', minWidth: '560px' }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: 'var(--rc-ink2)' }}>
+                {['Email', 'Last visit', 'Visits', 'Days', 'Clips', 'Device', 'Ver', 'Where'].map(c => <th key={c} style={{ padding: '4px 6px', borderBottom: '1px solid var(--rc-line)', fontWeight: '600' }}>{c}</th>)}
+              </tr>
+            </thead>
+            <tbody>
+              {d.rows.map(r => {
+                const u = Object.fromEntries(d.columns.map((c, i) => [c, r[i]]));
+                return (
+                  <tr key={u['Email']}>
+                    {[<button key="e" onClick={() => onPick(String(u['Email']))} style={{ background: 'none', border: 'none', padding: 0, color: BLUE, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}>{u['Email']}</button>, String(u['Last login (PT)']).slice(5, 16), u['Sessions'], u['Days active'], u['Clip library size'], `${u['Device']} ${u['OS version']}`, u['App version'], `${u['Country']} ${u['Region']}`].map((c, i) => (
+                      <td key={i} style={{ padding: '4px 6px', borderBottom: '1px solid var(--rc-line)', whiteSpace: 'nowrap' }}>{c}</td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {!d && st.kind === 'loading' && <div style={sub}>Loading people…</div>}
+      {d && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginTop: '10px' }}>
+          {pgBtn('\u2190 Newer', d.page <= 0, d.page - 1)}
+          <div style={{ ...sub, textAlign: 'center' }}>{shownFrom ? `${shownFrom}\u2013${shownFrom + d.rows.length - 1} of ${d.total}` : 'No one yet'}{` \u00B7 page ${d.page + 1} of ${d.pages}`}</div>
+          {pgBtn('Older \u2192', d.page >= d.pages - 1, d.page + 1)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Google lists a 100-user limit for new sign-ins on the project's Audience page. For this app's kind of permission
+// (only the files it creates) Google says it doesn't apply, but it is watched anyway so it is never a surprise.
+const SIGNIN_CAP = 100;
+const CONSOLE_AUDIENCE = 'https://console.cloud.google.com/auth/audience?project=riff-catalog';
+
+function OwnerView({ data, version, accessToken }) {
   const [picked, setPicked] = useState(null);   // an email the owner tapped in the People table
+  const [one, setOne] = useState({ kind: 'idle', data: null });
+  useEffect(() => {
+    if (!picked) return undefined;
+    let live = true;
+    setOne({ kind: 'loading', data: null });
+    (async () => {
+      try {
+        const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'person', accessToken, target: picked }) });
+        if (!live) return;
+        if (!res.ok) { setOne({ kind: 'error', data: null }); return; }
+        setOne({ kind: 'ready', data: await res.json() });
+      } catch { if (live) setOne({ kind: 'error', data: null }); }
+    })();
+    return () => { live = false; };
+  }, [picked, accessToken]);
   const links = (data && data.sheetLinks) || {};
   const m = useMemo(() => {
     if (!data) return null;
@@ -137,13 +221,16 @@ function OwnerView({ data, version }) {
     const back7 = elig7.filter(u => { const d = usedDays.get(String(u['Email']).toLowerCase()) || new Set(); for (let i = 1; i <= 7; i++) if (d.has(firstOf(u) + i)) return true; return false; }).length;
     const retention = { newByWeek, back1, elig1: elig1.length, back7, elig7: elig7.length };
     const alerts = [];
+    const totalPeople = (data.totals && data.totals.people) || users.length;
+    if (totalPeople >= SIGNIN_CAP) alerts.push({ href: CONSOLE_AUDIENCE, hrefText: 'Open Google\u2019s Audience page', text: `${totalPeople} people have signed in, which is at or past the 100-user limit Google lists. It shouldn\u2019t apply to this app\u2019s permission type, but check that new people can still sign in.` });
+    else if (totalPeople >= Math.floor(SIGNIN_CAP * 0.8)) alerts.push({ href: CONSOLE_AUDIENCE, hrefText: 'Open Google\u2019s Audience page', text: `${totalPeople} of the 100 sign-ins Google lists as a limit. It shouldn\u2019t apply to this app\u2019s permission type, but check the Audience page before it matters.` });
     if (older.length) alerts.push({ tab: 'Stats', text: `${older.length} ${older.length === 1 ? 'person is' : 'people are'} on an older version than ${version}: ${names(older)}` });
     if (away.length) alerts.push({ tab: 'Stats', text: `${away.length} ${away.length === 1 ? 'person hasn\u2019t' : 'people haven\u2019t'} opened the app in over 14 days: ${names(away)}` });
     if (errThis >= 3 && errThis > errPrev) alerts.push({ tab: 'Errors', text: `Problems are up: ${errThis} in the last 7 days, ${errPrev} in the 7 days before` });
     if (newFb.length) alerts.push({ tab: 'Feedback', text: `${newFb.length} new feedback ${newFb.length === 1 ? 'entry' : 'entries'} in the last 7 days${lowFb.length ? `, ${lowFb.length} rated 2.5 or lower` : ''}` });
     if (newDiag.length) alerts.push({ tab: 'Diagnostics', text: `${newDiag.length} diagnostic ${newDiag.length === 1 ? 'report' : 'reports'} in the last 7 days` });
     return {
-      alerts, retention, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
+      alerts, totalPeople, retention, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
       avgRating: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null, ratedN: rated.length,
       clips: sumCol(users, 'Clip library size'), sessions: sumCol(users, 'Sessions'), minutes: Math.round(sumCol(users, 'Active minutes')),
       versions: tally(users, u => u['App version']), devices: tally(users, u => u['Device']), os: tally(users, u => u['OS version']), screens: tally(users, u => realPx(u['Screen'])),
@@ -158,17 +245,12 @@ function OwnerView({ data, version }) {
     };
   }, [data, version]);
   if (picked) {
-    const rowsFor = (rows) => {
-      if (!rows || !rows.length) return [];
-      const col = rows[0].findIndex(h => String(h || '').trim().toLowerCase() === 'email');
-      if (col < 0) return [];
-      return [rows[0], ...rows.slice(1).filter(r => String(r[col] || '').trim().toLowerCase() === picked.toLowerCase())];
-    };
-    const one = { stats: rowsFor(data.stats), feedback: rowsFor(data.feedback), errors: rowsFor(data.errors), history: rowsFor(data.history), diagnostics: rowsFor(data.diagnostics), generated: data.generated };
     return (
       <>
         <button onClick={() => setPicked(null)} style={{ padding: '8px 14px', marginBottom: '12px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>{'\u2190'} Back to everyone</button>
-        <MyView data={one} who={picked} />
+        {one.kind === 'loading' && <div style={{ ...card, ...sub }}>Loading {picked}…</div>}
+        {one.kind === 'error' && <div role="alert" style={{ ...card, color: '#d93025', fontWeight: '600' }}>Couldn’t load that person right now. Go back and try again in a minute.</div>}
+        {one.kind === 'ready' && <MyView data={one.data} who={picked} />}
       </>
     );
   }
@@ -180,20 +262,21 @@ function OwnerView({ data, version }) {
             {m.alerts.map((a, i) => (
               <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '13px', lineHeight: 1.5, marginBottom: '6px' }}>
                 <span aria-label="Attention" style={{ flex: '0 0 auto', fontWeight: '700' }}>{'\u25B2'}</span>
-                <span>{a.text}{links[a.tab] && <> <a href={links[a.tab]} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>Open {a.tab} tab {'\u2197'}</a></>}</span>
+                <span>{a.text}{a.href && <> <a href={a.href} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>{a.hrefText} {'\u2197'}</a></>}{links[a.tab] && <> <a href={links[a.tab]} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>Open {a.tab} tab {'\u2197'}</a></>}</span>
               </div>
             ))}
             {links.Sheet && <div style={{ marginTop: '8px', fontSize: '13px' }}><a href={links.Sheet} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, fontWeight: '600' }}>Open the spreadsheet {'\u2197'}</a></div>}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
-            <Tile label="People" value={m.users.length} />
+            <Tile label="People" value={m.totalPeople} />
             <Tile label="Active in 7 days" value={m.active7} hint={`${m.active1} in the last day`} />
             <Tile label="Avg rating" value={m.avgRating ?? '–'} hint={m.ratedN ? `${m.ratedN} rating${m.ratedN === 1 ? '' : 's'}` : 'none yet'} />
             <Tile label="Clips in libraries" value={m.clips} />
             <Tile label="Sessions" value={m.sessions} hint={`${m.minutes} min open`} />
             <Tile label="Problems (7 days)" value={m.errCount} />
           </div>
+          {m.totalPeople > m.users.length && <div style={{ ...sub, margin: '-6px 0 14px', lineHeight: 1.5 }}>The charts below use the {m.users.length} most recently active people (of {m.totalPeople}). The People list at the bottom covers everyone.</div>}
 
           <div style={card}>
             <h3 style={h}>People active per day</h3>
@@ -209,7 +292,7 @@ function OwnerView({ data, version }) {
               ['The next day', m.retention.elig1 ? `${m.retention.back1} of ${m.retention.elig1}` : 'not enough time yet'],
               ['Within a week', m.retention.elig7 ? `${m.retention.back7} of ${m.retention.elig7}` : 'not enough time yet'],
             ]} />
-            <div style={{ ...sub, marginTop: '8px', lineHeight: 1.5 }}>Based on the days each person used the app. Days before the daily history existed can\u2019t be counted, so early numbers read low.</div>
+            <div style={{ ...sub, marginTop: '8px', lineHeight: 1.5 }}>Based on the days each person used the app. Days before the daily history existed can’t be counted, so early numbers read low.</div>
           </div>
 
           <div style={card}>
@@ -296,28 +379,7 @@ function OwnerView({ data, version }) {
             ))}
           </div>
 
-          <div style={card}>
-            <h3 style={h}>People ({m.users.length})</h3>
-            <div style={{ ...sub, marginBottom: '6px' }}>Tap an email to see that person\u2019s dashboard</div>
-            <div style={{ overflowX: 'auto' }}>
-              <table style={{ borderCollapse: 'collapse', fontSize: '12px', width: '100%', minWidth: '560px' }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', color: 'var(--rc-ink2)' }}>
-                    {['Email', 'Last visit', 'Visits', 'Days', 'Clips', 'Device', 'Ver', 'Where'].map(c => <th key={c} style={{ padding: '4px 6px', borderBottom: '1px solid var(--rc-line)', fontWeight: '600' }}>{c}</th>)}
-                  </tr>
-                </thead>
-                <tbody>
-                  {m.users.slice().sort((a, b) => String(b['Last login (PT)']).localeCompare(String(a['Last login (PT)']))).map(u => (
-                    <tr key={u['Email']}>
-                      {[<button key="e" onClick={() => setPicked(String(u['Email']))} style={{ background: 'none', border: 'none', padding: 0, color: BLUE, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}>{u['Email']}</button>, String(u['Last login (PT)']).slice(5, 16), u['Sessions'], u['Days active'], u['Clip library size'], `${u['Device']} ${u['OS version']}`, u['App version'], `${u['Country']} ${u['Region']}`].map((c, i) => (
-                        <td key={i} style={{ padding: '4px 6px', borderBottom: '1px solid var(--rc-line)', whiteSpace: 'nowrap' }}>{c}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <PeopleList accessToken={accessToken} total={m.totalPeople} onPick={setPicked} />
       </>
   );
 }
@@ -535,6 +597,7 @@ export default function Dashboard({ accessToken, isOwner, version }) {
     try {
       const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: asked === 'all' ? 'dashboard' : 'mydata', accessToken }) });
       if (res.status === 403) { setState({ kind: 'error', msg: 'The owner view is only for the app’s owner. If that’s you, check the OWNER_EMAIL setting in Netlify.' }); return; }
+      if (res.status === 503) { setState({ kind: 'error', msg: 'The spreadsheet is busy right now (Google limits how fast it can be read). Please try again in a minute.' }); return; }
       if (!res.ok) { setState({ kind: 'error', msg: 'Couldn’t load the numbers right now. Please try again.' }); return; }
       setData({ ...(await res.json()), mode: asked });
       setState({ kind: 'ready', msg: '' });
@@ -562,7 +625,7 @@ export default function Dashboard({ accessToken, isOwner, version }) {
       {state.kind === 'error' && <div role="alert" style={{ ...card, color: '#d93025', fontWeight: '600' }}>{state.msg}</div>}
       {state.kind === 'loading' && !shown && <div style={{ ...card, ...sub }}>Reading your numbers…</div>}
 
-      {shown && state.kind !== 'error' && (mode === 'all' ? <OwnerView data={shown} version={version} /> : <MyView data={shown} />)}
+      {shown && state.kind !== 'error' && (mode === 'all' ? <OwnerView data={shown} version={version} accessToken={accessToken} /> : <MyView data={shown} />)}
     </div>
   );
 }

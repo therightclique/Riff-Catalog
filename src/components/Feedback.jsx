@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { noteMilestone, sendDiagnostic, recentProblems } from './UsageLog';
+import { sendOrQueue } from './UsageOutbox';
 
 // Feedback section (own item in the main menu). Later this becomes Support, with feedback and support together.
 
@@ -10,7 +11,6 @@ const ul = { margin: '0 0 10px', paddingLeft: '20px' };
 const li = { marginBottom: '4px' };
 const note = { fontSize: '12px', color: 'var(--rc-ink2)', margin: '0 0 8px' };
 
-const ENDPOINT = '/.netlify/functions/log-usage';
 const STAR_FULL = '#f5b301';
 
 function Stars({ value, onChange, disabled }) {
@@ -42,12 +42,14 @@ function FeedbackForm({ version, accessToken }) {
   const send = async () => {
     if (!rating || sending) return;
     if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then try again.' }); return; }
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) { setState({ kind: 'error', msg: 'You appear to be offline. Your message is still here. Try again when you’re connected.' }); return; }
     setState({ kind: 'sending', msg: '' });
     try {
-      const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'feedback', accessToken, rating, text: text.trim(), liked: liked.trim(), disliked: disliked.trim(), ideas: ideas.trim(), version }) });
-      if (res.ok) { setState({ kind: 'sent', msg: 'Thank you! Your feedback was sent.' }); noteMilestone('feedback'); setRating(0); setText(''); setLiked(''); setDisliked(''); setIdeas(''); return; }
-      setState({ kind: 'error', msg: res.status === 401 ? 'Your Google connection has expired. Reconnect Drive, then try again.' : 'Couldn’t send right now. Your message is still here. Please try again.' });
+      const out = await sendOrQueue('feedback', { rating, text: text.trim(), liked: liked.trim(), disliked: disliked.trim(), ideas: ideas.trim(), version }, accessToken);
+      if (out === 'sent' || out === 'queued') {
+        setState({ kind: 'sent', msg: out === 'sent' ? 'Thank you! Your feedback was sent.' : 'Thank you! Your feedback is saved on this device and will be sent automatically as soon as the server is reachable.' });
+        noteMilestone('feedback'); setRating(0); setText(''); setLiked(''); setDisliked(''); setIdeas(''); return;
+      }
+      setState({ kind: 'error', msg: 'Couldn’t send. If your Google connection has expired, reconnect Drive and try again. Your message is still here.' });
     } catch {
       setState({ kind: 'error', msg: 'Couldn’t send right now. Your message is still here. Please try again.' });
     }
@@ -99,11 +101,10 @@ function ReportProblem({ version, accessToken }) {
   const send = async () => {
     if (!ready || sending) return;
     if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then try again.' }); return; }
-    if (typeof navigator !== 'undefined' && navigator.onLine === false) { setState({ kind: 'error', msg: 'You appear to be offline. Your note is still here. Try again when you’re connected.' }); return; }
     setState({ kind: 'sending', msg: '' });
     try {
-      const ok = await sendDiagnostic(accessToken, version, what.trim());
-      if (ok) { setState({ kind: 'sent', msg: 'Report sent. Thank you!' }); setWhat(''); return; }
+      const out = await sendDiagnostic(accessToken, version, what.trim());
+      if (out !== 'failed') { setState({ kind: 'sent', msg: out === 'sent' ? 'Report sent. Thank you!' : 'Thank you! Your report is saved on this device and will be sent automatically as soon as the server is reachable.' }); setWhat(''); return; }
       setState({ kind: 'error', msg: 'Couldn’t send right now. Your note is still here. Please try again.' });
     } catch { setState({ kind: 'error', msg: 'Couldn’t send right now. Your note is still here. Please try again.' }); }
   };

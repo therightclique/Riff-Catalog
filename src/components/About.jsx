@@ -75,7 +75,8 @@ function PrivacyPolicy() {
       <p style={p}>
         Feedback is optional and only sent when you press Send in the Feedback section of the menu. We keep your star rating, the things you typed
         (what you find useful, what you dislike, ideas, and anything else), your email address, the country and region of your
-        connection, the date and the app version. Each submission is kept as its own entry.
+        connection, the date and the app version. Each submission is kept as its own entry. If your message can't be sent right away (no connection, or the
+        server is busy), it waits on your device and is sent automatically later. Your usage numbers work the same way.
       </p>
 
       <h3 style={h3}>If you send a diagnostic report</h3>

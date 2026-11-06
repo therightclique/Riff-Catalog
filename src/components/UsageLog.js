@@ -15,6 +15,7 @@ import { listPendingSummaries } from './OfflineStore';
 import { getJamBeats, getPrefs } from './SettingsService';
 import { getTheme } from './Appearance';
 import { NOTE_ROLE_COLORS, DEFAULT_NOTE_ROLE_COLORS } from './theme';
+import { sendOrQueue, flushOutbox, backoffRemainingMs, noteSendFailure, noteSendSuccess } from './UsageOutbox';
 import { loadCounters, saveCounters, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, recentProblems, installErrorCapture, installActiveTimer, flushActive } from './UsageCounters';
 
 export { noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, recentProblems, installErrorCapture, installActiveTimer };
@@ -143,11 +144,11 @@ export async function sendDiagnostic(accessToken, version, note) {
   const details = await deviceDetails();
   const pending = await pendingCount();
   const lines = recentProblems().map(p => `${new Date(p.t).toISOString().slice(5, 16).replace('T', ' ')} ${p.area} ${p.code}${p.view ? ' > ' + p.view : ''}${p.n > 1 ? ' x' + p.n : ''}`);
-  const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
-    kind: 'diagnostic', accessToken, version, note: String(note || '').slice(0, 500), device: deviceKind(), installed: isInstalled(), online: navigator.onLine,
+  // 'sent' | 'queued' (saved on this device, goes out automatically) | 'failed'
+  return sendOrQueue('diagnostic', {
+    version, note: String(note || '').slice(0, 500), device: deviceKind(), installed: isInstalled(), online: navigator.onLine,
     ...details, pendingClips: pending, storageMB: await storageUsedMB(), problems: lines,
-  }) });
-  return res.ok;
+  }, accessToken);
 }
 
 // Sends one report. Never throws and never blocks the app; if anything fails
@@ -155,6 +156,8 @@ export async function sendDiagnostic(accessToken, version, note) {
 export async function reportUsage(accessToken, version) {
   try {
     if (!accessToken || !navigator.onLine) return false;
+    flushOutbox(accessToken);   // anything written earlier that couldn't be sent
+    if (backoffRemainingMs() > 0) { scheduleRetry(accessToken, version); return false; }   // the server asked for a pause
     const before = load();
     if (Date.now() - before.lastReport < MIN_GAP_MS) return false;
     before.lastReport = Date.now();   // claim the slot first so two quick calls can't both send
@@ -192,9 +195,16 @@ export async function reportUsage(accessToken, version) {
     };
     const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!res.ok) {
-      const s = load(); s.lastReport = 0; save(s);   // allow a retry on the next open
+      const s = load(); s.lastReport = 0; save(s);   // the counts stay on the device; allow a retry
+      // Busy or erroring server: wait longer each time (with a random spread) rather than asking again at once.
+      // A rejected sign-in (401) isn't the server's fault, so it doesn't lengthen the wait.
+      if (res.status !== 401 && res.status !== 403) {
+        let ra = 0; try { ra = Number(res.headers.get('retry-after')) || 0; } catch { /* no header */ }
+        scheduleRetry(accessToken, version, noteSendFailure(ra));
+      }
       return false;
     }
+    noteSendSuccess();
     // Success: take off exactly what was sent.
     try { const j = await res.json(); localStorage.setItem('rc_owner', j?.owner === true ? '1' : ''); } catch { /* flag unchanged */ }
     const now = load();
@@ -218,6 +228,15 @@ export async function reportUsage(accessToken, version) {
     return true;
   } catch {
     try { const s = load(); s.lastReport = 0; save(s); } catch { /* ignore */ }
+    try { scheduleRetry(accessToken, version, noteSendFailure(0)); } catch { /* ignore */ }
     return false;
   }
+}
+
+// If the app stays open, try again once the wait is over (at most one timer at a time; capped at 30 minutes so
+// the sign-in is still fresh). If the app is closed, the next open tries again on its own.
+let retryTimer = null;
+function scheduleRetry(accessToken, version, waitMs = backoffRemainingMs()) {
+  if (retryTimer) return;
+  retryTimer = setTimeout(() => { retryTimer = null; reportUsage(accessToken, version); }, Math.min(30 * 60000, Math.max(30000, waitMs)) + 1000);
 }

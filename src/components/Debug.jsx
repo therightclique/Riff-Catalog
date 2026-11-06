@@ -55,11 +55,10 @@ export default function Debug({ accessToken, version }) {
   const handleDiagnostic = async () => {
     if (diag.kind === 'sending') return;
     if (!accessToken) { setDiag({ kind: 'error', msg: 'Connect to Google Drive first, then try again.' }); return; }
-    if (navigator.onLine === false) { setDiag({ kind: 'error', msg: 'You appear to be offline. Try again when you\u2019re connected.' }); return; }
     setDiag({ kind: 'sending', msg: '' });
     try {
-      const ok = await sendDiagnostic(accessToken, version, diagNote);
-      if (ok) { setDiag({ kind: 'sent', msg: 'Report sent. Thank you!' }); setDiagNote(''); }
+      const out = await sendDiagnostic(accessToken, version, diagNote);
+      if (out !== 'failed') { setDiag({ kind: 'sent', msg: out === 'sent' ? 'Report sent. Thank you!' : 'Thank you! Your report is saved on this device and will be sent automatically as soon as the server is reachable.' }); setDiagNote(''); }
       else setDiag({ kind: 'error', msg: 'Couldn\u2019t send the report right now. Please try again.' });
     } catch { setDiag({ kind: 'error', msg: 'Couldn\u2019t send the report right now. Please try again.' }); }
   };

@@ -75,7 +75,7 @@ const THEMES = ['light', 'dark', 'match device'];
 const IDX = Object.fromEntries(COLS.map((name, i) => [name, i]));
 const TAB_COL = (id) => IDX[`Views: ${TABS.find(([k]) => k === id)[1]}`];
 
-export const _internals = { COLS, TABS };
+export const _internals = { COLS, TABS, resetBusy: () => { busyUntil = 0; } };
 
 // ── Google auth for the spreadsheet (service account) ───────────────────
 
@@ -289,11 +289,30 @@ export function buildRow(existing, email, p, where) {
 
 let sheetInfo = null; // { title, gid } - looked up once per warm instance
 
+// Google limits how many Sheets requests one account can make per minute (60 reads and 60 writes for this app).
+// A refused request (429) or a Google hiccup (5xx) is retried a couple of times with a short, slightly random
+// wait. If Google is still refusing, the error is marked "busy" so the app is told to try again later instead
+// of failing, and for the next 20 seconds routine reports are turned away early to give Google room to recover.
+const RETRY_MS = Number(process.env.SHEETS_RETRY_MS ?? 700);
+const RETRIES = 2;
+let busyUntil = 0;
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
 async function sheetsFetch(token, url, init = {}) {
-  const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers || {}) } });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(`Sheets ${res.status}: ${body.error?.message || 'error'}`);
-  return body;
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(init.headers || {}) } });
+    const body = await res.json().catch(() => ({}));
+    if (res.ok) return body;
+    const retryable = res.status === 429 || res.status >= 500;
+    if (retryable && attempt < RETRIES) {
+      const ra = Math.min(3000, Number(res.headers?.get?.('retry-after') || 0) * 1000);
+      await sleep(Math.max(ra, RETRY_MS * (attempt + 1)) + Math.random() * RETRY_MS * 0.4);
+      continue;
+    }
+    const err = new Error(`Sheets ${res.status}: ${body.error?.message || 'error'}`);
+    if (res.status === 429) { err.busy = true; busyUntil = Date.now() + 20000; }
+    throw err;
+  }
 }
 
 // The sheet tabs are found by name: "Stats" (one row per person) and "Feedback" (one row per submission).
@@ -383,19 +402,38 @@ async function afterStatsWrite(token, sheetId, email, row, p, where) {
   } catch (e) { console.error('error log append failed:', e.message); }
 }
 
+// Remembers which sheet row belongs to each email, so a returning person's report skips reading the whole email column.
+// Every use is double-checked against the row's own email, so rows that moved (a duplicate removed) just fall back to a full lookup.
+const rowCache = new Map();
+const remember = (email, n) => { if (rowCache.size > 5000) rowCache.clear(); if (n > 0) rowCache.set(email, n); };
+
 export async function upsertUser({ token, sheetId, email, payload, where }) {
   const { title, gid } = await getSheetInfo(token, sheetId);
-  let emails = await emailRows(token, sheetId, title);
-  await ensureHeader(token, sheetId, title, emails[0]);
-  if (emails[0] !== 'email') emails = ['email', ...emails.slice(1)];
-  let rowNum = emails.indexOf(email, 1) + 1; // 1-based sheet row; 0 when not found
+  let rowNum = 0, current = null;
+  const hint = headerWritten ? rowCache.get(email) : 0;
+  if (hint) {
+    const cur = await sheetsFetch(token, rangeUrl(sheetId, title, `A${hint}:${LAST_COL}${hint}`));
+    const got = cur.values?.[0];
+    if (got && String(got[0] || '').trim().toLowerCase() === email) { rowNum = hint; current = got; }
+    else rowCache.delete(email);
+  }
+  if (!rowNum) {
+    let emails = await emailRows(token, sheetId, title);
+    await ensureHeader(token, sheetId, title, emails[0]);
+    if (emails[0] !== 'email') emails = ['email', ...emails.slice(1)];
+    rowNum = emails.indexOf(email, 1) + 1; // 1-based sheet row; 0 when not found
+    if (rowNum > 0) {
+      const cur = await sheetsFetch(token, rangeUrl(sheetId, title, `A${rowNum}:${LAST_COL}${rowNum}`));
+      current = cur.values?.[0] || null;
+    }
+  }
 
   if (rowNum > 0) {
-    const cur = await sheetsFetch(token, rangeUrl(sheetId, title, `A${rowNum}:${LAST_COL}${rowNum}`));
-    const row = buildRow(cur.values?.[0] || null, email, payload, where);
+    const row = buildRow(current, email, payload, where);
     await sheetsFetch(token, rangeUrl(sheetId, title, `A${rowNum}:${LAST_COL}${rowNum}`, '?valueInputOption=RAW'), {
       method: 'PUT', body: JSON.stringify({ values: [row] }),
     });
+    remember(email, rowNum);
     await afterStatsWrite(token, sheetId, email, row, payload, where);
     return { row: rowNum, created: false };
   }
@@ -406,6 +444,7 @@ export async function upsertUser({ token, sheetId, email, payload, where }) {
   });
   const m = /!A(\d+)/.exec(out.updates?.updatedRange || '');
   rowNum = m ? Number(m[1]) : 0;
+  remember(email, rowNum);
 
   // Two first-time reports from the same person at the same instant (e.g. two
   // devices) could each add a row. Check once and remove any extras so the
@@ -478,11 +517,45 @@ async function readTab(token, sheetId, name, maxRows) {
   if (maxRows && rows.length > maxRows + 1) return [rows[0], ...rows.slice(-maxRows)];
   return rows;
 }
+// The owner dashboard never loads everyone at once. The charts use the most recently active people (STATS_WINDOW),
+// the People list is fetched 25 at a time (peoplePage), and one person's full numbers are fetched when tapped (personData).
+export const STATS_WINDOW = 300;
+export const PEOPLE_PAGE = 25;
+const PEOPLE_COLS = ['Email', 'Last login (PT)', 'Sessions', 'Days active', 'Clip library size', 'Device', 'OS version', 'App version', 'Country', 'Region'];
+
+// Stats rows, newest visit first, with the header kept apart.
+async function sortedPeople(token, sheetId) {
+  const rows = await readTab(token, sheetId, 'Stats');
+  const head = rows[0] || [];
+  const at = head.findIndex(h => String(h || '').trim() === 'Last login (PT)');
+  const body = rows.slice(1).filter(r => Array.isArray(r) && String(r[0] || '').trim());
+  body.sort((a, b) => String(b[at] ?? '').localeCompare(String(a[at] ?? '')));
+  return { head, body };
+}
+
+export async function peoplePage({ token, sheetId, page }) {
+  const { head, body } = await sortedPeople(token, sheetId);
+  const pages = Math.max(1, Math.ceil(body.length / PEOPLE_PAGE));
+  const n = Math.min(Math.max(0, Math.floor(Number(page) || 0)), pages - 1);
+  const idx = PEOPLE_COLS.map(c => head.findIndex(h => String(h || '').trim() === c));
+  const rows = body.slice(n * PEOPLE_PAGE, (n + 1) * PEOPLE_PAGE).map(r => idx.map(i => (i >= 0 ? r[i] ?? '' : '')));
+  return { columns: PEOPLE_COLS, rows, page: n, pages, total: body.length, pageSize: PEOPLE_PAGE };
+}
+
+// One person's own numbers for the owner, found by the email the owner tapped. Owner-only (checked by the caller).
+export async function personData({ token, sheetId, target }) {
+  const email = String(target || '').trim().toLowerCase();
+  if (!email || email.length > 254) return null;
+  return myData({ token, sheetId, email });
+}
+
 export async function dashboardData({ token, sheetId }) {
-  const [stats, feedback, errors, history, diagnostics] = await Promise.all([
-    readTab(token, sheetId, 'Stats'), readTab(token, sheetId, 'Feedback', 500), readTab(token, sheetId, 'Errors', 500),
-    readTab(token, sheetId, 'History', 20000), readTab(token, sheetId, 'Diagnostics', 100),
+  const [people, feedback, errors, history, diagnostics] = await Promise.all([
+    sortedPeople(token, sheetId), readTab(token, sheetId, 'Feedback', 500), readTab(token, sheetId, 'Errors', 500),
+    readTab(token, sheetId, 'History', 5000), readTab(token, sheetId, 'Diagnostics', 100),
   ]);
+  const stats = [people.head, ...people.body.slice(0, STATS_WINDOW)];
+  const totals = { people: people.body.length, window: Math.min(people.body.length, STATS_WINDOW) };
   // Links to the spreadsheet and its tabs, for the owner's "Needs attention" list.
   const info = await getSheetInfo(token, sheetId);
   const base = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/edit`;
@@ -491,7 +564,7 @@ export async function dashboardData({ token, sheetId }) {
     const t = name === 'Stats' ? { sheetId: info.gid } : info.tabs.find(x => String(x.title).trim().toLowerCase() === name.toLowerCase());
     if (t && Number.isInteger(t.sheetId)) sheetLinks[name] = `${base}#gid=${t.sheetId}`;
   }
-  return { stats, feedback, errors, history, diagnostics, sheetLinks, generated: ptNow() };
+  return { stats, totals, feedback, errors, history, diagnostics, sheetLinks, generated: ptNow() };
 }
 
 // ── A person's own numbers: only rows whose Email is the verified caller's email, filtered here before anything is sent ──
@@ -524,6 +597,10 @@ const reply = (status, obj) => new Response(JSON.stringify(obj), {
   status, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
 });
 
+const busy = (retryAfter) => new Response(JSON.stringify({ ok: false, busy: true, retryAfter }), {
+  status: 503, headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', 'Retry-After': String(retryAfter) },
+});
+
 export default async (req, context) => {
   if (req.method !== 'POST') return reply(405, { ok: false, error: 'POST only' });
 
@@ -542,6 +619,10 @@ export default async (req, context) => {
     return reply(400, { ok: false, error: 'bad request' });
   }
 
+  // While Google is refusing requests, routine reports are turned away early (the app keeps its counts and tries
+  // again later). Feedback, problem reports and the dashboard still go through.
+  if (!body.kind && Date.now() < busyUntil) return busy(Math.ceil((busyUntil - Date.now()) / 1000) + 30);
+
   try {
     const email = await verifyUser(body.accessToken);
     if (!email) return reply(401, { ok: false, error: 'not verified' });
@@ -556,6 +637,16 @@ export default async (req, context) => {
     if (body.kind === 'dashboard') {
       if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
       return reply(200, { ok: true, ...(await dashboardData({ token, sheetId })) });
+    }
+    if (body.kind === 'people') {
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      return reply(200, { ok: true, ...(await peoplePage({ token, sheetId, page: body.page })) });
+    }
+    if (body.kind === 'person') {
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      const one = await personData({ token, sheetId, target: body.target });
+      if (!one) return reply(400, { ok: false, error: 'bad request' });
+      return reply(200, { ok: true, ...one });
     }
     if (body.kind === 'mydata') {   // the email comes only from the verified token, never from the request body
       return reply(200, { ok: true, owner: isOwner(email), ...(await myData({ token, sheetId, email })) });
@@ -573,6 +664,7 @@ export default async (req, context) => {
     const result = await upsertUser({ token, sheetId, email, payload: cleanPayload(body), where });
     return reply(200, { ok: true, created: result.created, owner: isOwner(email) });
   } catch (err) {
+    if (err.busy) return busy(60);
     console.error('log-usage failed:', err.message);
     return reply(500, { ok: false, error: 'could not record' });
   }

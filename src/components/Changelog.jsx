@@ -65,6 +65,17 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Built for more people',
+        items: [
+          'If your feedback, a problem report or your usage numbers can\u2019t be sent (no connection, or the server is busy), they wait safely on your device and are sent automatically later. Written messages are never lost to a failed send',
+          'When the server is busy, the app now waits a little longer between tries, with a random spread, instead of retrying all at once',
+          'The server retries when Google briefly refuses a request, remembers where each person\u2019s row is so each visit does less work, and tells the app to come back later if Google is still busy',
+          'Dashboard (owner): the People list now loads 25 people per page (newest first, with Newer and Older buttons), and tapping a person loads just that person. The charts use the 300 most recently active people, which keeps the page fast as more people join',
+          'Dashboard (owner): a notice appears when 80 or more people have signed in, since Google lists a 100-user sign-in limit on the project page (it shouldn\u2019t apply to this app\u2019s kind of permission, but it is watched anyway)',
+          'Privacy Policy: notes that messages waiting to be sent are held on your device',
+        ],
+      },
+      {
         title: 'Dashboard: note colors',
         items: [
           'A person\u2019s Dashboard now shows their four note colors (Root, 3rd, 5th, Other) as swatches with their hex codes',
