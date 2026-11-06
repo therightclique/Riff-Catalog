@@ -80,8 +80,8 @@ function PrivacyPolicy() {
 
       <h3 style={h3}>If you send a diagnostic report</h3>
       <p style={p}>
-        On the Debug tab (in About) you can choose to send a report when something isn't working. It is only sent when you press the button.
-        It contains the date, your email, an optional note you type, your app version, device, system, browser and screen size,
+        On the Debug tab (in About) or the Report a problem tab (in Feedback) you can choose to send a report when something isn't working. It is only sent when you press the button.
+        It contains the date, your email, a note you type (optional on the Debug tab), your app version, device, system, browser and screen size,
         whether you're online, how many recordings are waiting on your device, how much storage the app uses, the country and region of
         your connection, and the list of recent problem codes described above. It does not include the console text shown on that
         screen, your recordings or anything you've written in the app.

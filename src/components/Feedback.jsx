@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { noteMilestone } from './UsageLog';
+import { noteMilestone, sendDiagnostic, recentProblems } from './UsageLog';
 
 // Feedback section (own item in the main menu). Later this becomes Support, with feedback and support together.
 
@@ -76,7 +76,7 @@ function FeedbackForm({ version, accessToken }) {
       ))}
 
       <div style={{ ...note, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', margin: '0 0 12px', lineHeight: 1.45 }}>
-        <strong>This form is not for technical support.</strong> Messages here are not answered, so please don't use it to report a problem you need fixed. A support option is coming later. Your email, country and region are sent with your feedback.
+        <strong>This form is not for technical support.</strong> Messages here are not answered. If something is broken, use the Report a problem tab. A full support option is coming later. Your email, country and region are sent with your feedback.
       </div>
 
       <button onClick={send} disabled={!rating || sending}
@@ -89,10 +89,79 @@ function FeedbackForm({ version, accessToken }) {
 }
 
 
+function ReportProblem({ version, accessToken }) {
+  const [what, setWhat] = useState('');
+  const [problems, setProblems] = useState(() => recentProblems());
+  const [state, setState] = useState({ kind: 'idle', msg: '' });   // idle | sending | sent | error
+  const sending = state.kind === 'sending';
+  const ready = what.trim().length >= 3;
+
+  const send = async () => {
+    if (!ready || sending) return;
+    if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then try again.' }); return; }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) { setState({ kind: 'error', msg: 'You appear to be offline. Your note is still here. Try again when you’re connected.' }); return; }
+    setState({ kind: 'sending', msg: '' });
+    try {
+      const ok = await sendDiagnostic(accessToken, version, what.trim());
+      if (ok) { setState({ kind: 'sent', msg: 'Report sent. Thank you!' }); setWhat(''); return; }
+      setState({ kind: 'error', msg: 'Couldn’t send right now. Your note is still here. Please try again.' });
+    } catch { setState({ kind: 'error', msg: 'Couldn’t send right now. Your note is still here. Please try again.' }); }
+  };
+
+  return (
+    <div style={card}>
+      <h3 style={{ ...h3, marginTop: 0 }}>Report a problem</h3>
+      <p style={p}>Tell us what went wrong. Your note is sent with a short technical report so the problem can be tracked down.</p>
+      <label htmlFor="rc-report-note" style={{ display: 'block', fontWeight: '600', marginBottom: '6px' }}>What happened?</label>
+      <textarea id="rc-report-note" value={what} onChange={(e) => { setWhat(e.target.value.slice(0, 500)); if (state.kind === 'sent') setState({ kind: 'idle', msg: '' }); }} disabled={sending} rows={4} maxLength={500}
+        placeholder="For example: I tapped Save on a recording and it never finished."
+        style={{ width: '100%', boxSizing: 'border-box', padding: '10px', fontSize: '16px', fontFamily: 'inherit', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', resize: 'vertical', marginBottom: '12px' }} />
+
+      <div style={{ fontWeight: '600', marginBottom: '4px' }}>Recent problems on this device ({problems.length})</div>
+      <div style={{ fontFamily: '"Courier New", monospace', fontSize: '11px', lineHeight: 1.5, maxHeight: '110px', overflowY: 'auto', backgroundColor: 'var(--rc-surface)', border: '1px solid var(--rc-line)', borderRadius: '8px', padding: '6px 8px', marginBottom: '12px' }}>
+        {problems.length === 0 ? <span style={{ color: 'var(--rc-ink2)' }}>None. Nothing has gone wrong lately.</span>
+          : problems.slice().reverse().map((q, i) => (
+            <div key={i}>{new Date(q.t).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · {q.area} · {q.code}{q.view ? ` · ${q.view}` : ''}{q.n > 1 ? ` ×${q.n}` : ''}</div>
+          ))}
+      </div>
+
+      <div style={{ ...note, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', margin: '0 0 12px', lineHeight: 1.45 }}>
+        The report includes your app version, device, system, browser and screen size, whether you’re online, how many recordings are waiting on this device, the problem codes above, and your email, country and region. It never includes your recordings, clip names, lyrics or anything you’ve written in the app. Reports are read, but we can’t reply to each one yet.
+      </div>
+
+      <div style={{ display: 'flex', gap: '8px' }}>
+        <button onClick={send} disabled={!ready || sending}
+          style={{ flex: 1, padding: '12px', fontSize: '16px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: !ready || sending ? 'default' : 'pointer', backgroundColor: !ready || sending ? 'var(--rc-line)' : '#1a73e8', color: !ready || sending ? 'var(--rc-ink2)' : 'white' }}>
+          {sending ? 'Sending…' : 'Send report'}
+        </button>
+        <button onClick={() => setProblems(recentProblems())}
+          style={{ padding: '12px 14px', fontSize: '14px', borderRadius: '10px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>Refresh list</button>
+      </div>
+      <div role="status" aria-live="polite" style={{ marginTop: '10px', fontSize: '14px', fontWeight: '600', color: state.kind === 'error' ? '#d93025' : '#1e8e3e', minHeight: '20px' }}>{state.msg}</div>
+    </div>
+  );
+}
+
+const TABS = [
+  { id: 'feedback', label: 'Feedback', Component: FeedbackForm },
+  { id: 'report', label: 'Report a problem', Component: ReportProblem },
+];
+
 export default function Feedback({ version, accessToken }) {
+  const [tab, setTab] = useState('feedback');
+  const Active = (TABS.find(t => t.id === tab) || TABS[0]).Component;
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-      <FeedbackForm version={version} accessToken={accessToken} />
+      <div role="tablist" style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
+        {TABS.map(t => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+            style={{ flex: 1, minWidth: 0, padding: '10px 6px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', cursor: 'pointer',
+              border: `2px solid ${tab === t.id ? '#1a73e8' : 'var(--rc-line)'}`, backgroundColor: tab === t.id ? 'var(--rc-sel)' : 'var(--rc-surface)', color: tab === t.id ? '#1a73e8' : 'var(--rc-ink)' }}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+      <Active version={version} accessToken={accessToken} />
     </div>
   );
 }

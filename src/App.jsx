@@ -16,6 +16,7 @@ import Jam from './components/Jam';
 import About from './components/About';
 import Dashboard from './components/Dashboard';
 import Feedback from './components/Feedback';
+import UpdateBanner from './components/UpdateBanner';
 import { reportUsage, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
@@ -187,8 +188,8 @@ function App() {
     { id: 'randomizer', label: 'Randomizer', icon: '🎲' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
     { id: 'feedback', label: 'Feedback', icon: '💬' },
-    { id: 'settings', label: 'Settings', icon: '⚙️' },
     { id: 'about', label: 'About', icon: 'ℹ️' },
+    { id: 'settings', label: 'Settings', icon: '⚙️' },   // Settings stays last
   ];
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -1057,6 +1058,7 @@ function App() {
           )}
         </div>
       )}
+      <UpdateBanner />
     </div>
   );
 }

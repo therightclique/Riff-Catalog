@@ -86,6 +86,7 @@ const MILESTONES = [['First recording (PT)', 'Made a recording'], ['First Drive 
 const FEATURES = [['Jam plays', 'Jam plays'], ['Practice picks', 'Practice picks'], ['Key Finder lookups', 'Key Finder lookups'], ['Wheel spins', 'Wheel spins'], ['Surprise me uses', 'Surprise me'], ['Ideas saved (saves)', 'Ideas saved'], ['Library filter uses', 'Library filters'], ['Library sort changes', 'Library sorts'], ['Clip plays', 'Clip plays']];
 
 function OwnerView({ data, version }) {
+  const [picked, setPicked] = useState(null);   // an email the owner tapped in the People table
   const links = (data && data.sheetLinks) || {};
   const m = useMemo(() => {
     if (!data) return null;
@@ -117,6 +118,24 @@ function OwnerView({ data, version }) {
     const lowFb = newFb.filter(f => num(f['Rating']) && num(f['Rating']) <= 2.5);
     const newDiag = diags.filter(d => within(d['Date (PT)'], 7));
     const names = (list) => list.slice(0, 3).map(u => u['Email']).join(', ') + (list.length > 3 ? ` and ${list.length - 3} more` : '');
+    // New people per week and who comes back. Days used come from each person's daily history plus their first and last visit.
+    const dayOf = (str) => Math.floor(Date.parse(`${String(str || '').slice(0, 10)}T00:00:00Z`) / 86400000);
+    const usedDays = new Map();
+    const addDay = (email, str) => { const n = dayOf(str); if (!email || !Number.isFinite(n)) return; if (!usedDays.has(email)) usedDays.set(email, new Set()); usedDays.get(email).add(n); };
+    for (const r of history) addDay(String(r['Email']).toLowerCase(), r['Date (PT)']);
+    for (const u of users) { addDay(String(u['Email']).toLowerCase(), u['First login (PT)']); addDay(String(u['Email']).toLowerCase(), u['Last login (PT)']); }
+    const todayDay = Math.floor(now / 86400000);
+    const iso = (n) => new Date(n * 86400000).toISOString().slice(5, 10);
+    const newByWeek = [];
+    for (let k = 7; k >= 0; k--) {
+      const end = todayDay - 7 * k, start = end - 6;
+      newByWeek.push({ label: `${iso(start)} \u2013 ${iso(end)}`, value: users.filter(u => { const f = dayOf(u['First login (PT)']); return f >= start && f <= end; }).length });
+    }
+    const firstOf = (u) => dayOf(u['First login (PT)']);
+    const elig1 = users.filter(u => firstOf(u) <= todayDay - 1), elig7 = users.filter(u => firstOf(u) <= todayDay - 7);
+    const back1 = elig1.filter(u => usedDays.get(String(u['Email']).toLowerCase())?.has(firstOf(u) + 1)).length;
+    const back7 = elig7.filter(u => { const d = usedDays.get(String(u['Email']).toLowerCase()) || new Set(); for (let i = 1; i <= 7; i++) if (d.has(firstOf(u) + i)) return true; return false; }).length;
+    const retention = { newByWeek, back1, elig1: elig1.length, back7, elig7: elig7.length };
     const alerts = [];
     if (older.length) alerts.push({ tab: 'Stats', text: `${older.length} ${older.length === 1 ? 'person is' : 'people are'} on an older version than ${version}: ${names(older)}` });
     if (away.length) alerts.push({ tab: 'Stats', text: `${away.length} ${away.length === 1 ? 'person hasn\u2019t' : 'people haven\u2019t'} opened the app in over 14 days: ${names(away)}` });
@@ -124,7 +143,7 @@ function OwnerView({ data, version }) {
     if (newFb.length) alerts.push({ tab: 'Feedback', text: `${newFb.length} new feedback ${newFb.length === 1 ? 'entry' : 'entries'} in the last 7 days${lowFb.length ? `, ${lowFb.length} rated 2.5 or lower` : ''}` });
     if (newDiag.length) alerts.push({ tab: 'Diagnostics', text: `${newDiag.length} diagnostic ${newDiag.length === 1 ? 'report' : 'reports'} in the last 7 days` });
     return {
-      alerts, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
+      alerts, retention, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
       avgRating: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null, ratedN: rated.length,
       clips: sumCol(users, 'Clip library size'), sessions: sumCol(users, 'Sessions'), minutes: Math.round(sumCol(users, 'Active minutes')),
       versions: tally(users, u => u['App version']), devices: tally(users, u => u['Device']), os: tally(users, u => u['OS version']), screens: tally(users, u => realPx(u['Screen'])),
@@ -138,6 +157,21 @@ function OwnerView({ data, version }) {
       installed: [{ label: 'Installed app', value: sumCol(users, 'Sessions installed') }, { label: 'In a browser', value: sumCol(users, 'Sessions in browser') }],
     };
   }, [data, version]);
+  if (picked) {
+    const rowsFor = (rows) => {
+      if (!rows || !rows.length) return [];
+      const col = rows[0].findIndex(h => String(h || '').trim().toLowerCase() === 'email');
+      if (col < 0) return [];
+      return [rows[0], ...rows.slice(1).filter(r => String(r[col] || '').trim().toLowerCase() === picked.toLowerCase())];
+    };
+    const one = { stats: rowsFor(data.stats), feedback: rowsFor(data.feedback), errors: rowsFor(data.errors), history: rowsFor(data.history), diagnostics: rowsFor(data.diagnostics), generated: data.generated };
+    return (
+      <>
+        <button onClick={() => setPicked(null)} style={{ padding: '8px 14px', marginBottom: '12px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>{'\u2190'} Back to everyone</button>
+        <MyView data={one} who={picked} />
+      </>
+    );
+  }
   return (
       <>
           <div style={card}>
@@ -164,6 +198,18 @@ function OwnerView({ data, version }) {
           <div style={card}>
             <h3 style={h}>People active per day</h3>
             <Line points={m.line} />
+          </div>
+
+          <div style={card}>
+            <h3 style={h}>New people and coming back</h3>
+            <div style={{ ...sub, marginBottom: '6px' }}>New people per week (first visit)</div>
+            <Bars items={m.retention.newByWeek} max={8} />
+            <div style={{ ...sub, margin: '12px 0 6px' }}>Came back</div>
+            <KV rows={[
+              ['The next day', m.retention.elig1 ? `${m.retention.back1} of ${m.retention.elig1}` : 'not enough time yet'],
+              ['Within a week', m.retention.elig7 ? `${m.retention.back7} of ${m.retention.elig7}` : 'not enough time yet'],
+            ]} />
+            <div style={{ ...sub, marginTop: '8px', lineHeight: 1.5 }}>Based on the days each person used the app. Days before the daily history existed can\u2019t be counted, so early numbers read low.</div>
           </div>
 
           <div style={card}>
@@ -252,6 +298,7 @@ function OwnerView({ data, version }) {
 
           <div style={card}>
             <h3 style={h}>People ({m.users.length})</h3>
+            <div style={{ ...sub, marginBottom: '6px' }}>Tap an email to see that person\u2019s dashboard</div>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ borderCollapse: 'collapse', fontSize: '12px', width: '100%', minWidth: '560px' }}>
                 <thead>
@@ -262,7 +309,7 @@ function OwnerView({ data, version }) {
                 <tbody>
                   {m.users.slice().sort((a, b) => String(b['Last login (PT)']).localeCompare(String(a['Last login (PT)']))).map(u => (
                     <tr key={u['Email']}>
-                      {[u['Email'], String(u['Last login (PT)']).slice(5, 16), u['Sessions'], u['Days active'], u['Clip library size'], `${u['Device']} ${u['OS version']}`, u['App version'], `${u['Country']} ${u['Region']}`].map((c, i) => (
+                      {[<button key="e" onClick={() => setPicked(String(u['Email']))} style={{ background: 'none', border: 'none', padding: 0, color: BLUE, cursor: 'pointer', fontSize: '12px', textDecoration: 'underline' }}>{u['Email']}</button>, String(u['Last login (PT)']).slice(5, 16), u['Sessions'], u['Days active'], u['Clip library size'], `${u['Device']} ${u['OS version']}`, u['App version'], `${u['Country']} ${u['Region']}`].map((c, i) => (
                         <td key={i} style={{ padding: '4px 6px', borderBottom: '1px solid var(--rc-line)', whiteSpace: 'nowrap' }}>{c}</td>
                       ))}
                     </tr>
@@ -334,7 +381,7 @@ async function saveMyData(data) {
 }
 
 // Only ever fed the signed-in person's own rows (the server filters before sending).
-function MyView({ data }) {
+function MyView({ data, who }) {
   const m = useMemo(() => {
     const u = toObjects(data.stats)[0] || null;
     const days = new Set(toObjects(data.history).map(r => String(r['Date (PT)']).slice(0, 10)));
@@ -354,7 +401,9 @@ function MyView({ data }) {
   const done = MS_LABELS.filter(([k]) => String(u[k] || '').trim());
   return (
     <>
-      <div style={{ ...card, ...sub, lineHeight: 1.5 }}>This page shows only the numbers kept about <strong style={{ color: 'var(--rc-ink)' }}>you</strong>. Nobody else’s numbers are ever shown here.</div>
+      <div style={{ ...card, ...sub, lineHeight: 1.5 }}>{who
+        ? <>Owner view of <strong style={{ color: 'var(--rc-ink)' }}>{who}</strong>, as they see it on their own Dashboard.</>
+        : <>This page shows only the numbers kept about <strong style={{ color: 'var(--rc-ink)' }}>you</strong>. Nobody else’s numbers are ever shown here.</>}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
         <Tile label="Visits" value={num(u['Sessions'])} hint={`first on ${String(u['First login (PT)']).slice(0, 10)}`} />
         <Tile label="Days you used it" value={num(u['Days active']) || m.days.size} />
@@ -428,7 +477,7 @@ function MyView({ data }) {
 
       <div style={card}>
         <h3 style={h}>Diagnostic reports you sent ({m.diags.length})</h3>
-        {m.diags.length === 0 && <div style={sub}>None yet. You can send one from About › Debug.</div>}
+        {m.diags.length === 0 && <div style={sub}>None yet. You can send one from About › Debug, or Feedback › Report a problem.</div>}
         {m.diags.slice(0, 5).map((d, i) => (
           <div key={i} style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
             <div style={sub}>{String(d['Date (PT)']).slice(0, 16)} · v{d['App version']} · {d['Device']} {d['OS version']}</div>
@@ -438,12 +487,14 @@ function MyView({ data }) {
         ))}
       </div>
 
+      {!who && (
       <div style={card}>
         <h3 style={h}>Your data</h3>
         <p style={{ ...sub, margin: '0 0 10px', lineHeight: 1.5 }}>Save everything shown on this page as a file. It contains only your own numbers, never your recordings, lyrics or clip names.</p>
         <button onClick={async () => setSaveMsg(await saveMyData(data))} style={{ width: '100%', padding: '12px', fontSize: '15px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: 'pointer', backgroundColor: BLUE, color: 'white' }}>Download my data</button>
         <div role="status" aria-live="polite" style={{ marginTop: '8px', fontSize: '13px', fontWeight: '600', color: '#1e8e3e', minHeight: '18px' }}>{saveMsg}</div>
       </div>
+      )}
     </>
   );
 }
@@ -478,7 +529,7 @@ export default function Dashboard({ accessToken, isOwner, version }) {
 
   return (
     <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-      {isOwner && <div role="tablist" style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>{seg('all', 'Owner: everyone')}{seg('me', 'My account')}</div>}
+      {isOwner && <div role="tablist" style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>{seg('all', 'Owner')}{seg('me', 'My account')}</div>}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 12px' }}>
         <div style={sub}>{shown?.generated ? `Updated ${shown.generated} PT` : ' '}</div>
         <button onClick={load} disabled={state.kind === 'loading'} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>

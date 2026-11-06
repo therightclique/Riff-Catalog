@@ -9,7 +9,7 @@ const CHANGELOG = [
       {
         title: 'About, privacy and feedback',
         items: [
-          'New About section in the menu, with Privacy Policy, User Agreement and Feedback tabs, all in plain English',
+          'New About section in the menu, with Privacy and Agreement tabs (and, as described under Menu changes, Changelog and Debug), all in plain English',
           'Feedback: rate the app from 0.5 to 5 stars (half stars allowed), then tell us what you find useful, what you dislike, and any feature ideas, plus an optional note. Each submission is saved as its own entry. It isn\u2019t for technical support',
           'The Privacy Policy lists exactly what the app collects, and was updated for everything below. Your recordings, lyrics, clip names, song ideas and beats are never collected. They stay in your own Google Drive',
         ],
@@ -38,17 +38,24 @@ const CHANGELOG = [
       {
         title: 'Dashboard',
         items: [
-          'New Dashboard section in the menu. Everyone sees their own numbers there: visits, days used, a 30-day calendar, the firsts they\u2019ve reached, what they use, how they record, speed and problems, their device, and the feedback and reports they sent. It never shows anyone else\u2019s numbers',
+          'New Dashboard section in the menu. Everyone sees their own numbers there: visits, days used, a 30-day calendar, the firsts they\u2019ve reached, what they use, how they record, speed and problems, their device, and the feedback and reports they sent. It never shows anyone else\u2019s numbers. Screen sizes are shown as real pixels (for example 1206\u00d72622) with the layout size beside them',
           'Download my data: save your own numbers, feedback and reports as a file (it never includes recordings, lyrics or clip names)',
-          'The app\u2019s owner can switch between Owner: everyone (people, activity, where new people get to, devices, problems, feedback and reports) and My account',
+          'The app\u2019s owner can switch between Owner (people, activity, new people and who comes back, where new people get to, devices, problems, feedback and reports) and My account. Tapping a person in the owner view shows their dashboard as they see it',
           'The owner view starts with a Needs attention list: people on an older version, people who haven\u2019t opened the app in two weeks, rising problems, and new feedback or diagnostic reports, each with a link to the right tab of the usage spreadsheet',
         ],
       },
       {
         title: 'Menu changes',
         items: [
-          'Feedback is now its own section in the menu, ready to grow into a support section later',
+          'Feedback is now its own section in the menu, ready to grow into a support section later. It has a new Report a problem tab: describe what went wrong and send it with the short technical report',
           'Changelog and Debug moved into About, as tabs next to Privacy and Agreement. The View changelog link on the home screen opens it there',
+          'About now comes just before Settings, and Settings is always last',
+        ],
+      },
+      {
+        title: 'Updates',
+        items: [
+          'When a newer version of the app is available, a banner appears at the bottom with a Reload button, so you don\u2019t stay on an old version. It never reloads by itself, so it can\u2019t interrupt a recording',
         ],
       },
       {
