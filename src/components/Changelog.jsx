@@ -2,6 +2,46 @@ import { useState } from 'react';
 
 const CHANGELOG = [
   {
+    date: '2026-11-06',
+    displayDate: 'November 6, 2026',
+    version: '2.2',
+    entries: [
+      {
+        title: 'More drum beats in Jam',
+        items: [
+          'Ten new beats: skate punk, fast punk, hardcore gallop, D-beat, thrash metal and blast beat, plus beats in other time signatures: a rock waltz in 3/4, a 6/8 ballad, 7/8 (2-2-3) and 5/4 (3+2). Each beat now shows its own time signature',
+        ],
+      },
+      {
+        title: 'Key Finder: major chords stand out',
+        items: [
+          'In the light theme, the white major-chord cards blended into the page. They now have a thin black outline, like the white outline on the minor chords',
+        ],
+      },
+      {
+        title: 'User Guide',
+        items: [
+          'New User Guide that explains every part of the app, with pictures, from signing in and recording to the Library, Key Finder, Practice, Jam, the Randomizer, the Dashboard and Support. It also has a glossary of music terms and answers to common problems',
+          'Open it with the \u201CUser Guide\u201D button at the top of Support, from the About tab, or from the public home page. It opens in its own tab and works on any phone, tablet or computer',
+          'We\u2019ll keep the guide up to date whenever features change',
+        ],
+      },
+      {
+        title: 'Share / Export',
+        items: [
+          'New \u201CShare / Export\u201D button on the \u201CRecording complete\u201D screen. Send the take to another app (Messages, email, Files, Dropbox, OneDrive and more) or save it as an audio file, without saving to Google Drive first',
+          'Every clip in your Library has a share button (\ud83d\udce4) too, including clips still waiting on your device. If your device has no share menu, the clip is downloaded as an audio file instead',
+        ],
+      },
+      {
+        title: 'Recording complete: note colors',
+        items: [
+          'The note buttons on the \u201CRecording complete\u201D screen now use your custom colors for every note, including the \u201Cother notes\u201D color',
+        ],
+      },
+    ],
+  },
+  {
     date: '2026-11-05',
     displayDate: 'November 5, 2026',
     version: '2.2',
@@ -77,31 +117,6 @@ const CHANGELOG = [
         items: [
           'After you record, you can now play the take back on the \u201CRecording complete\u201D screen before you save or discard it',
           'Randomizer: each saved song idea now has a Delete button. A deleted idea goes to your Google Drive trash, where you can restore it for 30 days',
-        ],
-      },
-      {
-        title: 'More drum beats in Jam',
-        items: [
-          'Ten new beats: skate punk, fast punk, hardcore gallop, D-beat, thrash metal and blast beat, plus beats in other time signatures: a rock waltz in 3/4, a 6/8 ballad, 7/8 (2-2-3) and 5/4 (3+2). Each beat now shows its own time signature',
-        ],
-      },
-      {
-        title: 'Key Finder: major chords stand out',
-        items: [
-          'In the light theme, the white major-chord cards blended into the page. They now have a thin black outline, like the white outline on the minor chords',
-        ],
-      },
-      {
-        title: 'User Guide',
-        items: [
-          'New User Guide with pictures of every section, from recording to the Randomizer. Open it with the \u201CUser Guide\u201D button at the top of Support, or from the About tab',
-        ],
-      },
-      {
-        title: 'Share / Export',
-        items: [
-          'New \u201CShare / Export\u201D button on the \u201CRecording complete\u201D screen. Send the take to another app (Messages, email, Files, Dropbox, OneDrive and more) or save it as an audio file, without saving to Google Drive first',
-          'Every clip in your Library has a share button (\ud83d\udce4) too, including clips still waiting on your device. If your device has no share menu, the clip is downloaded as an audio file instead',
         ],
       },
       {
