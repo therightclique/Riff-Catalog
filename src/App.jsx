@@ -374,7 +374,7 @@ function App() {
     setAccessToken(null);
     driveRequested.current = false;
     initGsi(false);   // so the Sign in button works again straight away
-    setMenuOpen(false); setViewHistory([]); setVisitedViews(prev => new Set(prev).add('about')); setView('about');   // land on About, not a stale signed-in screen
+    setMenuOpen(false); setViewHistory([]); setVisitedViews(prev => new Set(prev).add('about')); setView('about'); window.scrollTo(0, 0); setTimeout(() => window.scrollTo(0, 0), 50);   // land on About, not a stale signed-in screen
   };
 
   const handleRecordingComplete = async (blob, mimeType, capturedPcm = null) => {
