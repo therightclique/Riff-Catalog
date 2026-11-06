@@ -24,6 +24,7 @@ const CHANGELOG = [
           'Speed and reliability: average upload time, how long Drive takes to list your clips, and counts of upload, save, sign-in, microphone and sound problems',
           'Library tool use (filters, sorting, clip plays), when you record (time of day, weekday or weekend) and how long your takes are, in broad groups',
           'Storage used on the device, installed-app versus browser visits, and the previous app version after an update',
+          'Visits to the Dashboard and Feedback sections are now counted too',
           'Better device detection: iPhone and Android model and system version are shown more accurately (iPhone model is still an estimate)',
         ],
       },
@@ -35,9 +36,19 @@ const CHANGELOG = [
         ],
       },
       {
-        title: 'Dashboard (owner only)',
+        title: 'Dashboard',
         items: [
-          'A private Dashboard page that turns all the numbers above into charts and tables: people, activity, where new people get to, what gets used, devices, recording habits, speed, problems, feedback and diagnostic reports. It only appears for the app\u2019s owner',
+          'New Dashboard section in the menu. Everyone sees their own numbers there: visits, days used, a 30-day calendar, the firsts they\u2019ve reached, what they use, how they record, speed and problems, their device, and the feedback and reports they sent. It never shows anyone else\u2019s numbers',
+          'Download my data: save your own numbers, feedback and reports as a file (it never includes recordings, lyrics or clip names)',
+          'The app\u2019s owner can switch between Owner: everyone (people, activity, where new people get to, devices, problems, feedback and reports) and My account',
+          'The owner view starts with a Needs attention list: people on an older version, people who haven\u2019t opened the app in two weeks, rising problems, and new feedback or diagnostic reports',
+        ],
+      },
+      {
+        title: 'Menu changes',
+        items: [
+          'Feedback is now its own section in the menu, ready to grow into a support section later',
+          'Changelog and Debug moved into About, as tabs next to Privacy and Agreement. The View changelog link on the home screen opens it there',
         ],
       },
       {

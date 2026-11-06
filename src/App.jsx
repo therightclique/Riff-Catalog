@@ -9,13 +9,13 @@ import { analyzeAudio } from './components/AudioAnalyzer';
 import KeyFinder from './components/KeyFinder';
 import KeyNotes from './components/KeyNotes';
 import Practice from './components/Practice';
-import Changelog, { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog';
-import Debug from './components/Debug';
+import { CURRENT_VERSION, LAST_UPDATED } from './components/Changelog';
 import Randomizer from './components/Randomizer';
 import Settings from './components/Settings';
 import Jam from './components/Jam';
 import About from './components/About';
 import Dashboard from './components/Dashboard';
+import Feedback from './components/Feedback';
 import { reportUsage, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
 import { syncSettings } from './components/SettingsService';
 import { subscribeNoteRoleColors } from './components/theme';
@@ -105,7 +105,11 @@ function App() {
   // against the real tab list so a stale or hand-edited URL can't leave
   // the app on a blank view, then stripped from the address so a later
   // manual reload starts normally.
-  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'debug', 'changelog', 'settings', 'jam', 'about', 'dashboard'];
+  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'feedback', 'settings', 'jam', 'about', 'dashboard'];
+  // Changelog and Debug now live inside About; old links to them open About on that tab.
+  const [aboutRequest, setAboutRequest] = useState(() => {
+    try { const v = new URLSearchParams(window.location.search).get('view'); return v === 'changelog' || v === 'debug' ? { tab: v, n: 1 } : null; } catch { return null; }
+  });
   const [view, setView] = useState(() => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -113,6 +117,7 @@ function App() {
       if (v || params.has('r')) {
         window.history.replaceState(null, '', window.location.pathname);
       }
+      if (v === 'changelog' || v === 'debug') return 'about';
       return VALID_VIEWS.includes(v) ? v : 'record';
     } catch {
       return 'record';
@@ -180,10 +185,9 @@ function App() {
     { id: 'practice', label: 'Practice', icon: '🎯' },
     { id: 'jam', label: 'Jam', icon: '🥁' },
     { id: 'randomizer', label: 'Randomizer', icon: '🎲' },
-    { id: 'changelog', label: 'Changelog', icon: '📝' },
-    { id: 'debug', label: 'Debug', icon: '🛠' },
+    { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    { id: 'feedback', label: 'Feedback', icon: '💬' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },
-    ...(isOwner ? [{ id: 'dashboard', label: 'Dashboard', icon: '📊' }] : []),
     { id: 'about', label: 'About', icon: 'ℹ️' },
   ];
   const [menuOpen, setMenuOpen] = useState(false);
@@ -870,7 +874,7 @@ function App() {
                     🗂 Your recordings are saved to your Google Drive in a folder called <strong>RiffCatalog</strong>. Only you can access them — this app cannot see anything else in your Drive.
                   </p>
                   <p style={{ marginTop: '6px', fontSize: '13px', textAlign: 'center' }}>
-                    <button onClick={() => goToView('changelog')} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
+                    <button onClick={() => { setAboutRequest(r => ({ tab: 'changelog', n: ((r && r.n) || 0) + 1 })); goToView('about'); }} style={{ background: 'none', border: 'none', color: '#1a73e8', cursor: 'pointer', fontSize: '13px', textDecoration: 'underline', padding: 0 }}>
                       View changelog
                     </button>
                   </p>
@@ -1019,11 +1023,6 @@ function App() {
               <Practice />
             </div>
           )}
-          {visitedViews.has('changelog') && (
-            <div style={{ display: view === 'changelog' ? 'block' : 'none' }}>
-              <Changelog />
-            </div>
-          )}
           {/* Jam stays mounted (like every tab), so a running beat keeps playing while you switch sections. */}
           {visitedViews.has('jam') && (
             <div style={{ display: view === 'jam' ? 'block' : 'none' }}>
@@ -1038,17 +1037,17 @@ function App() {
           )}
           {visitedViews.has('about') && (
             <div style={{ display: view === 'about' ? 'block' : 'none' }}>
-              <About version={CURRENT_VERSION} accessToken={accessToken} />
+              <About version={CURRENT_VERSION} accessToken={accessToken} request={aboutRequest} />
             </div>
           )}
-          {isOwner && visitedViews.has('dashboard') && (
+          {visitedViews.has('dashboard') && (
             <div style={{ display: view === 'dashboard' ? 'block' : 'none' }}>
-              <Dashboard accessToken={accessToken} />
+              <Dashboard accessToken={accessToken} isOwner={isOwner} version={CURRENT_VERSION} />
             </div>
           )}
-          {visitedViews.has('debug') && (
-            <div style={{ display: view === 'debug' ? 'block' : 'none' }}>
-              <Debug accessToken={accessToken} version={CURRENT_VERSION} />
+          {visitedViews.has('feedback') && (
+            <div style={{ display: view === 'feedback' ? 'block' : 'none' }}>
+              <Feedback version={CURRENT_VERSION} accessToken={accessToken} />
             </div>
           )}
           {visitedViews.has('randomizer') && (

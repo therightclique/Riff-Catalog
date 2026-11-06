@@ -15,11 +15,14 @@ const CLIENT_ID = '495492558072-8ohvj2v3npv2coeq1alndbh0g0lk95s2.apps.googleuser
 const SHEETS = 'https://sheets.googleapis.com/v4/spreadsheets';
 
 // Tabs we count (must match the view ids in the app) and their spreadsheet labels.
-const TABS = [
+const TABS_BASE = [
   ['record', 'Record'], ['library', 'Library'], ['keyfinder', 'Key Finder'], ['practice', 'Practice'],
   ['randomizer', 'Randomizer'], ['jam', 'Jam'], ['settings', 'Settings'], ['about', 'About'],
   ['changelog', 'Changelog'], ['debug', 'Debug'],
 ];
+// Added later: their columns go on the END of the sheet so existing columns never move.
+const TABS_LATE = [['dashboard', 'Dashboard'], ['feedback', 'Feedback']];
+const TABS = [...TABS_BASE, ...TABS_LATE];
 const DEVICES = ['iPhone', 'iPad', 'Android phone', 'Android tablet', 'Windows', 'Mac', 'Linux', 'ChromeOS', 'Other'];
 
 // Column layout. One place to change if columns are added later: new columns go on the END.
@@ -27,7 +30,7 @@ const COLS = [
   'Email', 'First login (PT)', 'Last login (PT)', 'Last IP', 'Country', 'Region',
   'Clip library size', 'Avg recording length (sec)', 'Most used tab', 'Custom drum beats', 'Song ideas saved',
   'Sessions', 'App version', 'Device', 'Installed app',
-  ...TABS.map(([, label]) => `Views: ${label}`),
+  ...TABS_BASE.map(([, label]) => `Views: ${label}`),
   'Recordings counted', 'Recording seconds counted',
   'OS version', 'Device model', 'Screen', 'Browser',
   'Offline clips waiting', 'Upload failures', 'Settings save failures', 'App errors', 'Last error type',
@@ -48,6 +51,8 @@ const COLS = [
   'Takes under 30s', 'Takes 30s-2min', 'Takes 2-5min', 'Takes over 5min',
   // install and update health
   'Sessions installed', 'Sessions in browser', 'Previous version', 'Version updated (PT)', 'Device storage used (MB)',
+  // sections added later
+  ...TABS_LATE.map(([, label]) => `Views: ${label}`),
 ];
 const MILESTONES = {
   recording: 'First recording (PT)', driveSave: 'First Drive save (PT)', library: 'First Library open (PT)', jam: 'First Jam play (PT)',
@@ -481,6 +486,30 @@ export async function dashboardData({ token, sheetId }) {
   return { stats, feedback, errors, history, diagnostics, generated: ptNow() };
 }
 
+// ── A person's own numbers: only rows whose Email is the verified caller's email, filtered here before anything is sent ──
+
+// Keeps the header row plus the rows belonging to `email`. If the tab has no Email column it sends nothing (fails closed).
+export function onlyMine(rows, email, drop = []) {
+  if (!Array.isArray(rows) || rows.length === 0 || !email) return [];
+  const head = rows[0] || [];
+  const col = head.findIndex(h => String(h || '').trim().toLowerCase() === 'email');
+  if (col < 0) return [];
+  const want = String(email).trim().toLowerCase();
+  const keep = head.map((h, i) => (drop.includes(String(h || '').trim()) ? -1 : i)).filter(i => i >= 0);
+  const mine = rows.slice(1).filter(r => Array.isArray(r) && String(r[col] || '').trim().toLowerCase() === want);
+  return [keep.map(i => head[i]), ...mine.map(r => keep.map(i => r[i] ?? ''))];
+}
+export async function myData({ token, sheetId, email }) {
+  const [stats, feedback, errors, history, diagnostics] = await Promise.all([
+    readTab(token, sheetId, 'Stats'), readTab(token, sheetId, 'Feedback', 2000), readTab(token, sheetId, 'Errors', 2000),
+    readTab(token, sheetId, 'History', 20000), readTab(token, sheetId, 'Diagnostics', 500),
+  ]);
+  return {
+    stats: onlyMine(stats, email, ['Last IP']), feedback: onlyMine(feedback, email), errors: onlyMine(errors, email),
+    history: onlyMine(history, email), diagnostics: onlyMine(diagnostics, email), generated: ptNow(),
+  };
+}
+
 // ── The function ────────────────────────────────────────────────────────
 
 const reply = (status, obj) => new Response(JSON.stringify(obj), {
@@ -519,6 +548,9 @@ export default async (req, context) => {
     if (body.kind === 'dashboard') {
       if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
       return reply(200, { ok: true, ...(await dashboardData({ token, sheetId })) });
+    }
+    if (body.kind === 'mydata') {   // the email comes only from the verified token, never from the request body
+      return reply(200, { ok: true, owner: isOwner(email), ...(await myData({ token, sheetId, email })) });
     }
     if (body.kind === 'diagnostic') {
       await addDiagnostic({ token, sheetId, email, d: cleanDiagnostic(body), where });

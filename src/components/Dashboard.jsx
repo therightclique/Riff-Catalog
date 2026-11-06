@@ -78,23 +78,7 @@ const MILESTONES = [['First recording (PT)', 'Made a recording'], ['First Drive 
   ['First Key Finder use (PT)', 'Used Key Finder'], ['First Practice use (PT)', 'Used Practice'], ['First Randomizer use (PT)', 'Used Randomizer'], ['First idea saved (PT)', 'Saved an idea'], ['First feedback sent (PT)', 'Sent feedback']];
 const FEATURES = [['Jam plays', 'Jam plays'], ['Practice picks', 'Practice picks'], ['Key Finder lookups', 'Key Finder lookups'], ['Wheel spins', 'Wheel spins'], ['Surprise me uses', 'Surprise me'], ['Ideas saved (saves)', 'Ideas saved'], ['Library filter uses', 'Library filters'], ['Library sort changes', 'Library sorts'], ['Clip plays', 'Clip plays']];
 
-export default function Dashboard({ accessToken }) {
-  const [state, setState] = useState({ kind: 'loading', msg: '' });   // loading | ready | error
-  const [data, setData] = useState(null);
-
-  const load = async () => {
-    if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then open this page again.' }); return; }
-    setState({ kind: 'loading', msg: '' });
-    try {
-      const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'dashboard', accessToken }) });
-      if (res.status === 403) { setState({ kind: 'error', msg: 'This page is only for the app’s owner. If that’s you, check the OWNER_EMAIL setting in Netlify.' }); return; }
-      if (!res.ok) { setState({ kind: 'error', msg: 'Couldn’t load the numbers right now. Please try again.' }); return; }
-      setData(await res.json());
-      setState({ kind: 'ready', msg: '' });
-    } catch { setState({ kind: 'error', msg: 'Couldn’t load the numbers right now. Please try again.' }); }
-  };
-  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [accessToken]);
-
+function OwnerView({ data, version }) {
   const m = useMemo(() => {
     if (!data) return null;
     const users = toObjects(data.stats);
@@ -115,8 +99,24 @@ export default function Dashboard({ accessToken }) {
     const listMs = users.map(u => num(u['Drive list ms (last)'])).filter(Boolean);
     const codes = tally(errors.filter(e => within(e['Date (PT)'], 30)), e => `${e['Area']} · ${e['Code']}`);
     const errCount = errors.filter(e => within(e['Date (PT)'], 7)).reduce((a, e) => a + (num(e['Times']) || 1), 0);
+    // "Needs attention": plain sentences for the owner. Nothing here is a score; it's a prompt to go look.
+    const verCmp = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; } return 0; };
+    const older = version ? users.filter(u => String(u['App version'] || '').trim() && verCmp(u['App version'], version) < 0) : [];
+    const away = users.filter(u => { const t = ptMs(u['Last login (PT)']); return Number.isFinite(t) && now - t > 14 * 86400000; });
+    const errIn = (from, to) => errors.filter(e => { const t = ptMs(e['Date (PT)']); return Number.isFinite(t) && now - t > from * 86400000 && now - t <= to * 86400000; }).reduce((a, e) => a + (num(e['Times']) || 1), 0);
+    const errThis = errIn(-1, 7), errPrev = errIn(7, 14);
+    const newFb = feedback.filter(f => within(f['Date (PT)'], 7));
+    const lowFb = newFb.filter(f => num(f['Rating']) && num(f['Rating']) <= 2.5);
+    const newDiag = diags.filter(d => within(d['Date (PT)'], 7));
+    const names = (list) => list.slice(0, 3).map(u => u['Email']).join(', ') + (list.length > 3 ? ` and ${list.length - 3} more` : '');
+    const alerts = [];
+    if (older.length) alerts.push(`${older.length} ${older.length === 1 ? 'person is' : 'people are'} on an older version than ${version}: ${names(older)}`);
+    if (away.length) alerts.push(`${away.length} ${away.length === 1 ? 'person hasn\u2019t' : 'people haven\u2019t'} opened the app in over 14 days: ${names(away)}`);
+    if (errThis >= 3 && errThis > errPrev) alerts.push(`Problems are up: ${errThis} in the last 7 days, ${errPrev} in the 7 days before`);
+    if (newFb.length) alerts.push(`${newFb.length} new feedback ${newFb.length === 1 ? 'entry' : 'entries'} in the last 7 days${lowFb.length ? `, ${lowFb.length} rated 2.5 or lower` : ''}`);
+    if (newDiag.length) alerts.push(`${newDiag.length} diagnostic ${newDiag.length === 1 ? 'report' : 'reports'} in the last 7 days`);
     return {
-      users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
+      alerts, users, feedback, errors, diags, active7, active1, line, tabViews, codes, errCount,
       avgRating: rated.length ? Math.round((rated.reduce((a, b) => a + b, 0) / rated.length) * 10) / 10 : null, ratedN: rated.length,
       clips: sumCol(users, 'Clip library size'), sessions: sumCol(users, 'Sessions'), minutes: Math.round(sumCol(users, 'Active minutes')),
       versions: tally(users, u => u['App version']), devices: tally(users, u => u['Device']), os: tally(users, u => u['OS version']),
@@ -129,22 +129,19 @@ export default function Dashboard({ accessToken }) {
       lengths: [['Under 30 sec', 'Takes under 30s'], ['30 sec - 2 min', 'Takes 30s-2min'], ['2 - 5 min', 'Takes 2-5min'], ['Over 5 min', 'Takes over 5min']].map(([label, k]) => ({ label, value: sumCol(users, k) })),
       installed: [{ label: 'Installed app', value: sumCol(users, 'Sessions installed') }, { label: 'In a browser', value: sumCol(users, 'Sessions in browser') }],
     };
-  }, [data]);
-
+  }, [data, version]);
   return (
-    <div style={{ maxWidth: '700px', margin: '0 auto' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 12px' }}>
-        <div style={sub}>{data?.generated ? `Updated ${data.generated} PT` : ' '}</div>
-        <button onClick={load} disabled={state.kind === 'loading'} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>
-          {state.kind === 'loading' ? 'Loading…' : 'Refresh'}
-        </button>
-      </div>
+      <>
+          <div style={card}>
+            <h3 style={h}>Needs attention</h3>
+            {m.alerts.length === 0 && <div style={sub}>{'\u2713'} Nothing needs attention right now.</div>}
+            {m.alerts.map((a, i) => (
+              <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '13px', lineHeight: 1.5, marginBottom: '6px' }}>
+                <span aria-label="Attention" style={{ flex: '0 0 auto', fontWeight: '700' }}>{'\u25B2'}</span><span>{a}</span>
+              </div>
+            ))}
+          </div>
 
-      {state.kind === 'error' && <div role="alert" style={{ ...card, color: '#d93025', fontWeight: '600' }}>{state.msg}</div>}
-      {state.kind === 'loading' && !m && <div style={{ ...card, ...sub }}>Reading your spreadsheet…</div>}
-
-      {m && (
-        <>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
             <Tile label="People" value={m.users.length} />
             <Tile label="Active in 7 days" value={m.active7} hint={`${m.active1} in the last day`} />
@@ -263,8 +260,225 @@ export default function Dashboard({ accessToken }) {
               </table>
             </div>
           </div>
-        </>
-      )}
+      </>
+  );
+}
+
+
+const MS_LABELS = [['First recording (PT)', 'Made a recording'], ['First Drive save (PT)', 'Saved to Drive'], ['First Library open (PT)', 'Opened the Library'], ['First Jam play (PT)', 'Played Jam'],
+  ['First Key Finder use (PT)', 'Used Key Finder'], ['First Practice use (PT)', 'Used Practice'], ['First Randomizer use (PT)', 'Used the Randomizer'], ['First idea saved (PT)', 'Saved an idea'], ['First feedback sent (PT)', 'Sent feedback']];
+
+function KV({ rows }) {
+  return (
+    <div style={{ fontSize: '13px', lineHeight: 1.7 }}>
+      {rows.filter(([, v]) => String(v ?? '').trim()).map(([k, v]) => (
+        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', borderBottom: '1px solid var(--rc-line)' }}>
+          <span style={{ color: 'var(--rc-ink2)' }}>{k}</span><span style={{ textAlign: 'right' }}>{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// 30 small squares, today on the right; filled = you used the app that day (from your own daily history).
+function DaysStrip({ days }) {
+  const todayMs = ptNowMs();
+  const cells = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date(todayMs - i * 86400000).toISOString().slice(0, 10);
+    cells.push({ d, on: days.has(d) });
+  }
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(15, 1fr)', gap: '4px' }}>
+        {cells.map(c => <div key={c.d} title={`${c.d}${c.on ? ': used the app' : ''}`} style={{ aspectRatio: '1', borderRadius: '4px', backgroundColor: c.on ? BLUE : 'var(--rc-line)' }} />)}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', ...sub, marginTop: '4px' }}><span>30 days ago</span><span>today</span></div>
+    </div>
+  );
+}
+
+const tidy = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => String(v ?? '').trim() !== ''));
+
+// Saves the person's own numbers as a file. Built only from the rows already on screen (their own).
+async function saveMyData(data) {
+  const out = {
+    about: 'The numbers Riff Catalog keeps about you. Your recordings, lyrics and clip names are never part of this.',
+    exported: new Date().toISOString(),
+    summary: tidy(toObjects(data.stats)[0] || {}),
+    daysUsed: toObjects(data.history).map(r => String(r['Date (PT)']).slice(0, 10)),
+    feedbackSent: toObjects(data.feedback).map(tidy),
+    problemLog: toObjects(data.errors).map(tidy),
+    diagnosticReportsSent: toObjects(data.diagnostics).map(tidy),
+  };
+  const file = new File([JSON.stringify(out, null, 2)], 'riff-catalog-my-data.json', { type: 'application/json' });
+  try {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'My Riff Catalog data' }); return 'Ready to save or send from the share sheet.'; }
+  } catch (e) { if (e && e.name === 'AbortError') return ''; /* otherwise fall through to a normal download */ }
+  const url = URL.createObjectURL(file);
+  const a = document.createElement('a');
+  a.href = url; a.download = file.name; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return 'Downloaded riff-catalog-my-data.json';
+}
+
+// Only ever fed the signed-in person's own rows (the server filters before sending).
+function MyView({ data }) {
+  const m = useMemo(() => {
+    const u = toObjects(data.stats)[0] || null;
+    const days = new Set(toObjects(data.history).map(r => String(r['Date (PT)']).slice(0, 10)));
+    if (u && String(u['Last login (PT)'] || '').trim()) days.add(String(u['Last login (PT)']).slice(0, 10));
+    return {
+      u, days, feedback: toObjects(data.feedback).reverse(), errors: toObjects(data.errors).reverse(), diags: toObjects(data.diagnostics).reverse(),
+      tabViews: u ? Object.keys(u).filter(k => k.startsWith('Views: ')).map(k => ({ label: k.slice(7), value: num(u[k]) })).filter(x => x.value).sort((a, b) => b.value - a.value) : [],
+      features: u ? FEATURES.map(([k, label]) => ({ label, value: num(u[k]) })).filter(x => x.value).sort((a, b) => b.value - a.value) : [],
+      when: u ? [['Morning', 'Recorded: morning'], ['Afternoon', 'Recorded: afternoon'], ['Evening', 'Recorded: evening'], ['Night', 'Recorded: night']].map(([label, k]) => ({ label, value: num(u[k]) })) : [],
+      lengths: u ? [['Under 30 sec', 'Takes under 30s'], ['30 sec - 2 min', 'Takes 30s-2min'], ['2 - 5 min', 'Takes 2-5min'], ['Over 5 min', 'Takes over 5min']].map(([label, k]) => ({ label, value: num(u[k]) })) : [],
+      codes: tally(toObjects(data.errors), e => `${e['Area']} · ${e['Code']}`),
+    };
+  }, [data]);
+  const [saveMsg, setSaveMsg] = useState('');
+  const u = m.u;
+  if (!u) return <div style={{ ...card, ...sub }}>No numbers have been recorded for you yet. Open the app a couple of times, then check back here.</div>;
+  const done = MS_LABELS.filter(([k]) => String(u[k] || '').trim());
+  return (
+    <>
+      <div style={{ ...card, ...sub, lineHeight: 1.5 }}>This page shows only the numbers kept about <strong style={{ color: 'var(--rc-ink)' }}>you</strong>. Nobody else’s numbers are ever shown here.</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
+        <Tile label="Visits" value={num(u['Sessions'])} hint={`first on ${String(u['First login (PT)']).slice(0, 10)}`} />
+        <Tile label="Days you used it" value={num(u['Days active']) || m.days.size} />
+        <Tile label="Clips in your library" value={num(u['Clip library size'])} />
+        <Tile label="Minutes open" value={Math.round(num(u['Active minutes']))} />
+        <Tile label="Ideas saved" value={num(u['Song ideas saved'])} />
+        <Tile label="Custom beats" value={num(u['Custom drum beats'])} />
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>The last 30 days</h3>
+        <DaysStrip days={m.days} />
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>Your firsts ({done.length} of {MS_LABELS.length})</h3>
+        {MS_LABELS.map(([k, label]) => {
+          const when = String(u[k] || '').trim();
+          return (
+            <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', fontSize: '13px', lineHeight: 1.8, borderBottom: '1px solid var(--rc-line)' }}>
+              <span>{when ? '✓ ' : '○ '}{label}</span><span style={sub}>{when ? when.slice(0, 10) : 'not yet'}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>What you use</h3>
+        <div style={{ ...sub, marginBottom: '6px' }}>Section opens</div>
+        <Bars items={m.tabViews} max={10} />
+        <div style={{ ...sub, margin: '12px 0 6px' }}>Feature use</div>
+        <Bars items={m.features} max={9} />
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>How you record</h3>
+        <div style={{ ...sub, marginBottom: '6px' }}>Time of day</div><Bars items={m.when} max={4} />
+        <div style={{ ...sub, margin: '12px 0 6px' }}>Take length</div><Bars items={m.lengths} max={4} />
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>Speed and problems</h3>
+        <KV rows={[
+          ['Average upload', num(u['Avg upload (sec)']) ? `${u['Avg upload (sec)']} s` : ''], ['Drive listing (last)', num(u['Drive list ms (last)']) ? `${u['Drive list ms (last)']} ms` : ''],
+          ['Upload failures', num(u['Upload failures']) || ''], ['Settings save failures', num(u['Settings save failures']) || ''], ['Drive reconnects needed', num(u['Drive reconnects needed']) || ''],
+          ['Microphone problems', (num(u['Mic denied']) + num(u['Mic errors (other)'])) || ''], ['Sound could not start', num(u['Audio blocked']) || ''], ['Recordings waiting on this device', num(u['Offline clips waiting']) || ''],
+        ]} />
+        <div style={{ ...sub, margin: '12px 0 6px' }}>Problem log</div>
+        <Bars items={m.codes} max={6} empty="No problems logged for you." />
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>Your device</h3>
+        <KV rows={[['Device', u['Device model'] || u['Device']], ['System', u['OS version']], ['Browser', u['Browser']], ['Screen', u['Screen']], ['Installed app', u['Installed app']],
+          ['App version', u['App version']], ['Previous version', u['Previous version']], ['Time zone', u['Time zone']], ['Language', u['Language']], ['Where (from your connection)', `${u['Country']} ${u['Region']}`.trim()],
+          ['Storage used by the app', num(u['Device storage used (MB)']) ? `${u['Device storage used (MB)']} MB` : ''], ['Last visit', u['Last login (PT)']]]} />
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>Feedback you sent ({m.feedback.length})</h3>
+        {m.feedback.length === 0 && <div style={sub}>None yet. The Feedback section in the menu is where to send it.</div>}
+        {m.feedback.slice(0, 10).map((f, i) => (
+          <div key={i} style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
+            <div><strong>{f['Rating']} / 5</strong> <span style={sub}>· {String(f['Date (PT)']).slice(0, 16)} · v{f['App version']}</span></div>
+            {[['Useful', f['Liked']], ['Dislikes', f['Disliked']], ['Ideas', f['Feature ideas']], ['Other', f['Feedback']]].filter(([, v]) => String(v || '').trim()).map(([k, v]) => (
+              <div key={k} style={{ whiteSpace: 'pre-wrap' }}><span style={sub}>{k}: </span>{v}</div>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>Diagnostic reports you sent ({m.diags.length})</h3>
+        {m.diags.length === 0 && <div style={sub}>None yet. You can send one from About › Debug.</div>}
+        {m.diags.slice(0, 5).map((d, i) => (
+          <div key={i} style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
+            <div style={sub}>{String(d['Date (PT)']).slice(0, 16)} · v{d['App version']} · {d['Device']} {d['OS version']}</div>
+            {String(d['Note'] || '').trim() && <div style={{ whiteSpace: 'pre-wrap' }}>{d['Note']}</div>}
+            {String(d['Recent problems'] || '').trim() && <div style={{ fontFamily: '"Courier New", monospace', fontSize: '11px', whiteSpace: 'pre-wrap', marginTop: '3px' }}>{d['Recent problems']}</div>}
+          </div>
+        ))}
+      </div>
+
+      <div style={card}>
+        <h3 style={h}>Your data</h3>
+        <p style={{ ...sub, margin: '0 0 10px', lineHeight: 1.5 }}>Save everything shown on this page as a file. It contains only your own numbers, never your recordings, lyrics or clip names.</p>
+        <button onClick={async () => setSaveMsg(await saveMyData(data))} style={{ width: '100%', padding: '12px', fontSize: '15px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: 'pointer', backgroundColor: BLUE, color: 'white' }}>Download my data</button>
+        <div role="status" aria-live="polite" style={{ marginTop: '8px', fontSize: '13px', fontWeight: '600', color: '#1e8e3e', minHeight: '18px' }}>{saveMsg}</div>
+      </div>
+    </>
+  );
+}
+
+export default function Dashboard({ accessToken, isOwner, version }) {
+  const [pref, setPref] = useState(() => { try { return localStorage.getItem('rc_dash_mode') === 'me' ? 'me' : 'all'; } catch { return 'all'; } });
+  const mode = isOwner ? pref : 'me';
+  const [state, setState] = useState({ kind: 'loading', msg: '' });   // loading | ready | error
+  const [data, setData] = useState(null);
+  const pick = (v) => { setPref(v); try { localStorage.setItem('rc_dash_mode', v); } catch { /* ignore */ } };
+
+  const load = async () => {
+    if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then open this page again.' }); return; }
+    setState({ kind: 'loading', msg: '' });
+    const asked = mode;
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: asked === 'all' ? 'dashboard' : 'mydata', accessToken }) });
+      if (res.status === 403) { setState({ kind: 'error', msg: 'The owner view is only for the app’s owner. If that’s you, check the OWNER_EMAIL setting in Netlify.' }); return; }
+      if (!res.ok) { setState({ kind: 'error', msg: 'Couldn’t load the numbers right now. Please try again.' }); return; }
+      setData({ ...(await res.json()), mode: asked });
+      setState({ kind: 'ready', msg: '' });
+    } catch { setState({ kind: 'error', msg: 'Couldn’t load the numbers right now. Please try again.' }); }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [accessToken, mode]);
+
+  const seg = (id, label) => (
+    <button key={id} role="tab" aria-selected={mode === id} onClick={() => pick(id)}
+      style={{ flex: 1, padding: '9px 6px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', cursor: 'pointer',
+        border: `2px solid ${mode === id ? BLUE : 'var(--rc-line)'}`, backgroundColor: mode === id ? 'var(--rc-sel)' : 'var(--rc-surface)', color: mode === id ? BLUE : 'var(--rc-ink)' }}>{label}</button>
+  );
+  const shown = data && data.mode === mode ? data : null;
+
+  return (
+    <div style={{ maxWidth: '700px', margin: '0 auto' }}>
+      {isOwner && <div role="tablist" style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>{seg('all', 'Owner: everyone')}{seg('me', 'My account')}</div>}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '4px 0 12px' }}>
+        <div style={sub}>{shown?.generated ? `Updated ${shown.generated} PT` : ' '}</div>
+        <button onClick={load} disabled={state.kind === 'loading'} style={{ padding: '8px 14px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>
+          {state.kind === 'loading' ? 'Loading…' : 'Refresh'}
+        </button>
+      </div>
+
+      {state.kind === 'error' && <div role="alert" style={{ ...card, color: '#d93025', fontWeight: '600' }}>{state.msg}</div>}
+      {state.kind === 'loading' && !shown && <div style={{ ...card, ...sub }}>Reading your numbers…</div>}
+
+      {shown && state.kind !== 'error' && (mode === 'all' ? <OwnerView data={shown} version={version} /> : <MyView data={shown} />)}
     </div>
   );
 }

@@ -1,0 +1,98 @@
+import { useState } from 'react';
+import { noteMilestone } from './UsageLog';
+
+// Feedback section (own item in the main menu). Later this becomes Support, with feedback and support together.
+
+const card = { backgroundColor: 'var(--rc-card)', border: '1px solid var(--rc-line)', borderRadius: '12px', padding: '16px', textAlign: 'left', lineHeight: 1.55, fontSize: '14px', color: 'var(--rc-ink)' };
+const h3 = { fontSize: '15px', margin: '18px 0 6px', color: 'var(--rc-ink)' };
+const p = { margin: '0 0 10px' };
+const ul = { margin: '0 0 10px', paddingLeft: '20px' };
+const li = { marginBottom: '4px' };
+const note = { fontSize: '12px', color: 'var(--rc-ink2)', margin: '0 0 8px' };
+
+const ENDPOINT = '/.netlify/functions/log-usage';
+const STAR_FULL = '#f5b301';
+
+function Stars({ value, onChange, disabled }) {
+  const star = (i) => {
+    const fill = value >= i ? 100 : value >= i - 0.5 ? 50 : 0;
+    return (
+      <span key={i} style={{ position: 'relative', width: '44px', height: '44px', display: 'inline-block', fontSize: '40px', lineHeight: '44px', textAlign: 'center' }}>
+        <span aria-hidden style={{ color: 'var(--rc-line)' }}>{'★'}</span>
+        <span aria-hidden style={{ position: 'absolute', left: 0, top: 0, width: `${fill}%`, overflow: 'hidden', whiteSpace: 'nowrap', color: STAR_FULL, textAlign: 'left', paddingLeft: '2px', boxSizing: 'border-box' }}>{'★'}</span>
+        {[i - 0.5, i].map((v, k) => (
+          <button key={v} type="button" disabled={disabled} onClick={() => onChange(v)} aria-label={`${v} star${v === 1 ? '' : 's'}`}
+            style={{ position: 'absolute', top: 0, height: '100%', width: '50%', left: k === 0 ? 0 : '50%', background: 'none', border: 'none', padding: 0, cursor: disabled ? 'default' : 'pointer', opacity: 0 }} />
+        ))}
+      </span>
+    );
+  };
+  return <div role="group" aria-label="Star rating" style={{ display: 'flex', justifyContent: 'center', gap: '2px' }}>{[1, 2, 3, 4, 5].map(star)}</div>;
+}
+
+function FeedbackForm({ version, accessToken }) {
+  const [rating, setRating] = useState(0);
+  const [text, setText] = useState('');
+  const [liked, setLiked] = useState('');
+  const [disliked, setDisliked] = useState('');
+  const [ideas, setIdeas] = useState('');
+  const [state, setState] = useState({ kind: 'idle', msg: '' });   // idle | sending | sent | error
+  const sending = state.kind === 'sending';
+
+  const send = async () => {
+    if (!rating || sending) return;
+    if (!accessToken) { setState({ kind: 'error', msg: 'Connect to Google Drive first (tap the Drive banner at the top), then try again.' }); return; }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) { setState({ kind: 'error', msg: 'You appear to be offline. Your message is still here. Try again when you’re connected.' }); return; }
+    setState({ kind: 'sending', msg: '' });
+    try {
+      const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'feedback', accessToken, rating, text: text.trim(), liked: liked.trim(), disliked: disliked.trim(), ideas: ideas.trim(), version }) });
+      if (res.ok) { setState({ kind: 'sent', msg: 'Thank you! Your feedback was sent.' }); noteMilestone('feedback'); setRating(0); setText(''); setLiked(''); setDisliked(''); setIdeas(''); return; }
+      setState({ kind: 'error', msg: res.status === 401 ? 'Your Google connection has expired. Reconnect Drive, then try again.' : 'Couldn’t send right now. Your message is still here. Please try again.' });
+    } catch {
+      setState({ kind: 'error', msg: 'Couldn’t send right now. Your message is still here. Please try again.' });
+    }
+  };
+
+  return (
+    <div style={card}>
+      <h3 style={{ ...h3, marginTop: 0 }}>How are we doing?</h3>
+      <p style={p}>Tap a star to rate Riff Catalog out of 5. Tap the left half of a star for a half star.</p>
+      <Stars value={rating} onChange={(v) => { setRating(v); if (state.kind === 'sent') setState({ kind: 'idle', msg: '' }); }} disabled={sending} />
+      <div style={{ textAlign: 'center', fontSize: '15px', fontWeight: '600', margin: '4px 0 14px', minHeight: '20px', color: rating ? 'var(--rc-ink)' : 'var(--rc-ink2)' }}>
+        {rating ? `${rating} out of 5` : 'No rating yet'}
+      </div>
+
+      {[
+        ['rc-fb-liked', 'Which features do you find most useful?', liked, setLiked, 'For example: the Jam beats, the Key Finder piano, saving ideas\u2026', 1000],
+        ['rc-fb-disliked', 'Is there anything you dislike or find frustrating?', disliked, setDisliked, 'What gets in your way or feels off?', 1000],
+        ['rc-fb-ideas', 'Any ideas for new features?', ideas, setIdeas, 'What would you love the app to do?', 1000],
+        ['rc-feedback-text', 'Anything else you\u2019d like to tell us?', text, setText, 'Anything at all.', 2000],
+      ].map(([id, label, val, set, ph, max]) => (
+        <div key={id} style={{ marginBottom: '12px' }}>
+          <label htmlFor={id} style={{ display: 'block', fontWeight: '600', marginBottom: '6px' }}>{label} <span style={{ fontWeight: '400', color: 'var(--rc-ink2)' }}>(optional)</span></label>
+          <textarea id={id} value={val} onChange={(e) => set(e.target.value.slice(0, max))} disabled={sending} rows={3} maxLength={max} placeholder={ph}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '10px', fontSize: '16px', fontFamily: 'inherit', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', resize: 'vertical' }} />
+        </div>
+      ))}
+
+      <div style={{ ...note, padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', margin: '0 0 12px', lineHeight: 1.45 }}>
+        <strong>This form is not for technical support.</strong> Messages here are not answered, so please don't use it to report a problem you need fixed. A support option is coming later. Your email, country and region are sent with your feedback.
+      </div>
+
+      <button onClick={send} disabled={!rating || sending}
+        style={{ width: '100%', padding: '12px', fontSize: '16px', fontWeight: '600', borderRadius: '10px', border: 'none', cursor: !rating || sending ? 'default' : 'pointer', backgroundColor: !rating || sending ? 'var(--rc-line)' : '#1a73e8', color: !rating || sending ? 'var(--rc-ink2)' : 'white' }}>
+        {sending ? 'Sending…' : 'Send feedback'}
+      </button>
+      <div role="status" aria-live="polite" style={{ marginTop: '10px', fontSize: '14px', fontWeight: '600', color: state.kind === 'error' ? '#d93025' : '#1e8e3e', minHeight: '20px' }}>{state.msg}</div>
+    </div>
+  );
+}
+
+
+export default function Feedback({ version, accessToken }) {
+  return (
+    <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+      <FeedbackForm version={version} accessToken={accessToken} />
+    </div>
+  );
+}
