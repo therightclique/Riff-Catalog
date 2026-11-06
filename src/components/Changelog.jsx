@@ -10,8 +10,9 @@ const CHANGELOG = [
         title: 'Support requests: tags, archive and search',
         items: [
           'Owner Dashboard: each support request can now be tagged (Bug, Feature request, Question, In progress, On hold, Needs more info, Resolved, Do not fix, Duplicate) and archived. Archived requests no longer show on the Dashboard\u2019s main list',
-          'The tag filter at the top of the Support requests list shows only requests with the tags you pick',
-          'New \u201CView all support requests\u201D page lists every request, archived or not. Search as you type (two or more letters) by email address, words in the message or tag, and narrow by Today, Last 7 days, Last month, Last 90 days or Last year',
+          'A tag filter on both the Support requests list and the All support requests page shows only requests with the tags you pick',
+          'New \u201CView all support requests\u201D page lists every request. Archived ones stay hidden unless you tick \u201CShow archived\u201D. Search as you type (two or more letters) by email address, words in the message or tag, and narrow by Today, Last 7 days, Last month, Last 90 days or Last year',
+          'The link that opens the Support tab of the spreadsheet now says \u201COpen Support sheet\u201D (and the same for the other sheet links), to make clear it opens outside Riff Catalog',
           'Everyone: your own support requests on your Dashboard now show any tags the owner added, so you can see where a request stands. Only the owner can change tags, and you can now show all of your requests, not just the latest 10',
         ],
       },

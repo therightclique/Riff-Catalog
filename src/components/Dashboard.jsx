@@ -183,15 +183,14 @@ function TagFilter({ rows, picked, setPicked }) {
     return { c, untagged };
   }, [rows]);
   const toggle = (k) => setPicked(prev => { const n = new Set(prev); if (n.has(k)) n.delete(k); else n.add(k); return n; });
-  const shown = SUPPORT_TAGS.filter(t => counts.c.get(t) || picked.has(t));
-  if (!shown.length && !picked.size) return null;   // nothing is tagged yet, so there is nothing to filter by
+  const shown = SUPPORT_TAGS;   // always listed, so the filter is there even before anything is tagged
   return (
     <div style={{ margin: '0 0 10px' }}>
       <div style={{ ...sub, marginBottom: '5px' }}>Filter by tag{picked.size ? ' (showing requests with any picked tag)' : ''}</div>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
         <button type="button" onClick={() => setPicked(new Set())} aria-pressed={picked.size === 0} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: '600', borderRadius: '999px', border: `1px solid ${picked.size === 0 ? 'var(--rc-ink)' : 'var(--rc-line)'}`, backgroundColor: picked.size === 0 ? 'var(--rc-surface)' : 'transparent', color: 'var(--rc-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>All</button>
         {shown.map(t => <TagChip key={t} tag={t} on={picked.has(t)} count={counts.c.get(t) || 0} onClick={() => toggle(t)} />)}
-        {(counts.untagged > 0 || picked.has('__none')) && (
+        {(
           <button type="button" onClick={() => toggle('__none')} aria-pressed={picked.has('__none')} style={{ padding: '5px 10px', fontSize: '12px', fontWeight: '600', borderRadius: '999px', border: `1px solid ${picked.has('__none') ? 'var(--rc-ink)' : 'var(--rc-line)'}`, backgroundColor: picked.has('__none') ? 'var(--rc-surface)' : 'transparent', color: 'var(--rc-ink)', cursor: 'pointer', fontFamily: 'inherit' }}>Untagged <span style={{ color: 'var(--rc-ink2)', fontWeight: '500' }}>{counts.untagged}</span></button>
         )}
       </div>
@@ -226,6 +225,7 @@ function SupportArchive({ accessToken, over, onTags, onArchive, onRead, readIds,
   const [period, setPeriod] = useState('all');
   const [picked, setPicked] = useState(() => new Set());
   const [newestFirst, setNewestFirst] = useState(true);
+  const [showArchived, setShowArchived] = useState(false);   // archived requests stay hidden unless this is ticked
   const [limit, setLimit] = useState(50);
   const [tryN, setTryN] = useState(0);
   useEffect(() => {
@@ -256,17 +256,20 @@ function SupportArchive({ accessToken, over, onTags, onArchive, onRead, readIds,
   const original = useMemo(() => new Map(st.rows.map(r => [String(r['ID']), r])), [st.rows]);
   const nowMs = ptNowMs();
   const inPeriod = useMemo(() => { const from = periodStartMs(period, nowMs); return rows.filter(r => { const t = ptMs(r['Date (PT)']); return from === -Infinity || (Number.isFinite(t) && t >= from); }); }, [rows, period, nowMs]);
-  const searched = useMemo(() => inPeriod.filter(r => matchesSearch(r, q)), [inPeriod, q]);
+  const visible = useMemo(() => (showArchived ? inPeriod : inPeriod.filter(r => !isArchivedRow(r))), [inPeriod, showArchived]);
+  const searched = useMemo(() => visible.filter(r => matchesSearch(r, q)), [visible, q]);
   const list = useMemo(() => { const f = searched.filter(r => passesTags(r, picked)); return newestFirst ? [...f].reverse() : f; }, [searched, picked, newestFirst]);
   const searching = q.trim().length >= SEARCH_MIN;
-  useEffect(() => { setLimit(50); }, [q, period, picked, newestFirst]);
+  useEffect(() => { setLimit(50); }, [q, period, picked, newestFirst, showArchived]);
+  const archivedTotal = rows.filter(isArchivedRow).length;
+  const pool = showArchived ? rows.length : rows.length - archivedTotal;
   const field = { padding: '9px 10px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', fontFamily: 'inherit', boxSizing: 'border-box' };
   return (
     <>
       <button onClick={onBack} style={{ padding: '8px 14px', marginBottom: '12px', fontSize: '13px', fontWeight: '600', borderRadius: '8px', border: '1px solid var(--rc-line)', cursor: 'pointer', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)' }}>{'←'} Back to dashboard</button>
       <div style={card}>
         <h3 style={h}>All support requests{st.kind === 'ready' ? ` (${rows.length}${st.total > rows.length ? ` of ${st.total}` : ''})` : ''}</h3>
-        <div style={{ ...sub, marginBottom: '10px' }}>Everything ever sent, archived or not. Reply by email to the address shown.</div>
+        <div style={{ ...sub, marginBottom: '10px' }}>Every request ever sent. Tick Show archived to include the archived ones. Reply by email to the address shown.</div>
         <input type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search email, message or tag" aria-label="Search support requests" autoComplete="off" spellCheck={false} style={{ ...field, width: '100%', marginBottom: '4px' }} />
         <div style={{ ...sub, minHeight: '16px', marginBottom: '8px' }} aria-live="polite">{q.trim().length === 1 ? `Type at least ${SEARCH_MIN} letters to search.` : (searching ? 'Searching all requests as you type.' : '')}</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
@@ -279,6 +282,10 @@ function SupportArchive({ accessToken, over, onTags, onArchive, onRead, readIds,
             </select>
           </label>
         </div>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', margin: '0 0 12px', cursor: 'pointer' }}>
+          <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} style={{ width: '18px', height: '18px' }} />
+          Show archived{archivedTotal ? ` (${archivedTotal})` : ''}
+        </label>
         <TagFilter rows={searched} picked={picked} setPicked={setPicked} />
         {st.kind === 'loading' && <div style={sub}>Loading every support request{'…'}</div>}
         {(st.kind === 'error' || st.kind === 'busy') && (
@@ -288,7 +295,7 @@ function SupportArchive({ accessToken, over, onTags, onArchive, onRead, readIds,
         )}
         {st.kind === 'ready' && (
           <>
-            <div style={{ ...sub, marginBottom: '8px' }} aria-live="polite">{list.length === rows.length ? `Showing all ${list.length}` : `${list.length} of ${rows.length} match`}</div>
+            <div style={{ ...sub, marginBottom: '8px' }} aria-live="polite">{list.length === pool ? `Showing all ${pool}` : `${list.length} of ${pool} match`}{!showArchived && archivedTotal > 0 ? ` \u00B7 ${archivedTotal} archived hidden` : ''}</div>
             {rows.length === 0 && <div style={sub}>None yet.</div>}
             {rows.length > 0 && list.length === 0 && <div style={sub}>No requests match. Try a different search, period or tag.</div>}
             {list.slice(0, limit).map((r, i) => (
@@ -537,7 +544,7 @@ function OwnerView({ data, version, accessToken }) {
             {m.alerts.map((a, i) => (
               <div key={i} style={{ display: 'flex', gap: '8px', fontSize: '13px', lineHeight: 1.5, marginBottom: '6px' }}>
                 <span aria-label="Attention" style={{ flex: '0 0 auto', fontWeight: '700' }}>{'\u25B2'}</span>
-                <span>{a.text}{a.href && <> <a href={a.href} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>{a.hrefText} {'\u2197'}</a></>}{links[a.tab] && <> <a href={links[a.tab]} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>Open {a.tab} tab {'\u2197'}</a></>}</span>
+                <span>{a.text}{a.href && <> <a href={a.href} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>{a.hrefText} {'\u2197'}</a></>}{links[a.tab] && <> <a href={links[a.tab]} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, whiteSpace: 'nowrap' }}>Open {a.tab} sheet {'\u2197'}</a></>}</span>
               </div>
             ))}
             {links.Sheet && <div style={{ marginTop: '8px', fontSize: '13px' }}><a href={links.Sheet} target="_blank" rel="noopener noreferrer" style={{ color: BLUE, fontWeight: '600' }}>Open the spreadsheet {'\u2197'}</a></div>}
@@ -561,7 +568,7 @@ function OwnerView({ data, version, accessToken }) {
               <button type="button" onClick={() => setArchiveOpen(true)} style={{ background: 'none', border: 'none', padding: 0, color: BLUE, cursor: 'pointer', fontSize: '13px', fontWeight: '600', textDecoration: 'underline' }}>View all support requests</button>
               <span style={sub}> {'\u00B7'} {totalSupport} in total{archivedCount ? `, ${archivedCount} archived` : ''}</span>
             </div>
-            {links.Support && <div style={{ marginTop: '10px', fontSize: '13px' }}><a href={links.Support} target="_blank" rel="noopener noreferrer" style={{ color: BLUE }}>Open Support tab {'\u2197'}</a></div>}
+            {links.Support && <div style={{ marginTop: '10px', fontSize: '13px' }}><a href={links.Support} target="_blank" rel="noopener noreferrer" style={{ color: BLUE }}>Open Support sheet {'\u2197'}</a></div>}
           </div>
 
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '14px' }}>
