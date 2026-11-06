@@ -345,7 +345,7 @@ export default function Jam() {
                   }}>
                   <div style={{ fontSize: '14px', fontWeight: '700' }}>{b.name}</div>
                   <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', marginTop: '2px', lineHeight: 1.3 }}>{b.desc}</div>
-                  <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>{b.beatsPerBar}/4 · {b.bpm[0]}–{b.bpm[1]} BPM</div>
+                  <div style={{ fontSize: '11px', color: '#888', marginTop: '4px' }}>{b.timeSig || `${b.beatsPerBar}/4`} · {b.bpm[0]}–{b.bpm[1]} BPM</div>
                 </button>
               );
             })}

@@ -37,11 +37,11 @@ export const NOTE_ROLE_COLORS = { ...DEFAULT_NOTE_ROLE_COLORS };
 
 // Chord quality is shown in black & white (not color) so it never clashes
 // with the note colors chosen in Settings:
-//   major      — solid white card
+//   major      — solid white card with a thin black outline (so it stands out on a light page)
 //   minor      — black card with a white outline
 //   diminished — black card filled with diagonal white lines
 export const CHORD_QUALITY_STYLES = {
-  M:   { background: '#ffffff', border: '2px solid #ffffff', ink: '#000000', pill: null },
+  M:   { background: '#ffffff', border: '2px solid #000000', ink: '#000000', pill: null },
   m:   { background: '#000000', border: '2px solid #ffffff', ink: '#ffffff', pill: null },
   dim: {
     background: 'repeating-linear-gradient(45deg, #000000 0, #000000 4px, #ffffff 4px, #ffffff 7px)',

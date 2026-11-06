@@ -24,6 +24,9 @@ const FILLS = {
   beat4:     { steps: 4, tracks: { k: 'x...', s: '.x.x', T: '..x.' } },
   triplet6:  { steps: 6, tracks: { k: 'x.....', s: 'xxx...', T: '...x..', M: '....x.', F: '.....x' } },
   waltz4:    { steps: 4, tracks: { k: 'x...', s: 'xx..', T: '..x.', F: '...x' } },
+  six8:      { steps: 3, tracks: { s: 'xxx', F: '..x' } },                                  // 6/8: the second pulse
+  seven8:    { steps: 4, tracks: { k: 'x...', s: 'x.x.', F: '..xx' } },                     // 7/8: the end of the last group
+  five4:     { steps: 4, tracks: { k: 'x...', s: 'xxx.', F: '...x' } },                     // 5/4: the last beat
 };
 
 // 4/4 beats use 16 steps (4 per beat); shuffle uses 12 (triplets); waltz is 3/4 with 12 (4 per beat).
@@ -52,6 +55,28 @@ export const BEATS = [
     tracks: { h: 'x.x.x.x.x.x.x.x.', k: 'x.....x.x.....x.', r: 'x..x..x...x.x...' } },
   { id: 'waltz', name: 'Waltz (3/4)', desc: 'Kick on 1, snare on 2 and 3', beatsPerBar: 3, stepsPerBeat: 4, steps: 12, bpm: [90, 160], fill: 'waltz4',
     tracks: { k: 'x...........', s: '....x...x...', h: 'x.x.x.x.x.x.' } },
+  // ── Punk and metal ──
+  { id: 'skate', name: 'Skate Punk', desc: 'Kick on the beat, snare in between: the fast boom-chick drive', beatsPerBar: 4, stepsPerBeat: 4, steps: 16, bpm: [160, 220], fill: 'roll8',
+    tracks: { k: 'x...x...x...x...', s: '..x...x...x...x.', h: 'x.x.x.x.x.x.x.x.' } },
+  { id: 'fastpunk', name: 'Fast Punk', desc: 'Straight 8th hats, snare on 2 and 4, kicks pushing ahead', beatsPerBar: 4, stepsPerBeat: 4, steps: 16, bpm: [150, 210], fill: 'roll8',
+    tracks: { h: 'x.x.x.x.x.x.x.x.', k: 'x.x...x.x.x...x.', s: '....x.......x...' } },
+  { id: 'gallop', name: 'Hardcore Gallop', desc: 'Galloping kicks under a snare on 2 and 4', beatsPerBar: 4, stepsPerBeat: 4, steps: 16, bpm: [140, 200], fill: 'toms8',
+    tracks: { h: 'x.x.x.x.x.x.x.x.', k: 'x.xxx.xxx.xxx.xx', s: '....x.......x...' } },
+  { id: 'dbeat', name: 'D-Beat', desc: 'Kicks bunched on beats 1 and 3, snare on 2 and 4', beatsPerBar: 4, stepsPerBeat: 4, steps: 16, bpm: [150, 200], fill: 'roll8',
+    tracks: { h: 'x.x.x.x.x.x.x.x.', k: 'x.x.....x.x.....', s: '....x.......x...' } },
+  { id: 'thrash', name: 'Thrash Metal', desc: 'Non-stop 16th kicks, snare on 2 and 4', beatsPerBar: 4, stepsPerBeat: 4, steps: 16, bpm: [140, 200], fill: 'toms8',
+    tracks: { k: 'xxxxxxxxxxxxxxxx', s: '....x.......x...', h: 'x...x...x...x...' } },
+  { id: 'blast', name: 'Blast Beat', desc: 'Kick and snare trading hits on every 8th note', beatsPerBar: 4, stepsPerBeat: 4, steps: 16, bpm: [160, 240], fill: 'roll8',
+    tracks: { k: 'x.x.x.x.x.x.x.x.', s: '..x...x...x...x.', h: 'x.x.x.x.x.x.x.x.' } },
+  // ── Other time signatures ──
+  { id: 'rockwaltz', name: 'Rock Waltz (3/4)', desc: 'Kick on 1, big snare on 3', timeSig: '3/4', beatsPerBar: 3, stepsPerBeat: 4, steps: 12, bpm: [70, 130], fill: 'waltz4',
+    tracks: { h: 'x.x.x.x.x.x.', k: 'x...x.......', s: '........x...' } },
+  { id: 'six8', name: '6/8 Ballad', desc: 'Two big pulses of three: kick on 1, snare on 4', timeSig: '6/8', beatsPerBar: 2, stepsPerBeat: 3, steps: 6, bpm: [50, 90], fill: 'six8',
+    tracks: { h: 'XxxXxx', k: 'x.....', s: '...x..' } },
+  { id: 'seven8', name: '7/8 (2-2-3)', desc: 'Seven 8th notes in groups of 2, 2 and 3', timeSig: '7/8', beatsPerBar: 7, stepsPerBeat: 2, steps: 14, bpm: [120, 220], fill: 'seven8',
+    tracks: { h: 'x.x.x.x.x.x.x.', k: 'x.........x...', s: '....x...x.....' } },
+  { id: 'five4', name: '5/4 (3+2)', desc: 'Five beats counted 1-2-3, 1-2: kick on 1 and 4', timeSig: '5/4', beatsPerBar: 5, stepsPerBeat: 4, steps: 20, bpm: [90, 180], fill: 'five4',
+    tracks: { h: 'x.x.x.x.x.x.x.x.x.x.', k: 'x...........x.......', s: '........x.......x...' } },
 ];
 
 export const getBeat = (id) => BEATS.find(b => b.id === id) || BEATS[0];

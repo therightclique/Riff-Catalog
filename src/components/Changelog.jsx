@@ -80,6 +80,18 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'More drum beats in Jam',
+        items: [
+          'Ten new beats: skate punk, fast punk, hardcore gallop, D-beat, thrash metal and blast beat, plus beats in other time signatures: a rock waltz in 3/4, a 6/8 ballad, 7/8 (2-2-3) and 5/4 (3+2). Each beat now shows its own time signature',
+        ],
+      },
+      {
+        title: 'Key Finder: major chords stand out',
+        items: [
+          'In the light theme, the white major-chord cards blended into the page. They now have a thin black outline, like the white outline on the minor chords',
+        ],
+      },
+      {
         title: 'User Guide',
         items: [
           'New User Guide with pictures of every section, from recording to the Randomizer. Open it with the \u201CUser Guide\u201D button at the top of Support, or from the About tab',
