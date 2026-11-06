@@ -16,6 +16,7 @@ import Jam from './components/Jam';
 import About from './components/About';
 import Dashboard from './components/Dashboard';
 import Feedback from './components/Feedback';
+import ReviewPlayer from './components/ReviewPlayer';
 import UpdateBanner from './components/UpdateBanner';
 import { SignInBanner, SignInGate } from './components/SignIn';
 import { reportUsage, fetchSupportUnread, noteTabView, noteRecording, noteEvent, noteMilestone, noteUpload, noteProblem, problemCode, installErrorCapture, installActiveTimer } from './components/UsageLog';
@@ -40,6 +41,16 @@ function abbreviateKey(key) {
   if (!key) return key;
   return keyLabel(key).replace('Major', 'Maj').replace('Minor', 'Min');
 }
+
+// Gives up waiting on something that isn't answering. The work itself can't be cancelled, so callers decide what to do next.
+function withTimeout(promise, ms, label = 'request') {
+  let timer;
+  const stop = new Promise((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} timed out`)), ms); });
+  return Promise.race([promise, stop]).finally(() => clearTimeout(timer));
+}
+// How long a save may take before it is handed over to the automatic retry: 45 seconds plus 20 more per megabyte, at most 3 minutes.
+const uploadTimeoutMs = (bytes) => (typeof window !== 'undefined' && window.__RC_UPLOAD_MS) || Math.min(180000, 45000 + Math.ceil((bytes || 0) / 1048576) * 20000);   // window.__RC_UPLOAD_MS: only for automated tests
+const DUPLICATE_CHECK_MS = 8000;
 
 async function checkDuplicate(accessToken, name) {
   const query = `(name='${name}.webm' or name='${name}.m4a') and trashed=false`;
@@ -99,6 +110,7 @@ function App() {
   };
 
   const [pendingRecording, setPendingRecording] = useState(null);
+  const capturedRef = useRef(null);   // the raw take (samples, tempo) for the recording waiting to be saved
   const [clipName, setClipName] = useState('');
   const [uploading, setUploading] = useState(false);
   const [lastUpload, setLastUpload] = useState(null);
@@ -108,9 +120,12 @@ function App() {
   // the app on a blank view, then stripped from the address so a later
   // manual reload starts normally.
   const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'feedback', 'settings', 'jam', 'about', 'dashboard'];
-  // Changelog and Debug now live inside About; old links to them open About on that tab.
+  // Changelog lives inside About and Debug inside Support; old links to them open that section on the right tab.
   const [aboutRequest, setAboutRequest] = useState(() => {
-    try { const v = new URLSearchParams(window.location.search).get('view'); return v === 'changelog' || v === 'debug' ? { tab: v, n: 1 } : null; } catch { return null; }
+    try { const v = new URLSearchParams(window.location.search).get('view'); return v === 'changelog' ? { tab: v, n: 1 } : null; } catch { return null; }
+  });
+  const [supportRequest] = useState(() => {
+    try { return new URLSearchParams(window.location.search).get('view') === 'debug' ? { tab: 'debug', n: 1 } : null; } catch { return null; }
   });
   const [view, setView] = useState(() => {
     try {
@@ -119,7 +134,8 @@ function App() {
       if (v || params.has('r')) {
         window.history.replaceState(null, '', window.location.pathname);
       }
-      if (v === 'changelog' || v === 'debug') return 'about';
+      if (v === 'changelog') return 'about';
+      if (v === 'debug') return 'feedback';
       // Someone who hasn't signed in yet lands on About (what the app is); signed-in people land on Record.
       return VALID_VIEWS.includes(v) ? v : (user ? 'record' : 'about');
     } catch {
@@ -379,6 +395,7 @@ function App() {
 
   const handleRecordingComplete = async (blob, mimeType, capturedPcm = null) => {
     console.log('Recording complete. Blob type:', blob.type, 'size:', blob.size, 'passed mimeType:', mimeType, 'pcm samples:', capturedPcm?.pcm?.length || 0);
+    capturedRef.current = capturedPcm;
     setPendingRecording({ blob, mimeType });
     setClipName('');
     setLastUpload(null);
@@ -416,16 +433,16 @@ function App() {
       return;
     }
     try {
-      const isDupe = await checkDuplicate(accessToken, clipName.trim());
+      const isDupe = await withTimeout(checkDuplicate(accessToken, clipName.trim()), DUPLICATE_CHECK_MS, 'duplicate check');
       console.log(`[timing] duplicate check: ${Math.round(performance.now() - t0)}ms`);
       if (isDupe) {
-        const suggested = await findAvailableName(accessToken, clipName.trim());
+        const suggested = await withTimeout(findAvailableName(accessToken, clipName.trim()), DUPLICATE_CHECK_MS, 'name search');
         setDuplicateWarning({ original: clipName.trim(), suggested });
         setUploading(false);
         return;
       }
     } catch (err) {
-      console.error('Duplicate check failed:', err);
+      console.error('Duplicate check skipped:', err);   // slow or failed: carry on and save; the clip is safe on the device first
     }
 
     await doUpload(clipName.trim());
@@ -454,9 +471,11 @@ function App() {
       analyzerVersion: analysis?.analyzerVersion || null,
     };
 
-    const takeSeconds = capturedPcm?.pcm && capturedPcm?.sampleRate ? capturedPcm.pcm.length / capturedPcm.sampleRate : 0;
+    const captured = capturedRef.current;
+    const takeSeconds = captured?.pcm && captured?.sampleRate ? captured.pcm.length / captured.sampleRate : 0;
     const finishReview = (saved) => {
       noteRecording(takeSeconds);
+      capturedRef.current = null;
       setLastUpload(saved);
       setLibraryRefreshToken(t => t + 1);
       setPendingRecording(null);
@@ -484,47 +503,84 @@ function App() {
     };
 
     // 2–4. Drive, if there's any chance of reaching it.
+    // The work runs on its own; if it hasn't finished in time the person is told the clip is safe on the device and
+    // will upload automatically. The work itself is left to finish in the background (and the sync service is kept
+    // away from this clip until it does), so a late success can't turn into a second copy on Drive.
+    let timedOut = false;
     if (accessToken && navigator.onLine) {
-      try {
-        const result = await uploadToDrive(
-          accessToken, blob, name, mimeType, initialMetadata, local?.createdTime, local?.id
-        );
-        console.log(`[timing] uploadToDrive total: ${Math.round(performance.now() - t0)}ms`);
-        noteUpload((performance.now() - t0) / 1000);
-        const verified = await verifyDriveFile(accessToken, result.id, blob.size);
+      const driveWork = (async () => {
+        try {
+          const result = await uploadToDrive(
+            accessToken, blob, name, mimeType, initialMetadata, local?.createdTime, local?.id
+          );
+          console.log(`[timing] uploadToDrive total: ${Math.round(performance.now() - t0)}ms`);
+          noteUpload((performance.now() - t0) / 1000);
+          const verified = await verifyDriveFile(accessToken, result.id, blob.size);
 
-        if (verified && result.sidecarSaved) {
-          noteMilestone('driveSave');
-          if (local) await deletePending(local.id);
-          finishReview({ name: result.name, offline: false });
-          await settle();
-          setUploading(false);
-          return;
+          if (verified && result.sidecarSaved) {
+            noteMilestone('driveSave');
+            if (local) await deletePending(local.id);
+            return { status: 'saved', name: result.name };
+          }
+          // Audio may well be on Drive — remember where, so sync can
+          // re-verify it instead of uploading a second copy.
+          if (local) {
+            await updatePending(local.id, {
+              driveAudioId: result.id,
+              driveAudioName: result.name,
+              sidecarSaved: result.sidecarSaved,
+            });
+          }
+          if (verified) {
+            console.warn('[upload] audio confirmed on Drive, but its details file failed — kept for next sync');
+            return { status: 'detailsPending', name: result.name };
+          }
+          console.warn('[upload] could not verify upload on Drive — keeping device copy');
+          noteEvent('uploadFail');
+          noteProblem('upload', 'unverified');
+          return { status: 'failed' };
+        } catch (err) {
+          console.error('[upload] Drive upload failed — keeping device copy:', err);
+          noteEvent('uploadFail');
+          noteProblem('upload', problemCode(err));
+          return { status: 'failed' };
         }
+      })();
 
-        // Audio may well be on Drive — remember where, so sync can
-        // re-verify it instead of uploading a second copy.
-        if (local) {
-          await updatePending(local.id, {
-            driveAudioId: result.id,
-            driveAudioName: result.name,
-            sidecarSaved: result.sidecarSaved,
-          });
-        }
-        if (verified) {
-          console.warn('[upload] audio confirmed on Drive, but its details file failed — kept for next sync');
-          finishReview({ name: result.name, offline: false, detailsPending: !!local });
-          await settle();
-          setUploading(false);
-          return;
-        }
-        console.warn('[upload] could not verify upload on Drive — keeping device copy');
+      // With no copy on the device there is nothing to fall back on, so wait for the real answer.
+      const outcome = local
+        ? await Promise.race([driveWork, new Promise(r => setTimeout(() => r({ status: 'timeout' }), uploadTimeoutMs(blob.size)))])
+        : await driveWork;
+
+      if (outcome.status === 'timeout') {
+        timedOut = true;
+        console.warn('[upload] taking too long — clip kept on the device, will upload automatically');
         noteEvent('uploadFail');
-        noteProblem('upload', 'unverified');
-      } catch (err) {
-        console.error('[upload] Drive upload failed — keeping device copy:', err);
-        noteEvent('uploadFail');
-        noteProblem('upload', problemCode(err));
+        noteProblem('upload', 'timeout');
+        // Finish in the background; keep the sync service off this clip until the upload has really ended (10 minutes at most).
+        const giveUp = setTimeout(() => { clearInFlight(local.id); refreshPending(); }, 10 * 60 * 1000);
+        driveWork.then(async (late) => {
+          clearTimeout(giveUp);
+          clearInFlight(local.id);
+          await refreshPending();
+          if (late.status === 'saved' || late.status === 'detailsPending') setLibraryRefreshToken(t => t + 1);
+        });
+        finishReview({ name: local.name, offline: true, timedOut: true });
+        await refreshPending();
+        setUploading(false);
+        return;
+      }
+      if (outcome.status === 'saved') {
+        finishReview({ name: outcome.name, offline: false });
+        await settle();
+        setUploading(false);
+        return;
+      }
+      if (outcome.status === 'detailsPending') {
+        finishReview({ name: outcome.name, offline: false, detailsPending: !!local });
+        await settle();
+        setUploading(false);
+        return;
       }
     }
 
@@ -541,6 +597,7 @@ function App() {
   };
 
   const handleDiscard = () => {
+    capturedRef.current = null;
     setPendingRecording(null);
     setClipName('');
     setAnalysis(null);
@@ -658,12 +715,14 @@ function App() {
   // card's Sync button) — never automatic. With no valid sign-in token the
   // tap itself is used to reconnect first, which is also what lets the
   // browser allow Google's sign-in popup.
-  const handleSync = async (onlyIds = null) => {
+  const handleSync = async (onlyIds = null, opts = {}) => {
+    const silent = opts?.silent === true;   // the automatic retry: never pops a sign-in window, never nags
     if (syncState?.running) return;
-    setSyncMessage(null);
+    if (!silent) setSyncMessage(null);
 
     let token = accessToken;
     if (!token) {
+      if (silent) return;
       const ok = await reconnectDrive();
       if (!ok) {
         setSyncMessage({ kind: 'warn', text: "Couldn't connect to Google Drive. Your recordings are safe on this device — tap Sync to try again." });
@@ -693,10 +752,10 @@ function App() {
       // The stored token is dead — clear it so the next tap reconnects.
       setAccessToken(null);
       try { localStorage.removeItem('rc_drive_token'); } catch { /* ignore */ }
-      setSyncMessage({ kind: 'warn', text: 'Your Google sign-in expired. Your recordings are safe on this device — tap Sync again to reconnect and finish.' });
+      if (!silent) setSyncMessage({ kind: 'warn', text: 'Your Google sign-in expired. Your recordings are safe on this device — tap Sync again to reconnect and finish.' });
     } else if (result.failed.length > 0) {
       const n = result.failed.length;
-      setSyncMessage({ kind: 'warn', text: `${n} recording${n === 1 ? '' : 's'} couldn't be synced yet. ${n === 1 ? 'It is' : 'They are'} still safe on this device — tap Sync to retry.` });
+      if (!silent) setSyncMessage({ kind: 'warn', text: `${n} recording${n === 1 ? '' : 's'} couldn't be synced yet. ${n === 1 ? 'It is' : 'They are'} still safe on this device — tap Sync to retry.` });
     } else if (result.synced > 0) {
       setSyncMessage({ kind: 'ok', text: result.synced === 1 ? '✅ Synced to Google Drive!' : `✅ All ${result.synced} recordings synced to Google Drive!` });
       setTimeout(() => setSyncMessage(null), 5000);
@@ -705,6 +764,29 @@ function App() {
 
   // Removing a recording from the device without uploading it. Confirmed
   // first, because for an un-uploaded recording this is permanent.
+
+  // Automatic retry: while recordings are waiting on the device and Drive is reachable, try to upload them by
+  // themselves. First after 20 seconds, then 1, 3, 10 and then every 15 minutes, for as long as it takes. Coming
+  // back online or returning to the app starts the schedule again. Nothing here ever opens a sign-in window.
+  const handleSyncRef = useRef(null);
+  handleSyncRef.current = handleSync;
+  const autoTry = useRef(0);
+  const [retryTick, setRetryTick] = useState(0);
+  useEffect(() => {
+    const again = () => { if (document.visibilityState !== 'hidden') { autoTry.current = 0; setRetryTick(t => t + 1); } };
+    document.addEventListener('visibilitychange', again);
+    window.addEventListener('online', again);
+    return () => { document.removeEventListener('visibilitychange', again); window.removeEventListener('online', again); };
+  }, []);
+  useEffect(() => {
+    if (pendingClips.length === 0) { autoTry.current = 0; return undefined; }
+    if (!accessToken || !isOnline || syncState?.running) return undefined;
+    const DELAYS = (typeof window !== 'undefined' && window.__RC_RETRY_SECS) || [20, 60, 180, 600, 900];   // window.__RC_RETRY_SECS: only for automated tests
+    const wait = DELAYS[Math.min(autoTry.current, DELAYS.length - 1)] * 1000;
+    const t = setTimeout(() => { autoTry.current += 1; handleSyncRef.current?.(null, { silent: true }); }, wait);
+    return () => clearTimeout(t);
+  }, [accessToken, isOnline, pendingClips.length, syncState?.running, retryTick]);
+
   const handleDiscardPending = async (id) => {
     const rec = pendingClips.find(r => r.id === id);
     if (!rec) return;
@@ -861,6 +943,7 @@ function App() {
               ) : isOnline ? (
                 <>
                   📱 {pendingClips.length} recording{pendingClips.length === 1 ? '' : 's'} saved on this device, not on Drive yet
+                  {accessToken && <span style={{ display: 'block', fontSize: '12px', opacity: 0.85 }}>Retrying automatically.</span>}
                   <button onClick={() => handleSync()} style={{
                     display: 'block', margin: '8px auto 0', padding: '6px 18px', backgroundColor: '#e07a10',
                     color: 'white', border: 'none', borderRadius: '6px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
@@ -899,9 +982,9 @@ function App() {
                   {!user && signInPrompt && <SignInGate what="record and save your riffs to your Google Drive" />}
                   {lastUpload && (lastUpload.offline ? (
                     <p style={{ color: '#d97706', marginTop: '16px', textAlign: 'center', maxWidth: '400px' }}>
-                      📱 Saved on this device: <strong>{lastUpload.name}</strong>
+                      {lastUpload.timedOut ? '⏱' : '📱'} Saved on this device: <strong>{lastUpload.name}</strong>
                       <br />
-                      <span style={{ fontSize: '13px' }}>When you're back online, tap "Sync now" at the top to upload it to Google Drive.</span>
+                      <span style={{ fontSize: '13px' }}>{lastUpload.timedOut ? 'The upload to Google Drive is taking longer than expected. ' : ''}It will upload automatically as soon as it can. You can also tap "Sync now" at the top to try right away.</span>
                     </p>
                   ) : (
                     <p style={{ color: 'green', marginTop: '16px', textAlign: 'center', maxWidth: '400px' }}>
@@ -985,6 +1068,9 @@ function App() {
                       )}
                     </div>
                   )}
+
+                  {/* Listen to the take before saving or discarding it */}
+                  <ReviewPlayer blob={pendingRecording.blob} disabled={uploading} />
 
                   {/* Duplicate warning */}
                   {duplicateWarning && (
@@ -1093,7 +1179,7 @@ function App() {
           )}
           {visitedViews.has('feedback') && (
             <div style={{ display: view === 'feedback' ? 'block' : 'none' }}>
-              {user ? <Feedback version={CURRENT_VERSION} accessToken={accessToken} email={user?.email} /> : <SignInGate what="send you a message and know who it is from, so we can reply" />}
+              {user ? <Feedback version={CURRENT_VERSION} accessToken={accessToken} email={user?.email} request={supportRequest} /> : <SignInGate what="send you a message and know who it is from, so we can reply" />}
             </div>
           )}
           {visitedViews.has('randomizer') && (

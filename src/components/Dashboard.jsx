@@ -651,7 +651,7 @@ function MyView({ data, who }) {
 
       <div style={card}>
         <h3 style={h}>Diagnostic reports you sent ({m.diags.length})</h3>
-        {m.diags.length === 0 && <div style={sub}>None yet. You can send one from About › Debug.</div>}
+        {m.diags.length === 0 && <div style={sub}>None yet. You can send one from Support › Debug.</div>}
         {m.diags.slice(0, 5).map((d, i) => (
           <div key={i} style={{ borderTop: i ? '1px solid var(--rc-line)' : 'none', paddingTop: i ? '10px' : 0, marginTop: i ? '10px' : 0, fontSize: '13px', lineHeight: 1.5 }}>
             <div style={sub}>{String(d['Date (PT)']).slice(0, 16)} · v{d['App version']} · {d['Device']} {d['OS version']}</div>

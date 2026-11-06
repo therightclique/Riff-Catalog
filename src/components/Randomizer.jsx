@@ -1,5 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useRef, useMemo } from 'react';
 import { uploadTextFile, listTextFiles, readTextFile } from './DriveUploader';
+import { trashFile } from './DriveLibrary';
 import { noteLabel, noteIn } from './Notation';
 import { getScaleNotes } from './FretboardDiagram';
 import { noteEvent } from './UsageCounters';
@@ -278,6 +279,7 @@ export default function Randomizer({ accessToken }) {
   const [status, setStatus] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedSets, setSavedSets] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
   const [loadingList, setLoadingList] = useState(false);
   // Where the caret is in the idea box (null = at the end). Add to idea inserts
   // there, and chord names use the key found to the LEFT of it.
@@ -611,6 +613,21 @@ export default function Randomizer({ accessToken }) {
     setLoadingList(false);
   };
 
+  // Moves a saved idea to the Google Drive trash (recoverable from Drive for 30 days) and takes it off the list.
+  const deleteSavedSet = async (file) => {
+    const name = file.name.replace(/\.txt$/, '');
+    if (!window.confirm(`Delete \u201C${name}\u201D? It moves to your Google Drive trash, where you can restore it for 30 days.`)) return;
+    setDeletingId(file.id);
+    try {
+      await trashFile(accessToken, file.id);
+      setSavedSets(list => (list || []).filter(x => x.id !== file.id));
+      setStatus(`Deleted: ${name}`);
+    } catch (err) {
+      setStatus('Could not delete: ' + err.message);
+    }
+    setDeletingId(null);
+  };
+
   const loadSavedSet = async (file) => {
     if (accumulated.trim() && !window.confirm('This replaces the current text below. Continue?')) return;
     try {
@@ -811,14 +828,23 @@ export default function Randomizer({ accessToken }) {
             </p>
           ) : (
             savedSets.map(f => (
-              <button key={f.id} onClick={() => loadSavedSet(f)}
-                style={{
-                  display: 'block', width: '100%', textAlign: 'left', padding: '10px 14px',
-                  background: 'none', border: 'none', borderBottom: '1px solid #262626',
-                  color: '#ddd', fontSize: '13px', cursor: 'pointer',
-                }}>
-                {f.name.replace(/\.txt$/, '')}
-              </button>
+              <div key={f.id} style={{ display: 'flex', alignItems: 'stretch', borderBottom: '1px solid #262626', opacity: deletingId === f.id ? 0.5 : 1 }}>
+                <button onClick={() => loadSavedSet(f)} disabled={deletingId === f.id}
+                  style={{
+                    flex: 1, minWidth: 0, textAlign: 'left', padding: '10px 14px',
+                    background: 'none', border: 'none',
+                    color: '#ddd', fontSize: '13px', cursor: 'pointer',
+                  }}>
+                  {f.name.replace(/\.txt$/, '')}
+                </button>
+                <button onClick={() => deleteSavedSet(f)} disabled={deletingId === f.id} aria-label={`Delete ${f.name.replace(/\.txt$/, '')}`}
+                  style={{
+                    flex: '0 0 auto', padding: '0 14px', background: 'none', border: 'none', borderLeft: '1px solid #262626',
+                    color: '#ff6b6b', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                  }}>
+                  {deletingId === f.id ? '…' : 'Delete'}
+                </button>
+              </div>
             ))
           )}
         </div>

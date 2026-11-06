@@ -51,7 +51,7 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
       clearTimeout(beginTimer.current);
       cancelAnimationFrame(posRaf.current);
       machineRef.current?.stop();
-      audioCtxRef.current?.close();
+      audioCtxRef.current?.close()?.catch?.(() => {});
       onRecordingStateChange?.(false);
     };
   }, []);
@@ -204,7 +204,7 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
         cancelAnimationFrame(animFrameRef.current);
         scriptNode.disconnect();
         endMetronome();
-        audioCtx.close();
+        audioCtx.close().catch(() => {});
       };
 
       const beginTake = () => {
@@ -250,7 +250,7 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
           endMetronome();
           stream.getTracks().forEach(track => track.stop());
           scriptNode.disconnect();
-          audioCtx.close();
+          audioCtx.close().catch(() => {});
           setPhase('idle');
         };
       }

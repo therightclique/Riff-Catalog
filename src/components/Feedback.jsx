@@ -1,7 +1,8 @@
 import { useRef, useState, useEffect } from 'react';
-import { noteMilestone, sendSupport, recentProblems } from './UsageLog';
+import { noteMilestone, sendSupport, recentProblems, noteTabView } from './UsageLog';
 import { sendOrQueue, lastSendProblem } from './UsageOutbox';
 import { MAX_SHOTS, REASON_TEXT, shrinkImage, uploadScreenshot } from './Screenshots';
+import Debug from './Debug';
 
 // Support section (menu item). Two tabs: Contact support (a message to the app's owner, answered by email) and Give feedback
 // (a star rating and ideas, not answered individually).
@@ -215,16 +216,17 @@ function ContactSupport({ version, accessToken, email }) {
 const TABS = [
   { id: 'support', label: 'Contact support', Component: ContactSupport },
   { id: 'feedback', label: 'Give feedback', Component: FeedbackForm },
+  { id: 'debug', label: 'Debug', Component: Debug },
 ];
 
-export default function Feedback({ version, accessToken, email }) {
-  const [tab, setTab] = useState('support');
+export default function Feedback({ version, accessToken, email, request }) {
+  const [tab, setTab] = useState((request && TABS.some(t => t.id === request.tab)) ? request.tab : 'support');
   const Active = (TABS.find(t => t.id === tab) || TABS[0]).Component;
   return (
     <div style={{ maxWidth: '600px', margin: '0 auto' }}>
       <div role="tablist" style={{ display: 'flex', gap: '6px', marginBottom: '12px' }}>
         {TABS.map(t => (
-          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => setTab(t.id)}
+          <button key={t.id} role="tab" aria-selected={tab === t.id} onClick={() => { setTab(t.id); if (t.id === 'debug') noteTabView('debug'); }}
             style={{ flex: 1, minWidth: 0, padding: '10px 6px', fontSize: '13px', fontWeight: '600', borderRadius: '10px', cursor: 'pointer',
               border: `2px solid ${tab === t.id ? '#1a73e8' : 'var(--rc-line)'}`, backgroundColor: tab === t.id ? 'var(--rc-sel)' : 'var(--rc-surface)', color: tab === t.id ? '#1a73e8' : 'var(--rc-ink)' }}>
             {t.label}

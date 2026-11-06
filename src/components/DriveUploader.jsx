@@ -1,5 +1,19 @@
 export const FOLDER_NAME = 'RiffCatalog';
 
+// Every Drive request in this file gives up if Google stops answering (30 seconds, or 4 minutes for an audio upload),
+// so a stalled connection becomes an ordinary failure: the clip stays on the device and is retried automatically,
+// instead of the app waiting forever. This local fetch shadows the global one for this file only.
+const nativeFetch = (...a) => globalThis.fetch(...a);
+function timeoutSignal(ms) {
+  if (typeof AbortSignal !== 'undefined' && AbortSignal.timeout) return AbortSignal.timeout(ms);
+  const c = new AbortController(); setTimeout(() => c.abort(), ms); return c.signal;
+}
+function fetch(url, init = {}) {
+  const upload = String(url).includes('/upload/');
+  const ms = (typeof window !== 'undefined' && window.__RC_FETCH_MS) || (upload ? 240000 : 30000);   // window.__RC_FETCH_MS: only for automated tests
+  return nativeFetch(url, { ...init, signal: init.signal || timeoutSignal(ms) });
+}
+
 // Folder IDs don't change during a session. Caching them removes 3+
 // sequential Drive round trips from every upload after the first.
 const folderIdCache = new Map();

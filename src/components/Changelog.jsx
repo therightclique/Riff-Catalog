@@ -73,6 +73,22 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Listen first, and delete ideas',
+        items: [
+          'After you record, you can now play the take back on the \u201CRecording complete\u201D screen before you save or discard it',
+          'Randomizer: each saved song idea now has a Delete button. A deleted idea goes to your Google Drive trash, where you can restore it for 30 days',
+        ],
+      },
+      {
+        title: 'Saving clips is more dependable',
+        items: [
+          'Fixed: saving a recording could get stuck on \u201CChecking\u2026\u201D forever. This affected the last few updates. It is fixed',
+          'Saving no longer waits forever. If Google Drive is slow or not answering, the clip is kept safely on your device, you\u2019re told so, and it uploads by itself as soon as it can',
+          'Clips waiting on your device are now retried automatically: after 20 seconds, then every few minutes (every 15 minutes at most), and again whenever you come back online or return to the app. \u201CSync now\u201D is still there to try right away',
+          'Debug moved from About into Support, next to Contact support and Give feedback',
+        ],
+      },
+      {
         title: 'Screenshots in Support',
         items: [
           'Contact support now has an Add a screenshot button. You can attach up to 3 pictures. They\u2019re shrunk on your device before sending, only the app\u2019s owner can see them, and they\u2019re deleted after 60 days',
