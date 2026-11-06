@@ -53,6 +53,10 @@ async function trimAssetCache() {
 }
 
 async function handleNavigation(request) {
+  // Only the app itself is kept as the offline shell. Other pages on this site (such as /privacy.html) are passed
+  // straight through, so they can never replace the cached app.
+  const path = new URL(request.url).pathname;
+  if (path !== '/' && path !== '/index.html') return fetch(request);
   try {
     const response = await Promise.race([fetch(request), timeout(NAV_TIMEOUT_MS)]);
     if (response && response.ok) {
