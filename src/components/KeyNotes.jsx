@@ -18,7 +18,7 @@ const CHIP_STYLES = {
   root:  chipFor('root'),
   third: chipFor('third'),
   fifth: chipFor('fifth'),
-  plain: { bg: '#ffffff', border: '#b5d4f0', text: '#222222' },
+  plain: chipFor('other'),
 };
 
 // getScaleNotes returns scale degrees 1–7 in order from the key's root, so
