@@ -64,6 +64,12 @@ const CHANGELOG = [
           'Saved beats now sync through Google Drive, so they\u2019re on every device you sign in on. Beats you saved before this update move over automatically the first time you open the app',
         ],
       },
+      {
+        title: 'iPad display',
+        items: [
+          'Improved how the app fills an iPad screen in both portrait and landscape: the content is scaled up to cut the empty space at the sides, and stays sharp. You may need to scroll a little more',
+        ],
+      },
     ],
   },
   {
