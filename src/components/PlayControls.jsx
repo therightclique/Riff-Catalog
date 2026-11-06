@@ -51,7 +51,8 @@ export function NoteStrip({ selectedKey, instrument }) {
                 transition: 'transform 60ms, filter 60ms',
               }}>
               {noteIn(n.note, selectedKey)}
-              <div style={{ fontSize: '9px', fontWeight: '600', opacity: 0.8 }}>{n.degree === '8' ? '8va' : n.degree}</div>
+              <div style={{ fontSize: '9px', fontWeight: '600', opacity: 0.8, lineHeight: 1.15 }}>{n.degree}</div>
+              {n.degree === '8' && <div style={{ fontSize: '7px', fontWeight: '600', opacity: 0.8, lineHeight: 1.1 }}>(Octave)</div>}
             </button>
           );
         })}

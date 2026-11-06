@@ -65,6 +65,12 @@ const CHANGELOG = [
         ],
       },
       {
+        title: 'Key Finder wording',
+        items: [
+          'The last note in the scale buttons now shows \u201C8\u201D with a small \u201C(Octave)\u201D underneath, instead of \u201C8va\u201D',
+        ],
+      },
+      {
         title: 'iPad display',
         items: [
           'Improved how the app fills an iPad screen in both portrait and landscape: the content is scaled up to cut the empty space at the sides, and stays sharp. You may need to scroll a little more',
