@@ -3,10 +3,6 @@ import { getPrefs, changePrefs, subscribePrefs } from './SettingsService';
 import { getTheme, setTheme, subscribeTheme } from './Appearance';
 import { playChord, guitarChordMidi, pianoChordMidi, installAudioUnlock } from './AudioEngine';
 import { clearSidecarCache } from './MetadataService';
-import {
-  listDevices, revealDeviceNames, getSavedMic, getSavedSpeaker, setSavedMic, setSavedSpeaker,
-  subscribeAudioDevices, canListDevices, canChooseSpeaker, micConstraints, deviceName,
-} from './AudioDevices';
 import { NOTE_ROLE_COLORS, DEFAULT_NOTE_ROLE_COLORS, NOTE_ROLE_TEXT, isValidHex } from './theme';
 import { changeNoteRoleColors, resetNoteRoleColors, getSettingsStatus, subscribeSettingsStatus } from './SettingsService';
 
@@ -188,148 +184,6 @@ function NotationCard() {
   );
 }
 
-// ── Microphone and speaker ──────────────────────────────────────────────
-
-const SELECT = { width: '100%', padding: '10px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--rc-line)', backgroundColor: 'var(--rc-surface)', color: 'var(--rc-ink)', boxSizing: 'border-box' };
-const FIELD_LABEL = { display: 'block', fontSize: '13px', fontWeight: '600', color: 'var(--rc-ink)', marginBottom: '6px' };
-
-function SoundCard() {
-  const [devs, setDevs] = useState({ mics: [], speakers: [], namesHidden: false });
-  const [mic, setMic] = useState(getSavedMic());
-  const [speaker, setSpeaker] = useState(getSavedSpeaker());
-  const [asking, setAsking] = useState(false);
-  const [problem, setProblem] = useState('');
-  const [level, setLevel] = useState(null);          // null = meter off, otherwise 0–1
-  const meterRef = useRef(null);
-
-  const refresh = async () => setDevs(await listDevices());
-  useEffect(() => {
-    refresh();
-    const md = navigator.mediaDevices;
-    md?.addEventListener?.('devicechange', refresh);
-    const off = subscribeAudioDevices(() => { setMic(getSavedMic()); setSpeaker(getSavedSpeaker()); });
-    return () => { md?.removeEventListener?.('devicechange', refresh); off(); stopMeter(); };
-  }, []);
-
-  const showNames = async () => {
-    setAsking(true); setProblem('');
-    try { await revealDeviceNames(); await refresh(); }
-    catch { setProblem('The microphone was not allowed. Allow it in your browser’s site settings, then try again.'); }
-    setAsking(false);
-  };
-
-  const stopMeter = () => {
-    const m = meterRef.current;
-    meterRef.current = null;
-    if (m) { cancelAnimationFrame(m.raf); m.stream.getTracks().forEach(t => t.stop()); m.ctx.close().catch(() => {}); }
-    setLevel(null);
-  };
-  const startMeter = async () => {
-    setProblem('');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: micConstraints({ echoCancellation: false, noiseSuppression: false, autoGainControl: false }),
-      });
-      const ctx = new (window.AudioContext || window.webkitAudioContext)();
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 1024;
-      ctx.createMediaStreamSource(stream).connect(analyser);
-      const data = new Uint8Array(analyser.fftSize);
-      const m = { stream, ctx, raf: 0 };
-      meterRef.current = m;
-      const tick = () => {
-        analyser.getByteTimeDomainData(data);
-        let peak = 0;
-        for (let i = 0; i < data.length; i++) peak = Math.max(peak, Math.abs(data[i] - 128) / 128);
-        setLevel(peak);
-        m.raf = requestAnimationFrame(tick);
-      };
-      tick();
-      refresh();   // names are available once the microphone has been allowed
-    } catch {
-      setProblem('Couldn’t open that microphone. Check that it’s plugged in and allowed.');
-    }
-  };
-
-  const chooseMic = (id) => { setSavedMic(id); if (meterRef.current) { stopMeter(); } };
-  const known = (list, id) => !id || list.some(d => d.id === id);
-  const micMissing = !known(devs.mics, mic);
-  const speakerMissing = !known(devs.speakers, speaker);
-
-  return (
-    <div style={CARD}>
-      <div style={TITLE}>Microphone and speaker</div>
-      <div style={HELP}>
-        Pick what the app records with and plays through, for example a USB audio interface or headphones.
-        This applies to this device only, because every phone, tablet and computer names its gear differently.
-      </div>
-
-      {canListDevices() && devs.namesHidden && (
-        <div style={{ marginBottom: '12px' }}>
-          <button onClick={showNames} disabled={asking} style={BTN}>{asking ? 'Asking…' : 'Show my devices'}</button>
-          <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', marginTop: '6px' }}>
-            Your browser hides the names of your gear until you allow the microphone once.
-          </div>
-        </div>
-      )}
-
-      <label style={FIELD_LABEL} htmlFor="rc-mic">Microphone</label>
-      <select id="rc-mic" value={micMissing ? '' : mic} onChange={e => chooseMic(e.target.value)} style={SELECT}>
-        <option value="">This device’s default</option>
-        {devs.mics.map(d => <option key={d.id} value={d.id}>{deviceName(d, 'Microphone')}</option>)}
-      </select>
-      {micMissing && (
-        <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', marginTop: '6px' }}>
-          Your saved microphone isn&rsquo;t connected right now, so the default is used. It comes back when you plug it in.
-        </div>
-      )}
-      {!canListDevices() && (
-        <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', marginTop: '6px' }}>This browser can&rsquo;t list microphones. The device&rsquo;s own default is used.</div>
-      )}
-
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px', margin: '12px 0 4px' }}>
-        <button onClick={level === null ? startMeter : stopMeter} style={BTN}>{level === null ? 'Test microphone' : 'Stop test'}</button>
-        {level !== null && (
-          <div aria-label="Microphone level" role="meter" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(level * 100)}
-            style={{ flex: 1, height: '12px', borderRadius: '6px', backgroundColor: 'var(--rc-line)', overflow: 'hidden' }}>
-            <div style={{ width: `${Math.min(100, Math.round(level * 140))}%`, height: '100%', backgroundColor: level > 0.95 ? '#d93025' : '#1e8e3e', transition: 'width 60ms linear' }} />
-          </div>
-        )}
-      </div>
-      {level !== null && (
-        <div style={{ fontSize: '12px', color: level > 0.95 ? '#d93025' : 'var(--rc-ink2)' }}>
-          {level > 0.95 ? 'Too loud — turn the input down on your interface.' : 'Play something. The bar should move.'}
-        </div>
-      )}
-
-      <label style={{ ...FIELD_LABEL, marginTop: '16px' }} htmlFor="rc-speaker">Speaker or headphones</label>
-      {canChooseSpeaker() ? (
-        <>
-          <select id="rc-speaker" value={speakerMissing ? '' : speaker} onChange={e => setSavedSpeaker(e.target.value)} style={SELECT}>
-            <option value="">This device’s default</option>
-            {devs.speakers.map(d => <option key={d.id} value={d.id}>{deviceName(d, 'Speaker')}</option>)}
-          </select>
-          {speakerMissing && (
-            <div style={{ fontSize: '12px', color: 'var(--rc-ink2)', marginTop: '6px' }}>
-              Your saved speaker isn&rsquo;t connected right now, so the default is used.
-            </div>
-          )}
-        </>
-      ) : (
-        <div style={{ fontSize: '13px', color: 'var(--rc-ink2)', lineHeight: 1.4 }}>
-          This browser doesn&rsquo;t let apps choose the speaker, so Riff Catalog plays through whatever this device is set to use.
-          Change it in the device&rsquo;s own sound settings.
-        </div>
-      )}
-      <div style={{ marginTop: '12px' }}>
-        <button onClick={() => playChord('guitar', guitarChordMidi({ frets: [3, 2, 0, 0, 0, 3] }))} style={BTN}>Play a test sound</button>
-      </div>
-
-      {problem && <div role="alert" style={{ fontSize: '13px', color: '#d93025', marginTop: '10px' }}>{problem}</div>}
-    </div>
-  );
-}
-
 // ── Light / dark ────────────────────────────────────────────────────────
 
 function AppearanceCard() {
@@ -457,7 +311,6 @@ export default function Settings({ user = null, signedIn = false, online = true,
       <NotationCard />
       <StrumCard />
       <AppearanceCard />
-      <SoundCard />
       <AccountCard user={user} signedIn={signedIn} online={online} pendingCount={pendingCount}
         onSync={onSync} onSignOut={onSignOut} version={version} updated={updated} />
     </div>

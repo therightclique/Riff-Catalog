@@ -10,7 +10,6 @@ import { analyzeAudio, ANALYZER_VERSION } from './AudioAnalyzer';
 import FilterBar from './FilterBar';
 import { noteEvent } from './UsageCounters';
 import { keyMatches } from './KeyUtils';
-import { applySpeakerToElement } from './AudioDevices';
 
 const SORT_OPTIONS = [
   { value: 'newest', label: 'Newest first' },
@@ -362,7 +361,6 @@ function Library({
     if (audioRef.current) audioRef.current.pause();
     noteEvent('clipPlay');
     const audio = new Audio(url);
-    applySpeakerToElement(audio);
     audio.playbackRate = playbackSpeed;
     audioRef.current = audio;
     audio.addEventListener('loadedmetadata', () => {
