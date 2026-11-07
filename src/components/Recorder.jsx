@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { createDrumMachine, makeMetronomeBeat } from './DrumMachine';
 import { TapTempoButton } from './TapTempo';
 import { noteEvent, noteProblem } from './UsageCounters';
+import { micConstraints, applySpeakerToContext } from './AudioDevices';
 
 // Record-tab metronome: an audible count-in, then a silent pulse (circles only)
 // while recording, so no click ever reaches the microphone.
@@ -130,15 +131,16 @@ function Recorder({ onRecordingComplete, onRecordingStateChange }) {
         try { savedSession.current = navigator.audioSession.type; navigator.audioSession.type = 'play-and-record'; } catch { /* not supported */ }
       }
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
+        audio: micConstraints({
           echoCancellation: false,
           noiseSuppression: false,
           autoGainControl: false,
           channelCount: 1,
-        }
+        })
       });
 
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      applySpeakerToContext(audioCtx);   // the count-in plays through the chosen speaker
       audioCtxRef.current = audioCtx;
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();

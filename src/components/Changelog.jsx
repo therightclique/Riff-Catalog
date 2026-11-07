@@ -7,6 +7,16 @@ const CHANGELOG = [
     version: '2.2',
     entries: [
       {
+        title: 'Choose your microphone and speaker',
+        items: [
+          'New “Microphone and speaker” card in Settings: pick which microphone Riff Catalog records with (for example a USB audio interface) and, where your browser allows it, which speaker or headphones it plays through. Playback, Jam drums, chords and the count-in all follow your choice',
+          'Test microphone shows a live level bar so you can check your interface is working and not too loud, and Play a test sound checks your speaker. If your browser hides device names, a Show my devices button asks for the microphone once so they appear',
+          'Recording quality is unchanged: the microphone is still opened with the phone’s sound processing off, as one channel',
+          'Saved on each device separately, because every phone, tablet and computer names its gear differently. If the saved microphone or speaker is unplugged, the device’s default is used until it comes back',
+          'Some browsers don’t let apps choose the speaker. When yours doesn’t, the card says so and the device’s own sound output is used',
+        ],
+      },
+      {
         title: 'Support requests: tags, archive and search',
         items: [
           'Owner Dashboard: each support request can now be tagged (Bug, Feature request, Question, In progress, On hold, Needs more info, Resolved, Do not fix, Duplicate) and archived. Archived requests no longer show on the Dashboard\u2019s main list',

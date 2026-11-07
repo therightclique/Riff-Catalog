@@ -6,6 +6,7 @@
 //   • piano  — a bright-to-mellow decaying tone with a hammer tap and a
 //              two-stage decay: a basic grand piano
 // Chords are strummed (notes staggered by a few ms) so each can be heard.
+import { applySpeakerToContext, subscribeAudioDevices } from './AudioDevices';
 
 const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 const GUITAR_OPEN_MIDI = [40, 45, 50, 55, 59, 64]; // low E, A, D, G, B, high E
@@ -237,6 +238,8 @@ function getEngine() {
   } catch { /* not supported — sound still works with the ringer on */ }
   try {
     sharedCtx = new AC({ latencyHint: 'interactive' });
+    applySpeakerToContext(sharedCtx);
+    subscribeAudioDevices(() => applySpeakerToContext(sharedCtx));
     sharedEngine = createEngine(sharedCtx);
   } catch (err) {
     console.warn('[audio] could not start audio:', err);
