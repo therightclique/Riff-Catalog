@@ -683,10 +683,65 @@ function OwnerView({ data, version, accessToken }) {
           </div>
 
           <PeopleList accessToken={accessToken} total={m.totalPeople} onPick={setPicked} />
+
+          <TestersCard accessToken={accessToken} />
       </>
   );
 }
 
+
+// Owner only: who sees the Testing section in the menu. The owner always does; everyone else only while listed here.
+function TestersCard({ accessToken }) {
+  const [list, setList] = useState(null);   // null = loading
+  const [email, setEmail] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const post = async (body) => {
+    const res = await fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ accessToken, ...body }) });
+    let j = null; try { j = await res.json(); } catch { /* no body */ }
+    return { res, j };
+  };
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const { res, j } = await post({ kind: 'testers' });
+        if (!live) return;
+        if (res.ok && Array.isArray(j?.testers)) setList(j.testers); else { setList([]); setMsg('Couldn\u2019t load the tester list.'); }
+      } catch { if (live) { setList([]); setMsg('Couldn\u2019t load the tester list.'); } }
+    })();
+    return () => { live = false; };
+  }, [accessToken]);
+  const change = async (addr, on) => {
+    setBusy(true); setMsg('');
+    try {
+      const { res, j } = await post({ kind: 'testerset', email: addr, on });
+      if (res.ok && Array.isArray(j?.testers)) { setList(j.testers); if (on) setEmail(''); setMsg(j.changed ? (on ? 'Added.' : 'Removed.') : (on ? 'Already on the list.' : 'Wasn\u2019t on the list.')); }
+      else if (res.status === 400) setMsg('That doesn\u2019t look like an email address.');
+      else if (res.status === 422) setMsg('The list is full (200 people). Remove someone first.');
+      else setMsg('Couldn\u2019t save that. Please try again.');
+    } catch { setMsg('Couldn\u2019t save that. Please try again.'); }
+    setBusy(false);
+  };
+  return (
+    <div style={card}>
+      <h3 style={h}>🧪 Testers</h3>
+      <div style={{ ...sub, marginBottom: '10px' }}>People listed here see a Testing item in their menu (use the Google account email they sign in with). It appears the next time they open the app. You always see it.</div>
+      <form onSubmit={e => { e.preventDefault(); if (email.trim() && !busy) change(email, true); }} style={{ display: 'flex', gap: '8px', marginBottom: '10px' }}>
+        <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="name@gmail.com" aria-label="Tester email"
+          style={{ flex: 1, minWidth: 0, padding: '8px', fontSize: '14px', borderRadius: '8px', border: '1px solid var(--rc-line)', background: 'var(--rc-card)', color: 'var(--rc-ink)' }} />
+        <button type="submit" disabled={busy || !email.trim()} style={{ padding: '8px 14px', borderRadius: '8px', border: 'none', background: BLUE, color: '#fff', fontSize: '14px', cursor: 'pointer' }}>Add</button>
+      </form>
+      {msg && <div style={{ ...sub, marginBottom: '8px' }} role="status">{msg}</div>}
+      {list === null ? <div style={sub}>Loading…</div> : list.length === 0 ? <div style={sub}>No testers yet.</div> : list.map(t => (
+        <div key={t.email} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', borderTop: '1px solid var(--rc-line)', padding: '8px 0', fontSize: '13px' }}>
+          <span style={{ overflowWrap: 'anywhere' }}>{t.email}</span>
+          <button onClick={() => change(t.email, false)} disabled={busy} style={{ padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--rc-line)', background: 'none', color: 'var(--rc-ink)', fontSize: '12px', cursor: 'pointer' }}>Remove</button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const MS_LABELS = [['First recording (PT)', 'Made a recording'], ['First Drive save (PT)', 'Saved to Drive'], ['First Library open (PT)', 'Opened the Library'], ['First Jam play (PT)', 'Played Jam'],
   ['First Key Finder use (PT)', 'Used Key Finder'], ['First Practice use (PT)', 'Used Practice'], ['First Randomizer use (PT)', 'Used the Randomizer'], ['First idea saved (PT)', 'Saved an idea'], ['First feedback sent (PT)', 'Sent feedback']];

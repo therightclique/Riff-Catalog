@@ -616,6 +616,56 @@ export function activeSupport(rows, max = 200) {
 
 export const isOwner = (email) => String(process.env.OWNER_EMAIL || '').toLowerCase().split(/[,\s;]+/).filter(Boolean).includes(email);
 
+// ── Testers: accounts the owner has switched the Testing section on for ──
+// One row per tester in the "Testers" tab. The owner is always a tester. A person is only ever told about their OWN
+// status (the usage report's reply); the full list goes to the owner alone.
+const TESTER_COLS = ['Email', 'Added (PT)', 'Added by'];
+const TESTER_MAX = 200;
+const TESTER_TTL_MS = 60 * 1000;
+const EMAIL_RE = /^[^\s@,;<>"'()\[\]\\]{1,64}@[A-Za-z0-9.-]{1,190}\.[A-Za-z]{2,24}$/;
+export const cleanTesterEmail = (v) => { const e = String(v ?? '').trim().toLowerCase(); return e.length <= 254 && EMAIL_RE.test(e) ? e : ''; };
+let testerCache = { at: 0, sheetId: '', list: null };
+export const clearTesterCache = () => { testerCache = { at: 0, sheetId: '', list: null }; };
+
+// The testers, as [{ email, added }]. A missing tab means nobody yet (and is not created just to answer a question).
+export async function listTesters({ token, sheetId, fresh = false }) {
+  if (!fresh && testerCache.list && testerCache.sheetId === sheetId && Date.now() - testerCache.at < TESTER_TTL_MS) return testerCache.list;
+  const found = await findTab(token, sheetId, 'Testers');
+  let list = [];
+  if (found) {
+    const body = await sheetsFetch(token, rangeUrl(sheetId, found.title, `A2:C${TESTER_MAX + 300}`));
+    list = (body.values || []).map(r => ({ email: String(r?.[0] || '').trim().toLowerCase(), added: String(r?.[1] || '') })).filter(t => t.email);
+  }
+  testerCache = { at: Date.now(), sheetId, list };
+  return list;
+}
+export async function isTester({ token, sheetId, email }) {
+  if (isOwner(email)) return true;
+  const want = String(email || '').trim().toLowerCase();
+  return !!want && (await listTesters({ token, sheetId })).some(t => t.email === want);
+}
+// Adds or removes one tester. Returns { changed, testers } or { error } (bad email / list full).
+export async function setTester({ token, sheetId, email, on, by }) {
+  const who = cleanTesterEmail(email);
+  if (!who) return { error: 'bad email' };
+  const title = await getTab(token, sheetId, 'Testers', TESTER_COLS);
+  const body = await sheetsFetch(token, rangeUrl(sheetId, title, `A2:C${TESTER_MAX + 300}`));
+  const rows = body.values || [];
+  const at = rows.findIndex(r => String(r?.[0] || '').trim().toLowerCase() === who);
+  let changed = false;
+  if (on && at < 0) {
+    if (rows.filter(r => String(r?.[0] || '').trim()).length >= TESTER_MAX) return { error: 'list full' };
+    await appendRows(token, sheetId, 'Testers', TESTER_COLS, [[who, ptNow(), String(by || '')]]);
+    changed = true;
+  } else if (!on && at >= 0) {
+    // Blank the row (the list ignores empty rows) instead of shifting rows around.
+    await sheetsFetch(token, rangeUrl(sheetId, title, `A${at + 2}:C${at + 2}`, '?valueInputOption=RAW'), { method: 'PUT', body: JSON.stringify({ values: [['', '', '']] }) });
+    changed = true;
+  }
+  clearTesterCache();
+  return { changed, testers: await listTesters({ token, sheetId, fresh: true }) };
+}
+
 async function readTab(token, sheetId, name, maxRows) {
   const found = name === 'Stats' ? { title: (await getSheetInfo(token, sheetId)).title } : await findTab(token, sheetId, name);
   if (!found) return [];
@@ -803,6 +853,18 @@ export default async (req, context) => {
       if (!one) return reply(400, { ok: false, error: 'bad request' });
       return reply(200, { ok: true, ...one });
     }
+    if (body.kind === 'testers') {   // owner only: who the Testing section is switched on for
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      return reply(200, { ok: true, testers: await listTesters({ token, sheetId, fresh: true }) });
+    }
+    if (body.kind === 'testerset') {   // owner only: switch Testing on or off for one email
+      if (!isOwner(email)) return reply(403, { ok: false, error: 'owner only' });
+      if (typeof body.on !== 'boolean' || !cleanTesterEmail(body.email)) return reply(400, { ok: false, error: 'bad request' });
+      const r = await setTester({ token, sheetId, email: body.email, on: body.on, by: email });
+      if (r.error === 'list full') return reply(422, { ok: false, error: 'list full' });
+      if (r.error) return reply(400, { ok: false, error: 'bad request' });
+      return reply(200, { ok: true, changed: r.changed, testers: r.testers });
+    }
     if (body.kind === 'mydata') {   // the email comes only from the verified token, never from the request body
       return reply(200, { ok: true, owner: isOwner(email), ...(await myData({ token, sheetId, email })) });
     }
@@ -817,7 +879,11 @@ export default async (req, context) => {
       return reply(200, { ok: true });
     }
     const result = await upsertUser({ token, sheetId, email, payload: cleanPayload(body), where });
-    return reply(200, { ok: true, created: result.created, owner: isOwner(email) });
+    // Tell the person (only) whether the Testing section is on for them. If the list can't be read just now, say nothing
+    // and the app keeps what it already knew.
+    let tester;
+    try { tester = await isTester({ token, sheetId, email }); } catch { /* leave the flag as it was */ }
+    return reply(200, { ok: true, created: result.created, owner: isOwner(email), ...(tester === undefined ? {} : { tester }) });
   } catch (err) {
     if (err.busy) return busy(60);
     console.error('log-usage failed:', err.message);

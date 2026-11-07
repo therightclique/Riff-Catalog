@@ -7,6 +7,14 @@ const CHANGELOG = [
     version: '2.2',
     entries: [
       {
+        title: 'Testing section for new features',
+        items: [
+          'New Testing item in the menu, shown only to people the owner has assigned (the owner always sees it). New features are tried there first, separate from the rest of the app, and only added to the main app once they work well on real phones',
+          'First experiment: choose which microphone to use and make a short test recording. It does not change your recordings or settings',
+          'Owner Dashboard: a Testers card to add or remove people by email',
+        ],
+      },
+      {
         title: 'Support requests: tags, archive and search',
         items: [
           'Owner Dashboard: each support request can now be tagged (Bug, Feature request, Question, In progress, On hold, Needs more info, Resolved, Do not fix, Duplicate) and archived. Archived requests no longer show on the Dashboard\u2019s main list',

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useReducer } from 'react';
+import { useState, useEffect, useRef, useReducer, lazy, Suspense } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import Recorder from './components/Recorder';
 import { uploadToDrive, verifyDriveFile } from './components/DriveUploader';
@@ -15,6 +15,8 @@ import Settings from './components/Settings';
 import Jam from './components/Jam';
 import About from './components/About';
 import Dashboard from './components/Dashboard';
+// Testing section: loaded only when an assigned tester opens it, so it can never affect anyone else's app.
+const Testing = lazy(() => import('./components/Testing'));
 import Feedback from './components/Feedback';
 import ReviewPlayer from './components/ReviewPlayer';
 import ShareButton from './components/ShareButton';
@@ -120,7 +122,7 @@ function App() {
   // against the real tab list so a stale or hand-edited URL can't leave
   // the app on a blank view, then stripped from the address so a later
   // manual reload starts normally.
-  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'feedback', 'settings', 'jam', 'about', 'dashboard'];
+  const VALID_VIEWS = ['record', 'library', 'keyfinder', 'practice', 'randomizer', 'feedback', 'settings', 'jam', 'about', 'dashboard', 'testing'];
   // Changelog lives inside About and Debug inside Support; old links to them open that section on the right tab.
   const [aboutRequest, setAboutRequest] = useState(() => {
     try { const v = new URLSearchParams(window.location.search).get('view'); return v === 'changelog' ? { tab: v, n: 1 } : null; } catch { return null; }
@@ -197,6 +199,8 @@ function App() {
 
   // Owner-only Dashboard: the server says whether this account is the owner; remembered on this device.
   const [isOwner, setIsOwner] = useState(() => { try { return localStorage.getItem('rc_owner') === '1'; } catch { return false; } });
+  // Testing section: shown only to people the owner has assigned (the owner always sees it). Server decides; remembered on this device.
+  const [isTester, setIsTester] = useState(() => { try { return localStorage.getItem('rc_tester') === '1'; } catch { return false; } });
   // Hamburger menu: top-level sections live here. Add a section by adding
   // one line to MENU_ITEMS (plus its view below); the menu scrolls on its own.
   const MENU_ITEMS = [
@@ -207,11 +211,14 @@ function App() {
     { id: 'jam', label: 'Jam', icon: '🥁' },
     { id: 'randomizer', label: 'Randomizer', icon: '🎲' },
     { id: 'dashboard', label: 'Dashboard', icon: '📊' },
+    ...(user && isTester ? [{ id: 'testing', label: 'Testing', icon: '🧪' }] : []),
     { id: 'feedback', label: 'Support', icon: '💬' },
     { id: 'about', label: 'About', icon: 'ℹ️' },
     { id: 'settings', label: 'Settings', icon: '⚙️' },   // Settings stays last
   ];
   const [menuOpen, setMenuOpen] = useState(false);
+  // Someone who isn't (or is no longer) a tester can't stay on the Testing view.
+  useEffect(() => { if (view === 'testing' && !(user && isTester)) setView('record'); }, [view, user, isTester]);
 
   // Re-draw everything when the interval colors change (picked here, or
   // adopted from another device), so no screen keeps showing the old ones.
@@ -240,7 +247,7 @@ function App() {
     usageReported.current = true;
     noteTabView(view);
     Promise.resolve(reportUsage(accessToken, CURRENT_VERSION)).then(() => {
-      try { setIsOwner(localStorage.getItem('rc_owner') === '1'); } catch { /* ignore */ }
+      try { setIsOwner(localStorage.getItem('rc_owner') === '1'); setIsTester(localStorage.getItem('rc_tester') === '1'); } catch { /* ignore */ }
     }).catch(() => {});
   }, [accessToken, user]);
   // Owner only: tell the owner how many support requests are waiting. Checked when the app opens (even on a quick
@@ -1177,6 +1184,13 @@ function App() {
           {visitedViews.has('dashboard') && (
             <div style={{ display: view === 'dashboard' ? 'block' : 'none' }}>
               {user ? <Dashboard accessToken={accessToken} isOwner={isOwner} version={CURRENT_VERSION} /> : <SignInGate what="show the numbers kept about your account" />}
+            </div>
+          )}
+          {visitedViews.has('testing') && user && isTester && (
+            <div style={{ display: view === 'testing' ? 'block' : 'none' }}>
+              <Suspense fallback={<p style={{ textAlign: 'center', color: '#666' }}>Loading…</p>}>
+                <Testing />
+              </Suspense>
             </div>
           )}
           {visitedViews.has('feedback') && (

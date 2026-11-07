@@ -230,7 +230,12 @@ export async function reportUsage(accessToken, version) {
     }
     noteSendSuccess();
     // Success: take off exactly what was sent.
-    try { const j = await res.json(); localStorage.setItem('rc_owner', j?.owner === true ? '1' : ''); } catch { /* flag unchanged */ }
+    try {
+      const j = await res.json();
+      localStorage.setItem('rc_owner', j?.owner === true ? '1' : '');
+      // Testing section: only changes when the server actually answered about it.
+      if (typeof j?.tester === 'boolean') localStorage.setItem('rc_tester', j.tester ? '1' : '');
+    } catch { /* flags unchanged */ }
     const now = load();
     for (const k of Object.keys(unsentMilestones)) now.msSent[k] = true;
     const sentKeys = new Set((body.problems || []).map(x => `${x.t}|${x.area}|${x.code}`));
